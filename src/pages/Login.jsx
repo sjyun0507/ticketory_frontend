@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {login} from "../api/memberApi.js";
+import "./Login.css";
 
 const Login = () => {
     const navigate = useNavigate();
@@ -22,42 +23,48 @@ const Login = () => {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100">
-            <div className="w-full max-w-md p-8 bg-white rounded shadow">
-                <h2 className="text-2xl font-bold mb-6 text-center">로그인</h2>
-                {errorMsg && <p className="text-red-500 mb-4">{errorMsg}</p>}
-                <form onSubmit={handleLogin} className="space-y-4">
-                    <div>
-                        <label className="block mb-1 font-semibold">아이디</label>
+        <div className="login-container">
+            <div className="login-box">
+                <h2 className="login-title">로그인</h2>
+                {errorMsg && <p className="error-message">{errorMsg}</p>}
+                <form onSubmit={handleLogin}>
+                    <div className="form-group">
+                        <label htmlFor="loginId" className="form-label">아이디</label>
                         <input
+                            id="loginId"
+                            name="loginId"
                             type="email"
                             value={loginId}
+                            placeholder="로그인 아이디"
                             onChange={(e) => setLoginId(e.target.value)}
-                            className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            className="form-input"
                             required
                         />
                     </div>
-                    <div>
-                        <label className="block mb-1 font-semibold">비밀번호</label>
+                    <div className="form-group">
+                        <label htmlFor="password" className="form-label">비밀번호</label>
                         <input
+                            id="password"
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            placeholder="비밀번호"
+                            className="form-input"
                             required
                         />
                     </div>
+
                     <button
                         type="submit"
-                        className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition"
+                        className="login-button"
                     >
                         로그인
                     </button>
                 </form>
-                <p className="mt-4 text-center text-gray-600">
+                <p className="signup-text">
                     계정이 없으신가요?{" "}
                     <span
-                        className="text-blue-500 cursor-pointer"
+                        className="signup-link"
                         onClick={() => navigate("/signup")}
                     >
             회원가입

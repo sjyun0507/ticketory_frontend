@@ -1,5 +1,5 @@
 import {useState} from "react";
-import {signup} from "../api/memberApi.js";
+import {checkLoginId, signup} from "../api/memberApi.js";
 import {useNavigate} from "react-router-dom";
 import "./Signup.css";
 
@@ -7,7 +7,6 @@ import "./Signup.css";
 export default function SignupPage() {
     const navigate = useNavigate();
     const [form, setForm] = useState({
-        nickname: "",
         loginId: "",
         name: "",
         email: "",
@@ -15,9 +14,9 @@ export default function SignupPage() {
         phone: "",
     });
     const [passwordConfirm, setPasswordConfirm] = useState("");
-    // const [isCheckingId, setIsCheckingId] = useState(false);
-    // const [isIdAvailable, setIsIdAvailable] = useState(null); // null: 미확인, true/false: 확인 결과
-    // const [idCheckMessage, setIdCheckMessage] = useState("");
+    const [isCheckingId, setIsCheckingId] = useState(false);
+    const [isIdAvailable, setIsIdAvailable] = useState(null); // null: 미확인, true/false: 확인 결과
+    const [idCheckMessage, setIdCheckMessage] = useState("");
 
     const handleChange = e => {
         const {name, value} = e.target;
@@ -26,50 +25,49 @@ export default function SignupPage() {
         } else {
             setForm(prev => ({...prev, [name]: value}));
         }
-        // if (name === "loginId") {
-        //     // 아이디가 바뀌면 이전 중복확인 결과는 무효화
-        //     setIsIdAvailable(null);
-        //     setIdCheckMessage("");
-        // }
+        if (name === "loginId") {
+            // 아이디가 바뀌면 이전 중복확인 결과는 무효화
+            setIsIdAvailable(null);
+            setIdCheckMessage("");
+        }
 
     };
 
-    // const handleIdCheck = async () => {
-    //     if (!form.loginId) {
-    //         setIdCheckMessage("아이디(이메일)를 입력하세요.");
-    //         setIsIdAvailable(null);
-    //         return;
-    //     }
-    //     // 예: 이메일 형식 간단 검증(프로젝트 정책에 맞게 조정)
-    //     const emailLike = /\S+@\S+\.\S+/.test(form.loginId);
-    //     if (!emailLike) {
-    //         setIdCheckMessage("올바른 이메일 형식이 아닙니다.");
-    //         setIsIdAvailable(null);
-    //         return;
-    //     }
-    //
-    //     try {
-    //         setIsCheckingId(true);
-    //         setIdCheckMessage("");
-    //
-    //         const available = await checkLoginId(form.loginId);
-    //
-    //
-    //         if (available) {
-    //             setIsIdAvailable(true);
-    //             setIdCheckMessage("사용 가능한 아이디입니다.");
-    //         } else {
-    //             setIsIdAvailable(false);
-    //             setIdCheckMessage("이미 사용 중인 아이디입니다.");
-    //         }
-    //     } catch (e) {
-    //         console.error(e);
-    //         setIsIdAvailable(null);
-    //         setIdCheckMessage("중복확인에 실패했습니다. 잠시 후 다시 시도하세요.");
-    //     } finally {
-    //         setIsCheckingId(false);
-    //     }
-    // };
+    const handleIdCheck = async () => {
+        if (!form.loginId) {
+            setIdCheckMessage("아이디(이메일)를 입력하세요.");
+            setIsIdAvailable(null);
+            return;
+        }
+        // 예: 이메일 형식 간단 검증(프로젝트 정책에 맞게 조정)
+        const emailLike = /\S+@\S+\.\S+/.test(form.loginId);
+        if (!emailLike) {
+            setIdCheckMessage("올바른 이메일 형식이 아닙니다.");
+            setIsIdAvailable(null);
+            return;
+        }
+
+        try {
+            setIsCheckingId(true);
+            setIdCheckMessage("");
+
+            const available = await checkLoginId(form.loginId);
+
+            if (available) {
+                setIsIdAvailable(true);
+                setIdCheckMessage("사용 가능한 아이디입니다.");
+            } else {
+                setIsIdAvailable(false);
+                setIdCheckMessage("이미 사용 중인 아이디입니다.");
+            }
+        } catch (e) {
+            console.error(e);
+            setIsIdAvailable(null);
+            setIdCheckMessage("중복확인에 실패했습니다. 잠시 후 다시 시도하세요.");
+        } finally {
+            setIsCheckingId(false);
+        }
+    };
 
 
     const handleSubmit = async e => {
@@ -106,7 +104,24 @@ export default function SignupPage() {
         <div className="signup-container">
             <div className="signup-card">
                 <h2 className="signup-title">회원가입</h2>
+                <div className="mb-1">
+                    <div className={`min-h-10 transition-all`}>
+                        {idCheckMessage && (
+                            <div
+                                aria-live="polite"
+                                style={{marginTop: 4,
+                                    color: isIdAvailable === true ? "green"
+                                        : isIdAvailable === false ? "red" : "#666",
+                                }}
+                            >
+                                {idCheckMessage}
+                            </div>
+                        )}
+                    </div>
+                </div>
                 <form onSubmit={handleSubmit} className="signup-form">
+
+
                     <label htmlFor="loginId" className="form-label">아이디</label>
                     <div className="id-check-group">
                         <input
@@ -118,27 +133,10 @@ export default function SignupPage() {
                             required
                             className="form-input"
                         />
-                        {/*<button type="button" className="id-check-button" onClick={handleIdCheck}*/}
-                        {/*        disabled={isCheckingId || !form.loginId}>*/}
-                        {/*    {isCheckingId ? "확인중..." : "중복확인"}</button>*/}
+                        <button type="button" className="id-check-button" onClick={handleIdCheck}
+                                disabled={isCheckingId || !form.loginId}>
+                            {isCheckingId ? "확인중..." : "중복확인"}</button>
                     </div>
-                    {/*{idCheckMessage && (*/}
-                    {/*    <div*/}
-                    {/*        aria-live="polite"*/}
-                    {/*        style={{*/}
-                    {/*            marginTop: 4,*/}
-                    {/*            color:*/}
-                    {/*                isIdAvailable === true*/}
-                    {/*                    ? "green"*/}
-                    {/*                    : isIdAvailable === false*/}
-                    {/*                        ? "crimson"*/}
-                    {/*                        : "#666",*/}
-                    {/*        }}*/}
-                    {/*    >*/}
-                    {/*        {idCheckMessage}*/}
-                    {/*    </div>*/}
-                    {/*)}*/}
-
 
                     <label htmlFor="password" className="form-label">비밀번호</label>
                     <input
@@ -172,16 +170,6 @@ export default function SignupPage() {
                         onChange={handleChange}
                         placeholder="이름"
                         required
-                        className="form-input"
-                    />
-
-                    <label htmlFor="nickname" className="form-label">닉네임</label>
-                    <input
-                        id="nickname"
-                        name="nickname"
-                        value={form.nickname}
-                        onChange={handleChange}
-                        placeholder="닉네임"
                         className="form-input"
                     />
 

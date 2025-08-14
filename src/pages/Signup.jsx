@@ -225,6 +225,7 @@ export default function SignupPage() {
                         value={form.phone}
                         onChange={handleChange}
                         placeholder="휴대폰번호"
+                        required
                         className="form-input"
                     />
                     <div className="agreement-container">
@@ -281,6 +282,7 @@ export default function SignupPage() {
                     <button
                         type="submit"
                         className="form-button"
+                        disabled={isIdAvailable !== true || !requiredOk}
                     >
                         회원가입
                     </button>

@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {login} from "../api/memberApi.js";
+import {login, startKakaoLogin} from "../api/memberApi.js";
 import "./Login.css";
+import kakaoLogin from "../assets/styles/kakao_login_medium_narrow.png";
 
 const Login = () => {
     const navigate = useNavigate();
@@ -22,6 +23,10 @@ const Login = () => {
         }
     };
 
+    const handleKakaoLoginClick = () => {
+        startKakaoLogin(); // 백엔드 카카오 로그인 시작
+    };
+
     return (
         <div className="login-container">
             <div className="login-box">
@@ -29,7 +34,7 @@ const Login = () => {
                 {errorMsg && <p className="error-message">{errorMsg}</p>}
                 <form onSubmit={handleLogin}>
                     <div className="form-group">
-                        <label htmlFor="loginId" className="form-label">아이디</label>
+
                         <input
                             id="loginId"
                             name="loginId"
@@ -42,7 +47,7 @@ const Login = () => {
                         />
                     </div>
                     <div className="form-group">
-                        <label htmlFor="password" className="form-label">비밀번호</label>
+
                         <input
                             id="password"
                             type="password"
@@ -67,9 +72,17 @@ const Login = () => {
                         className="signup-link"
                         onClick={() => navigate("/signup")}
                     >
-            회원가입
-          </span>
+            회원가입</span>
                 </p>
+                {/* 소셜 로그인 구분선 */}
+                <div className="social-login-separator">소셜 로그인</div>
+
+                {/* 카카오 로그인 버튼 */}
+                <div>
+                    <button onClick={handleKakaoLoginClick} className="kakao-login-button" style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}>
+                        <img src={kakaoLogin} alt="카카오 로그인" style={{ display: "block" }} />
+                    </button>
+                </div>
             </div>
         </div>
     );

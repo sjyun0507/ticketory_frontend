@@ -18,6 +18,17 @@ export default function SignupPage() {
     const [isIdAvailable, setIsIdAvailable] = useState(null); // null: 미확인, true/false: 확인 결과
     const [idCheckMessage, setIdCheckMessage] = useState("");
 
+    // 동의 항목 상태 추가
+    const [agreements, setAgreements] = useState({
+        age: false,       // [필수] 만 14세 이상
+        terms: false,     // [필수] 이용약관 동의
+        marketing: false, // [선택] 마케팅 정보 수신 동의
+    });
+
+    // 파생 상태
+    const requiredOk = agreements.age && agreements.terms;
+    const allAgree = agreements.age && agreements.terms && agreements.marketing;
+
     const handleChange = e => {
         const {name, value} = e.target;
         if (name === "passwordConfirm") {
@@ -31,6 +42,22 @@ export default function SignupPage() {
             setIdCheckMessage("");
         }
 
+    };
+
+    // 전체 동의 토글
+    const handleToggleAllAgree = (e) => {
+        const checked = e.target.checked;
+        setAgreements({
+            age: checked,
+            terms: checked,
+            marketing: checked,
+        });
+    };
+
+    // 개별 항목 토글
+    const handleToggleAgreement = (key) => (e) => {
+        const checked = e.target.checked;
+        setAgreements(prev => ({ ...prev, [key]: checked }));
     };
 
     const handleIdCheck = async () => {
@@ -72,6 +99,13 @@ export default function SignupPage() {
 
     const handleSubmit = async e => {
         e.preventDefault();
+
+        // 필수 동의 체크
+        if (!requiredOk) {
+            alert("필수 항목(만 14세 이상, 이용약관)에 동의해 주세요.");
+            return;
+        }
+
         if (form.password !== passwordConfirm) {
             alert("비밀번호가 일치하지 않습니다.");
             return;
@@ -193,7 +227,57 @@ export default function SignupPage() {
                         placeholder="휴대폰번호"
                         className="form-input"
                     />
+                    <div className="agreement-container">
+                        <h3 className="agreement-title">개인정보 수집 이용 동의 안내</h3>
 
+                        <p className="subtext">
+                            전체 동의에는 필수 및 선택 정보에 대한 동의가 포함되어 있으며, 선택 항목에 대한 동의를 거부하시는 경우에도 서비스 이용이 가능합니다.
+                        </p>
+                        <label className="check-all">
+                            <input
+                                type="checkbox"
+                                id="all-agree"
+                                checked={allAgree}
+                                onChange={handleToggleAllAgree}
+                            />{" "}
+                            <strong>모두 확인하였으며 동의합니다.</strong>
+                        </label>
+                        <div className="agreement-box">
+                            <label htmlFor="agree-age">
+                                <input
+                                    id="agree-age"
+                                    type="checkbox"
+                                    className="agree"
+                                    checked={agreements.age}
+                                    onChange={handleToggleAgreement("age")}
+                                />{" "}
+                                [필수] 만 14세 이상입니다
+                            </label>
+
+                            <label htmlFor="agree-terms">
+                                <input
+                                    id="agree-terms"
+                                    type="checkbox"
+                                    className="agree"
+                                    checked={agreements.terms}
+                                    onChange={handleToggleAgreement("terms")}
+                                />{" "}
+                                [필수] 이용약관 동의
+                            </label>
+
+                            <label htmlFor="agree-marketing">
+                                <input
+                                    id="agree-marketing"
+                                    type="checkbox"
+                                    className="agree"
+                                    checked={agreements.marketing}
+                                    onChange={handleToggleAgreement("marketing")}
+                                />{" "}
+                                [선택] 마케팅 정보 수신 동의
+                            </label>
+
+                        </div>
+                    </div>
                     <button
                         type="submit"
                         className="form-button"

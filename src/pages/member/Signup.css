@@ -10,7 +10,7 @@
 
 /* 회원가입 카드 */
 .signup-card {
-    max-width: 38rem;
+    max-width: 34rem;
     width: 100%;
     background: white;
     border-radius: 0.5rem; /* rounded-lg */

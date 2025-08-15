@@ -112,6 +112,12 @@ const Header = () => {
                             >
                                 로그인
                             </button>
+                            <button
+                                onClick={() => navigate('/guest-login')}
+                                className="text-xs text-gray-700 font-medium px-1 rounded hover:bg-gray-100"
+                            >
+                                비회원 예매확인
+                            </button>
                         </>
                     )}
                     {isAdmin && (

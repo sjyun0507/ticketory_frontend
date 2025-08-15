@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { memberLogin, startKakaoLogin } from "../../api/memberApi.js";
 import "./Login.css";
-import kakaoLogin from "../../assets/styles/kakao_login_medium_narrow.png";
+import kakaoLogin from "../../assets/styles/kakao_login_large_wide.png";
 import { useAuthStore } from '../../store/useAuthStore.js';
 
 
@@ -50,11 +50,11 @@ const Login = () => {
 
     return (
         <div className="login-container">
-            <div className="login-box">
+            <div className="login-box" style={{ maxWidth: '340px', margin: '0 auto' }}>
                 <h2 className="login-title">로그인</h2>
                 {errorMsg && <p className="error-message" role="alert">{errorMsg}</p>}
                 <form onSubmit={handleLogin}>
-                    <div className="form-group">
+                    <div className="form-group full-width">
 
                         <input
                             id="loginId"
@@ -64,10 +64,11 @@ const Login = () => {
                             placeholder="로그인 아이디"
                             onChange={(e) => { setErrorMsg(""); setLoginId(e.target.value); }}
                             className="form-input"
+                            style={{ width: "100%" }}
                             required
                         />
                     </div>
-                    <div className="form-group">
+                    <div className="form-group full-width">
 
                         <input
                             id="password"
@@ -76,11 +77,12 @@ const Login = () => {
                             onChange={(e) => { setErrorMsg(""); setPassword(e.target.value); }}
                             placeholder="비밀번호"
                             className="form-input"
+                            style={{ width: "100%" }}
                             required
                         />
                     </div>
 
-                    <button type="submit" className="login-button" disabled={submitting}>
+                    <button type="submit" className="login-button" disabled={submitting} style={{ width: "100%" }}>
                         {submitting ? "로그인 중..." : "로그인"}
                     </button>
                 </form>
@@ -98,7 +100,7 @@ const Login = () => {
                 {/* 카카오 로그인 버튼 */}
                 <div>
                     <button onClick={handleKakaoLoginClick} className="kakao-login-button" style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}>
-                        <img src={kakaoLogin} alt="카카오 로그인" style={{ display: "block" }} />
+                        <img src={kakaoLogin} alt="카카오 로그인" style={{ display: "block", width: "100%" }} />
                     </button>
                 </div>
             </div>

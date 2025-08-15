@@ -88,9 +88,14 @@ export default function Settings() {
     try {
       setLoading(true);
       await deleteMember();
-      // 인증 상태 초기화 및 홈으로 이동
+      // 토큰/스토어 완전 초기화
+      localStorage.removeItem('accessToken');
       if (typeof clearAuth === 'function') clearAuth();
-      navigate('/');
+      const st = useAuthStore?.getState?.();
+      if (st && typeof st.logout === 'function') st.logout();
+      // 인증 상태 초기화 및 홈으로 이동
+      // 로그아웃 후 홈으로 리다이렉트
+      navigate('/', { replace: true });
     } catch (e) {
       setErr(e?.response?.data?.message || '회원 탈퇴에 실패했어요. 잠시 후 다시 시도해 주세요.');
     } finally {

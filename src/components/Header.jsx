@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {Link, useNavigate} from 'react-router-dom';
 import logo from '../assets/styles/logo.png';
 import user from '../assets/styles/users.png';
@@ -8,6 +8,7 @@ import {memberLogout} from "../api/memberApi.js";
 
 const Header = () => {
     const navigate = useNavigate();
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
 
     const accessToken = useAuthStore((s) => s.accessToken);
     const isLoggedIn = Boolean(accessToken);
@@ -57,6 +58,10 @@ const Header = () => {
     };
 
     const handleLogout = async () => {
+        if (isLoggingOut) return; // 중복 클릭 방지
+        const ok = window.confirm('정말 로그아웃 하시겠습니까?');
+        if (!ok) return;
+        setIsLoggingOut(true);
         try {
             // 1) 서버에 로그아웃 요청 (토큰은 인터셉터로 자동 첨부)
             await memberLogout();
@@ -68,9 +73,15 @@ const Header = () => {
             localStorage.removeItem("accessToken");
             // 3) 프론트 정리 (스토어 단일 통로)
             const logout = useAuthStore?.getState?.()?.logout;
-            logout && logout();
+            if (typeof logout === 'function') logout();
+            const st = useAuthStore?.getState?.();
+            if (st) {
+              if ('accessToken' in st) st.accessToken = null;
+              if ('user' in st) st.user = null;
+            }
             // 4) 이동
             navigate('/', { replace: true });
+            setIsLoggingOut(false);
         }
     };
     return (
@@ -81,7 +92,9 @@ const Header = () => {
                     {isLoggedIn ? (
                         <button
                             onClick={handleLogout}
-                            className="text-xs text-gray-700 font-medium px-1 rounded hover:bg-gray-100"
+                            disabled={isLoggingOut}
+                            aria-disabled={isLoggingOut}
+                            className={`text-xs text-gray-700 font-medium px-1 rounded hover:bg-gray-100 ${isLoggingOut ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             로그아웃
                         </button>

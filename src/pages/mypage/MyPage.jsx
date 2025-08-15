@@ -67,7 +67,7 @@ export default function MyPage() {
   ];
 
   return (
-    <main className="max-w-[1200px] mx-auto px-4 py-6">
+    <main className="max-w-[1200px] min-h-[85vh] mx-auto px-4 py-6">
       {/* 상단: 프로필 카드 */}
       <section className="bg-white border rounded-lg p-4 sm:p-5 mb-6">
         <div className="flex items-center gap-4">

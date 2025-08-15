@@ -2,7 +2,7 @@ import React from 'react';
 
 const Home = () => {
   return (
-    <main className="max-w-[1200px] mx-auto px-4 py-16 min-h-[70vh] flex items-center justify-center">
+    <main className="max-w-[1200px] mx-auto px-4 py-16 min-h-[85vh] flex items-center justify-center">
       <section className="w-full">
         <div className="border rounded-lg bg-white/80 backdrop-blur p-10 text-center shadow-sm">
           <div className="text-5xl mb-4">🚧</div>

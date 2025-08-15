@@ -77,11 +77,11 @@ const Header = () => {
         <header id="header" className="sticky top-0 w-full z-50 bg-white shadow-sm leading-none">
             {/* Top Bar */}
             <div className="w-full">
-                <div className="max-w-[1200px] mx-auto px-4 py-1 mt-0 flex justify-end items-end space-x-2">
+                <div className="max-w-[1200px] mx-auto px-4 pt-4 mt-0 flex justify-end items-end space-x-2">
                     {isLoggedIn ? (
                         <button
                             onClick={handleLogout}
-                            className="text-xs text-gray-700 font-medium px-2 py-1 rounded hover:bg-gray-100"
+                            className="text-xs text-gray-700 font-medium px-1 rounded hover:bg-gray-100"
                         >
                             로그아웃
                         </button>
@@ -89,13 +89,13 @@ const Header = () => {
                         <>
                             <button
                                 onClick={() => navigate('/signup')}
-                                className="text-xs text-gray-700 font-medium px-2 py-1 rounded hover:bg-gray-100"
+                                className="text-xs text-gray-700 font-medium px-1 rounded hover:bg-gray-100"
                             >
                                 회원가입
                             </button>
                             <button
                                 onClick={() => navigate('/login')}
-                                className="text-xs text-gray-700 font-medium px-2 py-1 rounded hover:bg-gray-100"
+                                className="text-xs text-gray-700 font-medium px-1 rounded hover:bg-gray-100"
                             >
                                 로그인
                             </button>
@@ -104,7 +104,7 @@ const Header = () => {
                     {isAdmin && (
                         <button
                             onClick={() => navigate('/admin')}
-                            className="text-xs text-rose-700 font-semibold px-2 py-1 rounded hover:bg-rose-50"
+                            className="text-xs text-rose-700 font-semibold px-1 rounded hover:bg-rose-50"
                         >
                             관리자
                         </button>
@@ -114,7 +114,7 @@ const Header = () => {
 
             {/* Main Header */}
             <div className="w-full">
-                <div className="max-w-[1200px] mx-auto px-4 py-2.5 flex items-center justify-between">
+                <div className="max-w-[1200px] mx-auto px-4 pb-2.5 flex items-center justify-between">
                     {/* 로고 */}
                     <div>
                         <Link to="/" aria-label="홈으로 이동">

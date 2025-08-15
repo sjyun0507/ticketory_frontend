@@ -5,7 +5,8 @@ import './Footer.css';
 const Footer = () => {
     return (
         <footer className="footer">
-            <p>Footer</p>
+            <p>&copy; {new Date().getFullYear()} Ticketory. All rights reserved.</p>
+            <p className="footer-tagline">Your movie journey starts here.</p>
         </footer>
     );
 };

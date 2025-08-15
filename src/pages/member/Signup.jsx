@@ -1,10 +1,10 @@
 import {useState} from "react";
-import {checkLoginId, signup} from "../api/memberApi.js";
+import { checkLoginId, memberSignup } from "../../api/memberApi.js";
 import {useNavigate} from "react-router-dom";
 import "./Signup.css";
 
 
-export default function SignupPage() {
+export default function Signup() {
     const navigate = useNavigate();
     const [form, setForm] = useState({
         loginId: "",
@@ -16,6 +16,7 @@ export default function SignupPage() {
     const [passwordConfirm, setPasswordConfirm] = useState("");
     const [isCheckingId, setIsCheckingId] = useState(false);
     const [isIdAvailable, setIsIdAvailable] = useState(null); // null: 미확인, true/false: 확인 결과
+    const [submitting, setSubmitting] = useState(false);
     const [idCheckMessage, setIdCheckMessage] = useState("");
 
     // 동의 항목 상태 추가
@@ -34,12 +35,15 @@ export default function SignupPage() {
         if (name === "passwordConfirm") {
             setPasswordConfirm(value);
         } else {
+            if (name === "loginId") {
+                const normalized = value.trim().toLowerCase();
+                setForm(prev => ({ ...prev, loginId: normalized }));
+                // 아이디가 바뀌면 이전 중복확인 결과는 무효화
+                setIsIdAvailable(null);
+                setIdCheckMessage("");
+                return;
+            }
             setForm(prev => ({...prev, [name]: value}));
-        }
-        if (name === "loginId") {
-            // 아이디가 바뀌면 이전 중복확인 결과는 무효화
-            setIsIdAvailable(null);
-            setIdCheckMessage("");
         }
 
     };
@@ -66,11 +70,11 @@ export default function SignupPage() {
             setIsIdAvailable(null);
             return;
         }
-        // 예: 이메일 형식 간단 검증(프로젝트 정책에 맞게 조정)
-        const emailLike = /\S+@\S+\.\S+/.test(form.loginId);
+        // 이메일 형식 검증 (간단 버전)
+        const emailLike = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.loginId);
         if (!emailLike) {
             setIdCheckMessage("올바른 이메일 형식이 아닙니다.");
-            setIsIdAvailable(null);
+            setIsIdAvailable(false);
             return;
         }
 
@@ -100,27 +104,59 @@ export default function SignupPage() {
     const handleSubmit = async e => {
         e.preventDefault();
 
+        if (submitting) return;
+
         // 필수 동의 체크
         if (!requiredOk) {
             alert("필수 항목(만 14세 이상, 이용약관)에 동의해 주세요.");
             return;
         }
 
-        if (form.password !== passwordConfirm) {
+        // 값 정리
+        const payload = {
+            ...form,
+            loginId: (form.loginId || "").trim().toLowerCase(),
+            name: (form.name || "").trim(),
+            email: (form.email || "").trim(),
+            phone: (form.phone || "").trim(),
+        };
+
+        // 기본 검증
+        const emailLike = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.loginId);
+        if (!emailLike) {
+            alert("아이디는 이메일 형식이어야 합니다.");
+            return;
+        }
+
+        if (!payload.password || payload.password.length < 8 || payload.password.length > 24) {
+            alert("비밀번호는 8~24자여야 합니다.");
+            return;
+        }
+
+        if (payload.password !== passwordConfirm) {
             alert("비밀번호가 일치하지 않습니다.");
             return;
         }
+
+        // 중복확인 통과 필요
+        if (isIdAvailable !== true) {
+            alert("아이디 중복확인을 먼저 진행해 주세요.");
+            return;
+        }
+
         try {
-            const res = await signup(form); // API 호출
-            alert("회원가입 성공!");
+            setSubmitting(true);
+            const res = await memberSignup(payload); // API 호출
+            alert("회원가입 성공! 로그인 후 이용해주세요");
             console.log(res.data);
-            navigate("/"); // 로그인 후 홈화면 이동
+            navigate("/"); // 홈화면 이동
         } catch (error) {
             console.error(error);
             if (error.response) {
                 const status = error.response.status;
                 if (status === 409) {
                     alert("이미 사용 중인 아이디입니다. 다른 아이디를 입력하세요.");
+                    setIsIdAvailable(false);
                 } else if (status === 401) {
                     alert("인증 오류: 관리자에게 문의하세요.");
                 } else if (status === 400) {
@@ -131,6 +167,8 @@ export default function SignupPage() {
             } else {
                 alert("서버와 연결할 수 없습니다.");
             }
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -143,6 +181,7 @@ export default function SignupPage() {
                         {idCheckMessage && (
                             <div
                                 aria-live="polite"
+                                role="status"
                                 style={{marginTop: 4,
                                     color: isIdAvailable === true ? "green"
                                         : isIdAvailable === false ? "red" : "#666",
@@ -156,21 +195,26 @@ export default function SignupPage() {
                 <form onSubmit={handleSubmit} className="signup-form">
 
 
-                    <label htmlFor="loginId" className="form-label">아이디</label>
+                    <label htmlFor="loginId" className="form-label">아이디(이메일)</label>
                     <div className="id-check-group">
-                        <input
-                            id="loginId"
-                            name="loginId"
-                            value={form.loginId}
-                            onChange={handleChange}
-                            placeholder="이메일"
-                            required
-                            className="form-input"
-                        />
-                        <button type="button" className="id-check-button" onClick={handleIdCheck}
-                                disabled={isCheckingId || !form.loginId}>
-                            {isCheckingId ? "확인중..." : "중복확인"}</button>
+                      <input
+                          id="loginId"
+                          name="loginId"
+                          type="email"
+                          inputMode="email"
+                          autoComplete="username"
+                          value={form.loginId}
+                          onChange={handleChange}
+                          placeholder="아이디(이메일)"
+                          required
+                          aria-invalid={isIdAvailable === false}
+                          className="form-input"
+                      />
+                      <button type="button" className="id-check-button" onClick={handleIdCheck}
+                              disabled={isCheckingId || !form.loginId}>
+                          {isCheckingId ? "확인중..." : "중복확인"}</button>
                     </div>
+
 
                     <label htmlFor="password" className="form-label">비밀번호</label>
                     <input
@@ -180,6 +224,8 @@ export default function SignupPage() {
                         value={form.password}
                         onChange={handleChange}
                         placeholder="비밀번호 8~24자"
+                        minLength={8}
+                        maxLength={24}
                         autoComplete="new-password"
                         className="form-input"
                     />
@@ -222,10 +268,11 @@ export default function SignupPage() {
                     <input
                         id="phone"
                         name="phone"
+                        type="tel"
+                        inputMode="numeric"
                         value={form.phone}
                         onChange={handleChange}
                         placeholder="휴대폰번호"
-                        required
                         className="form-input"
                     />
                     <div className="agreement-container">
@@ -282,13 +329,13 @@ export default function SignupPage() {
                     <button
                         type="submit"
                         className="form-button"
-                        disabled={isIdAvailable !== true || !requiredOk}
+                        disabled={submitting || isIdAvailable !== true || !requiredOk}
                     >
-                        회원가입
+                        {submitting ? "가입 중..." : "회원가입"}
                     </button>
                 </form>
                 <p className="signup-footer">
-                    이미 계정이 있으신가요? <a href="/login">로그인</a>
+                    이미 계정이 있으신가요? <a href="/member/Login">로그인</a>
                 </p>
             </div>
         </div>

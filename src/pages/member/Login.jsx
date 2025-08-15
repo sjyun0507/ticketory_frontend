@@ -1,25 +1,46 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {login, startKakaoLogin} from "../api/memberApi.js";
+import { memberLogin, startKakaoLogin } from "../../api/memberApi.js";
 import "./Login.css";
-import kakaoLogin from "../assets/styles/kakao_login_medium_narrow.png";
+import kakaoLogin from "../../assets/styles/kakao_login_medium_narrow.png";
+import { useAuthStore } from '../../store/useAuthStore.js';
+
 
 const Login = () => {
     const navigate = useNavigate();
     const [loginId, setLoginId] = useState("");
     const [password, setPassword] = useState("");
     const [errorMsg, setErrorMsg] = useState("");
+    const [submitting, setSubmitting] = useState(false);
 
     const handleLogin = async (e) => {
         e.preventDefault();
+        if (submitting) return;
+        setSubmitting(true);
         try {
-            const response = await login({loginId, password});
-            // 로그인 성공 시 토큰 저장
-            localStorage.setItem("accessToken", response.data.accessToken);
-            navigate("/"); // 로그인 후 홈화면 이동
-        } catch (error) {
-            console.error(error);
-            setErrorMsg("로그인 실패. 아이디와 비밀번호를 확인하세요.");
+            const { data } = await memberLogin({ loginId, password });
+            localStorage.setItem("accessToken", data.accessToken);
+            useAuthStore.getState().login(data.accessToken);
+            navigate("/");
+        } catch (err) {
+            const status = err?.response?.status;
+            const backendMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message;
+
+            if (status === 400 || status === 401) {
+                setErrorMsg("아이디 또는 비밀번호가 올바르지 않습니다.");
+            } else if (status === 403) {
+                setErrorMsg("접근 권한이 없습니다. 관리자에게 문의하세요.");
+            } else if (status === 429) {
+                setErrorMsg("요청이 너무 잦습니다. 잠시 후 다시 시도하세요.");
+            } else if (status >= 500) {
+                setErrorMsg("서버 오류가 발생했습니다. 잠시 후 다시 시도하세요.");
+            } else if (err?.request && !err?.response) {
+                setErrorMsg("네트워크 오류입니다. 인터넷 연결을 확인하세요.");
+            } else {
+                setErrorMsg(backendMsg || "로그인 중 오류가 발생했습니다. 잠시 후 다시 시도하세요.");
+            }
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -31,7 +52,7 @@ const Login = () => {
         <div className="login-container">
             <div className="login-box">
                 <h2 className="login-title">로그인</h2>
-                {errorMsg && <p className="error-message">{errorMsg}</p>}
+                {errorMsg && <p className="error-message" role="alert">{errorMsg}</p>}
                 <form onSubmit={handleLogin}>
                     <div className="form-group">
 
@@ -41,7 +62,7 @@ const Login = () => {
                             type="email"
                             value={loginId}
                             placeholder="로그인 아이디"
-                            onChange={(e) => setLoginId(e.target.value)}
+                            onChange={(e) => { setErrorMsg(""); setLoginId(e.target.value); }}
                             className="form-input"
                             required
                         />
@@ -52,18 +73,15 @@ const Login = () => {
                             id="password"
                             type="password"
                             value={password}
-                            onChange={(e) => setPassword(e.target.value)}
+                            onChange={(e) => { setErrorMsg(""); setPassword(e.target.value); }}
                             placeholder="비밀번호"
                             className="form-input"
                             required
                         />
                     </div>
 
-                    <button
-                        type="submit"
-                        className="login-button"
-                    >
-                        로그인
+                    <button type="submit" className="login-button" disabled={submitting}>
+                        {submitting ? "로그인 중..." : "로그인"}
                     </button>
                 </form>
                 <p className="signup-text">

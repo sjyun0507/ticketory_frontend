@@ -1,0 +1,5 @@
+/* Global reset for root spacing */
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { margin: 0; padding: 0; }
+html, body { height: 100%; }
+#root { min-height: 100%; }

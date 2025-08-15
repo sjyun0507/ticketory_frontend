@@ -25,3 +25,15 @@ export const getMyInfo = (memberId) => api.get(`/members/${memberId}`).then(res 
 
 // 로그아웃 API
 export const memberLogout = () => api.post("/members/logout");
+
+// 내 정보 수정
+export const updateMember = async (memberId, payload) => {
+    const { data } = await api.put(`/members/${memberId}`, payload);
+    return data;
+};
+
+// 내 정보 삭제
+export const deleteMember = async () => {
+    const { data } = await api.delete(`/members/me`);
+    return data;
+};

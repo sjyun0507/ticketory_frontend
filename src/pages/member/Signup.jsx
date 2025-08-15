@@ -272,7 +272,7 @@ export default function Signup() {
                         inputMode="numeric"
                         value={form.phone}
                         onChange={handleChange}
-                        placeholder="휴대폰번호"
+                        placeholder="휴대폰번호(01012345678)"
                         className="form-input"
                         required
                     />

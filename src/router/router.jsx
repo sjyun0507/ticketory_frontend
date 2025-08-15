@@ -10,6 +10,7 @@ import Story from "../pages/public/Story.jsx";
 import Points from "../pages/public/Points.jsx";
 import Events from "../pages/public/Events.jsx";
 import RequireAuth from "./RequireAuth.jsx";
+import Settings from "../pages/mypage/Settings.jsx";
 
 const routes = [
     {path: "/", element: <Home/>},
@@ -22,12 +23,14 @@ const routes = [
     {path: "/login", element: <Login/>},
     {path: "/kakao", element: <KakaoRedirectHandler/>},
     {
-        element: <RequireAuth/>,           // 보호 필요, 실시간 토큰 확인
+        path: "/mypage",
+        element: <RequireAuth/>,
         children: [
-            { path: "/mypage", element: <MyPage /> },            // MyPage 단독
-            { path: "/mypage/bookings", element: <MyBookings /> } // 예매내역 단독
+            { index: true, element: <MyPage /> },
+            { path: "bookings", element: <MyBookings /> },
+            { path: "settings", element: <Settings /> },
         ],
-    },
+    }
 ];
 
 export default routes;

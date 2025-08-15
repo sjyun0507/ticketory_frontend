@@ -274,6 +274,7 @@ export default function Signup() {
                         onChange={handleChange}
                         placeholder="휴대폰번호"
                         className="form-input"
+                        required
                     />
                     <div className="agreement-container">
                         <h3 className="agreement-title">개인정보 수집 이용 동의 안내</h3>

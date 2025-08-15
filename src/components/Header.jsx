@@ -64,11 +64,12 @@ const Header = () => {
             // 401/403/네트워크 오류여도 프론트 정리는 무조건 진행
             console.info("logout api skipped/failed", e?.response?.status);
         } finally {
-            // 2) 프론트 정리 (스토어 단일 통로)
+            // 2) 로컬스토리지 토큰 제거
+            localStorage.removeItem("accessToken");
+            // 3) 프론트 정리 (스토어 단일 통로)
             const logout = useAuthStore?.getState?.()?.logout;
             logout && logout();
-
-            // 3) 이동
+            // 4) 이동
             navigate('/', { replace: true });
         }
     };

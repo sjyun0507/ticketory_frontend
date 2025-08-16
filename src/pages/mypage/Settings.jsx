@@ -11,9 +11,11 @@ export default function Settings() {
   const memberIdStr = memberId != null ? String(memberId) : null;
 
   const [form, setForm] = useState({
+    id: '',              // 로그인 아이디(수정 불가)
     name: '',
     email: '',
     phone: '',
+    currentPassword: '', // 비밀번호 변경 시 필요
     newPassword: '',
     confirmPassword: '',
   });
@@ -29,6 +31,7 @@ export default function Settings() {
         const data = await getMyInfo(memberIdStr);
         setForm((prev) => ({
           ...prev,
+          id: (data?.loginId ?? data?.id ?? ''),
           name: data?.name ?? '',
           email: data?.email ?? '',
           phone: data?.phone ?? '',
@@ -60,12 +63,19 @@ export default function Settings() {
       setErr('새 비밀번호가 일치하지 않습니다.');
       return;
     }
+    if (form.newPassword && !form.currentPassword) {
+      setErr('비밀번호를 변경하려면 현재 비밀번호를 입력해 주세요.');
+      return;
+    }
 
     const payload = {
       name: form.name,
+      email: form.email,
       phone: form.phone,
-      // 백엔드가 허용하는 경우에만 전송
-      ...(form.newPassword ? { newPassword: form.newPassword } : {}),
+      // 비밀번호 변경 시 현재 비밀번호와 새 비밀번호 함께 전달
+      ...(form.newPassword
+        ? { currentPassword: form.currentPassword, newPassword: form.newPassword }
+        : {}),
     };
 
     try {
@@ -126,29 +136,21 @@ export default function Settings() {
       <h2 className="mb-3 text-2xl font-semibold">회원정보 수정</h2>
       <p className="mb-6 text-gray-600">프로필 정보를 업데이트하세요.</p>
 
-      {loading && (
-        <div className="mb-3 text-sm text-gray-700">처리 중...</div>
-      )}
-
-      {err && (
-        <div
-          role="alert"
-          className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-        >
-          {err}
-        </div>
-      )}
-
-      {ok && (
-        <div
-          role="status"
-          className="mb-3 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700"
-        >
-          {ok}
-        </div>
-      )}
-
       <form onSubmit={onSubmit} className="space-y-4">
+        <div className="space-y-1">
+          <label htmlFor="loginId" className="block font-semibold">로그인 아이디 (수정 불가)</label>
+          <input
+            id="loginId"
+            name="id"
+            type="text"
+            value={form.id}
+            readOnly
+            disabled
+            placeholder="로그인 시 사용한 이메일"
+            autoComplete="username"
+            className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-gray-600 cursor-not-allowed"
+          />
+        </div>
         <div className="space-y-1">
           <label htmlFor="name" className="block font-semibold">이름</label>
           <input
@@ -172,7 +174,7 @@ export default function Settings() {
             type="email"
             value={form.email}
             onChange={onChange}
-            placeholder="ex. user@example.com"
+            placeholder="user@example.com"
             autoComplete="email"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black/70"
           />
@@ -186,7 +188,7 @@ export default function Settings() {
             type="tel"
             value={form.phone}
             onChange={onChange}
-            placeholder="01012345678"
+            placeholder="010-1234-5678"
             autoComplete="tel"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black/70"
           />
@@ -195,6 +197,20 @@ export default function Settings() {
         <fieldset className="rounded-xl border border-gray-200 p-4">
           <legend className="px-1 text-gray-600">비밀번호 변경 (선택)</legend>
           <div className="space-y-4">
+            <div className="space-y-1">
+              <label htmlFor="currentPassword" className="block font-semibold">현재 비밀번호</label>
+              <input
+                id="currentPassword"
+                name="currentPassword"
+                type="password"
+                value={form.currentPassword}
+                onChange={onChange}
+                placeholder="현재 비밀번호"
+                autoComplete="current-password"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black/70"
+              />
+              <p className="text-xs text-gray-500">비밀번호를 변경하려면 현재 비밀번호가 필요합니다.</p>
+            </div>
             <div className="space-y-1">
               <label htmlFor="newPassword" className="block font-semibold">새 비밀번호</label>
               <input
@@ -224,6 +240,28 @@ export default function Settings() {
             </div>
           </div>
         </fieldset>
+
+          {loading && (
+              <div className="mb-3 text-sm text-gray-700">처리 중...</div>
+          )}
+
+          {err && (
+              <div
+                  role="alert"
+                  className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+              >
+                  {err}
+              </div>
+          )}
+
+          {ok && (
+              <div
+                  role="status"
+                  className="mb-3 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700"
+              >
+                  {ok}
+              </div>
+          )}
 
         <div className="flex items-center gap-2">
           <button

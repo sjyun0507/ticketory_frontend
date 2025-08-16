@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {Link, useNavigate} from 'react-router-dom';
-import logo from '../assets/styles/logo.png';
+import logo from '../assets/styles/logo2.png';
 import user from '../assets/styles/users.png';
 import magnifier from '../assets/styles/magnifier.png';
 import {useAuthStore} from '../store/useAuthStore.js';

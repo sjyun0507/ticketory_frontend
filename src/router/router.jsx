@@ -11,9 +11,11 @@ import Points from "../pages/public/Points.jsx";
 import Events from "../pages/public/Events.jsx";
 import RequireAuth from "./RequireAuth.jsx";
 import Settings from "../pages/mypage/Settings.jsx";
+import MovieDetail from "../pages/MovieDetail.jsx";
 
 const routes = [
     {path: "/", element: <Home/>},
+    {path: '/movies/:id', element: <MovieDetail /> },
     {path: "/booking", element: <Booking/>},
     {path: "/screenings", element: <Screenings/>},
     {path: "/story", element: <Story/>},

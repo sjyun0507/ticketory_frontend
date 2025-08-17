@@ -1,17 +1,22 @@
 import React from 'react';
+import {useMovieList} from "../../hooks/useMovies.js";
+import MovieList from "../../components/MovieList.jsx";
 
-const Home = () => {
-  return (
-    <main className="max-w-[1200px] mx-auto px-4 py-16 min-h-[75vh] flex items-center justify-center">
-      <section className="w-full">
-        <div className="border rounded-lg bg-white/80 backdrop-blur p-10 text-center shadow-sm">
-          <div className="text-5xl mb-4">🚧</div>
-          <h2 className="text-2xl sm:text-3xl font-semibold mb-3">이 페이지는 현재 작업 중입니다</h2>
-          <p className="text-gray-600 mb-8">기능을 준비하고 있어요. 조금만 기다려 주세요.</p>
-        </div>
-      </section>
-    </main>
-  );
-};
 
-export default Home;
+
+export default function Home() {
+    const { data, loading, err } = useMovieList(0, 24);
+
+    if (loading) return <div className="p-6">불러오는 중…</div>;
+    if (err) return <div className="p-6 text-red-600">{err}</div>;
+
+    return (
+        <main className="max-w-[1200px] mx-auto px-4 py-16 min-h-[75vh] flex items-center justify-center">
+            <div className="mx-auto max-w-6xl p-4">
+                <h2 className="mb-4 text-xl font-bold">지금 상영중</h2>
+                <MovieList movies={data.content} />
+            </div>
+        </main>
+    );
+}
+

@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import MovieCard from "./MovieCard.jsx";
 
 export default function MovieList({ movies = [] }) {
@@ -11,9 +12,15 @@ export default function MovieList({ movies = [] }) {
     }
 
     return (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {movies.map((movie) => (
-                <MovieCard key={movie.movieId} movie={movie} />
+                <Link
+                    key={movie.movieId}
+                    to={`/movies/${movie.movieId}`}
+                    className="transform transition hover:scale-105"
+                >
+                    <MovieCard movie={movie} />
+                </Link>
             ))}
         </div>
     );

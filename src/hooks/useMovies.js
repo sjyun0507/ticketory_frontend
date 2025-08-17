@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getMovies, getMovieById } from '../api/movieApi.js';
+import { getMovies, getMovieDetail } from '../api/movieApi.js';
 
 export const useMovieList = (page = 0, size = 20) => {
     const [data, setData] = useState({ content: [], page: 0, size, totalElements: 0 });
@@ -35,7 +35,7 @@ export const useMovieDetail = (movieId) => {
             try {
                 setLoading(true);
                 setErr('');
-                const res = await getMovieById(movieId);
+                const res = await getMovieDetail(movieId);
                 setData(res);
             } catch (e) {
                 setErr('영화 상세 정보를 불러오지 못했어요.');

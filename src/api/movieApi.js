@@ -5,7 +5,7 @@ export const getMovies = async ({ page = 0, size = 20 } = {}) => {
     return data;
 };
 
-export const getMovieById = async (movieId) => {
+export const getMovieDetail = async (movieId) => {
     const { data } = await api.get(`/movies/${movieId}`);
     return data;
 };

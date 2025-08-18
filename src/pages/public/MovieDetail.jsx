@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams} from 'react-router-dom';
-import { useMovieDetail } from '../hooks/useMovies.js';
+import { useMovieDetail } from '../../hooks/useMovies.js';
 
 // ===== UI Components =====
 const SectionTitle = ({ children }) => (
@@ -62,6 +62,53 @@ const pickUrl = (item) => {
         c.imageUrl || c.fileUrl || c.file_path || c.image_path || null
     );
 };
+// image helpers: detect images & collect from movie_media / variants
+const isProbablyImage = (u) => {
+    if (!u) return false;
+    try {
+        const base = String(u).split(/[?#]/)[0].toLowerCase();
+        return /\.(jpg|jpeg|png|webp|gif|bmp|jfif|pjpeg|pjp)$/i.test(base);
+    } catch { return false; }
+};
+const collectMediaImageUrls = (m) => {
+    const out = [];
+    if (!m) return out;
+
+
+    const candidates = [];
+    if (Array.isArray(m.movie_media)) candidates.push(...m.movie_media);
+    if (Array.isArray(m.movieMedia)) candidates.push(...m.movieMedia);
+    if (Array.isArray(m.media)) candidates.push(...m.media);
+    if (Array.isArray(m?.media?.items)) candidates.push(...m.media.items);
+    if (Array.isArray(m?.images?.posters)) candidates.push(...m.images.posters);
+    if (Array.isArray(m?.images?.stills)) candidates.push(...m.images.stills);
+
+    const pushFrom = (x) => {
+        if (!x) return;
+        const primary =
+            pickUrl(x) ||
+            x?.posterUrl || x?.stillcutUrl || x?.stillUrl ||
+            x?.image_url || x?.imageUrl ||
+            x?.url_path || x?.file_path || x?.path || x?.link ||
+            x?.original || x?.full || x?.large || x?.medium || x?.small || x?.thumbnail || x?.thumb ||
+            null;
+
+        if (primary) out.push(primary);
+
+        // additionally scan some known alt fields if object groups them
+        ['original','full','large','medium','small','thumbnail','thumb','src','href'].forEach((k) => {
+            if (x && x[k]) out.push(x[k]);
+        });
+    };
+    candidates.forEach(pushFrom);
+
+    // also allow raw string arrays (e.g., movie_media is ['a.jpg', 'b.png'])
+    if (Array.isArray(m.movie_media) && typeof m.movie_media[0] === 'string') {
+        out.push(...m.movie_media);
+    }
+    // normalize, uniq, and keep only image-like urls
+    return Array.from(new Set(out.filter(Boolean).map(normalizeUrl))).filter(isProbablyImage);
+};
 
 const asName = (x) =>
     typeof x === 'string'
@@ -118,8 +165,14 @@ export default function MovieDetail() {
         return uniq(buckets.flat().map(normalizeUrl));
     }, [movie]);
 
-    // 갤러리 = 스틸컷 + 추가 포스터(대표 제외)
-    const galleryImages = useMemo(() => uniq([ ...stills, ...posterList.slice(1) ]), [stills, posterList]);
+    // movie_media 에서 모든 이미지 수집 (포맷 제한: jpg/png/webp/gif 등)
+    const mediaImages = useMemo(() => collectMediaImageUrls(movie), [movie]);
+    // 갤러리 = movie_media의 모든 이미지 + 스틸컷 + 추가 포스터(대표 제외)
+    const galleryImages = useMemo(
+        () => uniq([ ...mediaImages, ...stills, ...posterList.slice(1) ]),
+        [mediaImages, stills, posterList]
+    );
+
 
     // 예고편: trailerUrl 우선
     const rawTrailers = useMemo(
@@ -258,7 +311,7 @@ export default function MovieDetail() {
                         <button
                             type="button"
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/booking?movieId=${movieId}`); }}
-                            className="w-1/3 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                            className="w-1/3 bg-sky-600  text-white py-2 rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                             aria-label={`${title} 예매하기`}
                         >
                             예매하기

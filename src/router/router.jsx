@@ -11,7 +11,7 @@ import Points from "../pages/public/Points.jsx";
 import Events from "../pages/public/Events.jsx";
 import RequireAuth from "./RequireAuth.jsx";
 import Settings from "../pages/mypage/Settings.jsx";
-import MovieDetail from "../pages/MovieDetail.jsx";
+import MovieDetail from "../pages/public/MovieDetail.jsx";
 
 const routes = [
     {path: "/", element: <Home/>},

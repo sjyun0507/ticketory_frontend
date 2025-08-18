@@ -1,7 +1,8 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 export default function MovieCard({ movie }) {
     const { movieId, title, posterUrl } = movie;
+    const navigate = useNavigate();
 
     return (
         <Link
@@ -23,6 +24,16 @@ export default function MovieCard({ movie }) {
             </div>
             <div className="p-3">
                 <h3 className="line-clamp-1 text-sm font-semibold">{title}</h3>
+            </div>
+            <div className="p-3 pt-0">
+                <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/booking?movieId=${movieId}`); }}
+                    className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                    aria-label={`${title} 예매하기`}
+                    >
+                    예매하기
+                </button>
             </div>
         </Link>
     );

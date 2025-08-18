@@ -1,9 +1,7 @@
-// --- file: src/pages/MovieDetail.jsx
 import { useEffect, useMemo, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams} from 'react-router-dom';
 import { useMovieDetail } from '../hooks/useMovies.js';
 
-// ===== Helpers =====
 // ===== UI Components =====
 const SectionTitle = ({ children }) => (
     <div className="mb-3 flex items-center gap-3">
@@ -39,7 +37,7 @@ const normalizeUrl = (u) => {
     // 안전 인코딩 (이미 %가 있으면 건드리지 않음)
     try {
         if (!/%[0-9A-Fa-f]{2}/.test(s)) s = encodeURI(s);
-    } catch (_) {}
+    } catch (_) {/* 공백 */}
 
     return s;
 };
@@ -72,6 +70,7 @@ const asName = (x) =>
 
 // ===== Component =====
 export default function MovieDetail() {
+    const navigate = useNavigate();
     const params = useParams();
     const movieId = params.movieId ?? params.id;
     const { data: movie, loading, err } = useMovieDetail(movieId);
@@ -104,7 +103,6 @@ export default function MovieDetail() {
 
     const posterSrc = posterList[0] || '/images/placeholder-poster.jpg';
 
-    // 스틸컷: stillcutUrls 우선 + items(STILL/BACKDROP/IMAGE)
     const stills = useMemo(() => {
         const buckets = [];
         buckets.push(toArray(movie?.stillcutUrls)); // ← backend exact field
@@ -187,6 +185,7 @@ export default function MovieDetail() {
                             const tried = Number(img.dataset.retried || 0);
                             const urlNow = img.getAttribute('src') || '';
 
+
                             // 1) decodeURI 재시도 (이중 인코딩 케이스)
                             if (tried === 0) {
                                 img.dataset.retried = '1';
@@ -196,7 +195,7 @@ export default function MovieDetail() {
                                         img.src = decoded;
                                         return;
                                     }
-                                } catch {}
+                                } catch { /*  */}
                             }
                             // 2) encodeURI 재시도 (공백/한글 미인코딩 케이스)
                             if (tried === 1) {
@@ -207,7 +206,7 @@ export default function MovieDetail() {
                                         img.src = encoded;
                                         return;
                                     }
-                                } catch {}
+                                } catch { /*  */}
                             }
                             // 3) 확장자 케이스 스왑 (.jpg <-> .JPG)
                             if (tried === 2) {
@@ -226,25 +225,26 @@ export default function MovieDetail() {
                             img.src = '/images/placeholder-poster.jpg';
                         }}
                     />
+
                 </div>
 
                 {/* 우: 텍스트/메타/예고편/갤러리 */}
                 <div className="md:col-span-2">
-                    <h1 className="text-2xl font-bold mb-1">{title}</h1>
-                    {subtitle && <p className="text-base text-gray-600 mb-2">{subtitle}</p>}
+                    <h1 className="text-3xl font-bold mb-1">{title}</h1>
+                    {subtitle && <p className="text-xl font-semibold text-gray-600 mb-2">{subtitle}</p>}
 
-                    <p className="text-sm text-gray-500 mb-4">
+                    <p className="text-base text-gray-800 font-semibold mt-4 mb-4">
                         개봉일: {releaseDate}
-                        {genreText && <> · 장르: {genreText}</>}
-                        {rating && <> · 등급: {rating}</>}
-                        {runningMinutes && <> · 상영시간: {runningMinutes}분</>}
+                        {genreText && <> | 장르: {genreText}</>}
+                        {rating && <> | 등급: {rating}</>}
+                        {runningMinutes && <> | 상영시간: {runningMinutes}분</>}
                     </p>
 
                     {overview && <p className="leading-7 text-gray-800 mb-6">{overview}</p>}
 
                     {/* 감독/출연 */}
                     {(toArray(movie?.director).length > 0 || toArray(movie?.actors).length > 0) && (
-                        <div className="mb-6 space-y-1 text-sm">
+                        <div className="mb-6 space-y-1 text-base text-gray-600">
                             {toArray(movie?.director).length > 0 && (
                                 <div><span className="font-semibold">감독:</span> {toArray(movie.director).map(asName).join(', ')}</div>
                             )}
@@ -253,6 +253,17 @@ export default function MovieDetail() {
                             )}
                         </div>
                     )}
+
+                    <div className="p-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/booking?movieId=${movieId}`); }}
+                            className="w-1/3 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                            aria-label={`${title} 예매하기`}
+                        >
+                            예매하기
+                        </button>
+                    </div>
 
                     {/* 예고편: 중앙 정렬 + 너비 통일 */}
                     {primaryTrailer ? (

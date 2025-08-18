@@ -51,7 +51,7 @@ const Header = () => {
 
     const handleUserClick = () => {
         if (isLoggedIn) {
-            navigate('/mypage'); // 경로 소문자 일관
+            navigate('/mypage');
         } else {
             navigate('/login');
         }

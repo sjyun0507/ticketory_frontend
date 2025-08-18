@@ -331,9 +331,9 @@ export default function MovieDetail() {
                     )}
 
                     {/* 디버그 */}
-                    <div className="mt-4 text-xs text-gray-400 text-center">
-                        DEBUG: movieId = {movieId} | posters={posterList.length} | stills={stills.length} | gallery={galleryImages.length} | trailer={primaryTrailer ? primaryTrailer.kind : 'none'}
-                    </div>
+                    {/*<div className="mt-4 text-xs text-gray-400 text-center">*/}
+                    {/*    DEBUG: movieId = {movieId} | posters={posterList.length} | stills={stills.length} | gallery={galleryImages.length} | trailer={primaryTrailer ? primaryTrailer.kind : 'none'}*/}
+                    {/*</div>*/}
                 </div>
             </div>
         </div>

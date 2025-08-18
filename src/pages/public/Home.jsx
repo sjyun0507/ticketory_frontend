@@ -28,7 +28,7 @@ export default function Home() {
     );
 
     return (
-        <main className="mx-auto max-w-6xl px-4 py-6">
+        <main className="mx-auto max-w-[1200px] px-4 py-6">
             {/* 탭 */}
             <div className="mb-4 inline-flex rounded-2xl bg-gray-100 p-1">
                 {TABS.map(t => (

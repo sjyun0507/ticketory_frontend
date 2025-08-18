@@ -99,7 +99,7 @@ const Header = () => {
         <header id="header" className="sticky top-0 w-full z-50 bg-white shadow-sm leading-none">
             {/* Top Bar */}
             <div className="w-full">
-                <div className="mx-auto max-w-6xl px-4 pt-4 mt-0 flex justify-end items-end space-x-2">
+                <div className="mx-auto max-w-[1200px] px-4 pt-4 mt-0 flex justify-end items-end space-x-2">
                     {isLoggedIn ? (
                         <button
                             onClick={handleLogout}
@@ -144,7 +144,7 @@ const Header = () => {
 
             {/* Main Header */}
             <div className="w-full">
-                <div className="max-w-6xl mx-auto px-4 pb-1 flex items-center justify-between">
+                <div className="max-w-[1200px] mx-auto px-4 pb-1 flex items-center justify-between">
                     {/* 로고 */}
                     <div >
                         <Link to="/" aria-label="홈으로 이동">

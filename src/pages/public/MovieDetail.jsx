@@ -132,19 +132,39 @@ export default function MovieDetail() {
     const rating         = movie?.rating ?? '';
     const runningMinutes = movie?.runningMinutes ?? '';
 
-    // 포스터 목록: 메인은 posterUrl, 추가 목록은 posterUrls/posters/이미지/아이템
+    // 포스터 목록: 메인은 posterUrl, 추가 목록은 posterUrls/posters/이미지/아이템, snake_case 및 movie_media 포함
     const posterList = useMemo(() => {
         const a = [];
+        // camelCase 우선
         a.push(movie?.posterUrl);
         a.push(...toArray(movie?.posterUrls));
         a.push(...toArray(movie?.posters));
+
+        // snake_case 및 기타 변형 키들도 수집
+        a.push(movie?.poster_url);
+        a.push(...toArray(movie?.poster_urls));
+        a.push(...toArray(movie?.poster_list));
+        a.push(...toArray(movie?.posters_url));
+
+        // nested images/posters
         if (Array.isArray(movie?.images?.posters)) a.push(...movie.images.posters.map(pickUrl));
+
+        // media.items 내 POSTER 타입
         if (Array.isArray(movie?.media?.items)) {
             const postersFromItems = movie.media.items
                 .filter((x) => String(x?.type || x?.category || x?.kind).toUpperCase().includes('POSTER'))
                 .map(pickUrl);
             a.push(...postersFromItems);
         }
+
+        // movie_media 테이블 기반(POSTER만)
+        if (Array.isArray(movie?.movie_media)) {
+            const postersFromMedia = movie.movie_media
+                .filter((x) => String(x?.media_type || x?.type || x?.category || x?.kind).toUpperCase().includes('POSTER'))
+                .map(pickUrl);
+            a.push(...postersFromMedia);
+        }
+
         return uniq(a.map(pickUrl).map(normalizeUrl));
     }, [movie]);
 
@@ -167,10 +187,10 @@ export default function MovieDetail() {
 
     // movie_media 에서 모든 이미지 수집 (포맷 제한: jpg/png/webp/gif 등)
     const mediaImages = useMemo(() => collectMediaImageUrls(movie), [movie]);
-    // 갤러리 = movie_media의 모든 이미지 + 스틸컷 + 추가 포스터(대표 제외)
+    // 대표 포스터 여부와 무관하게 모든 포스터를 포함
     const galleryImages = useMemo(
-        () => uniq([ ...mediaImages, ...stills, ...posterList.slice(1) ]),
-        [mediaImages, stills, posterList]
+        () => uniq([ ...posterList, ...stills, ...mediaImages ]),
+        [posterList, stills, mediaImages]
     );
 
 
@@ -223,7 +243,7 @@ export default function MovieDetail() {
     if (!movie) return <div className="p-6 text-gray-700">영화 데이터를 찾을 수 없습니다. (id: {movieId})</div>;
 
     return (
-        <div className="mx-auto max-w-6xl p-4">
+        <div className="mx-auto max-w-[1200px] p-4">
             <div className="grid gap-6 md:grid-cols-3">
                 {/* 좌: 대표 포스터*/}
                 <div className="md:col-span-1 md:sticky md:top-6 self-start">
@@ -275,7 +295,7 @@ export default function MovieDetail() {
                             }
 
                             // 마지막 폴백
-                            img.src = '/images/placeholder-poster.jpg';
+                            img.src = `/proxy/img?url=${encodeURIComponent(urlNow)}`;
                         }}
                     />
 

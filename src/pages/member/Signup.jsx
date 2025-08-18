@@ -149,7 +149,7 @@ export default function Signup() {
             const res = await memberSignup(payload); // API 호출
             alert("회원가입 성공! 로그인 후 이용해주세요");
             console.log(res.data);
-            navigate("/"); // 홈화면 이동
+            navigate("/member/Login"); // 로그인화면 이동
         } catch (error) {
             console.error(error);
             if (error.response) {
@@ -253,17 +253,6 @@ export default function Signup() {
                         className="form-input"
                     />
 
-                    <label htmlFor="email" className="form-label">이메일</label>
-                    <input
-                        id="email"
-                        type="email"
-                        name="email"
-                        value={form.email}
-                        onChange={handleChange}
-                        placeholder="추가 이메일(선택)"
-                        className="form-input"
-                    />
-
                     <label htmlFor="phone" className="form-label">휴대폰 번호</label>
                     <input
                         id="phone"
@@ -272,9 +261,20 @@ export default function Signup() {
                         inputMode="numeric"
                         value={form.phone}
                         onChange={handleChange}
-                        placeholder="휴대폰번호(01012345678)"
+                        placeholder="휴대폰번호(필수)"
                         className="form-input"
                         required
+                    />
+
+                    <label htmlFor="email" className="form-label">이메일</label>
+                    <input
+                        id="email"
+                        type="email"
+                        name="email"
+                        value={form.email}
+                        onChange={handleChange}
+                        placeholder="이메일추가(선택)"
+                        className="form-input"
                     />
                     <div className="agreement-container">
                         <h3 className="agreement-title">개인정보 수집 이용 동의 안내</h3>

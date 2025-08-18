@@ -172,7 +172,7 @@ export default function MovieDetail() {
     if (!movie) return <div className="p-6 text-gray-700">영화 데이터를 찾을 수 없습니다. (id: {movieId})</div>;
 
     return (
-        <div className="mx-auto max-w-6xl">
+        <div className="mx-auto max-w-6xl p-4">
             <div className="grid gap-6 md:grid-cols-3">
                 {/* 좌: 대표 포스터*/}
                 <div className="md:col-span-1 md:sticky md:top-6 self-start">

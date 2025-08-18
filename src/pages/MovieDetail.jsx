@@ -4,6 +4,14 @@ import { useParams } from 'react-router-dom';
 import { useMovieDetail } from '../hooks/useMovies.js';
 
 // ===== Helpers =====
+// ===== UI Components =====
+const SectionTitle = ({ children }) => (
+    <div className="mb-3 flex items-center gap-3">
+        <span className="block h-5 w-1.5 rounded-full bg-gradient-to-b from-blue-600 to-cyan-400" />
+        <h2 className="text-lg font-bold tracking-tight text-gray-900">{children}</h2>
+        <span className="ml-auto h-px flex-1 bg-gradient-to-r from-gray-300 to-transparent" />
+    </div>
+);
 const ASSET_ORIGIN = import.meta?.env?.VITE_ASSET_ORIGIN || 'http://mybusiness.dothome.co.kr';
 
 // URL을 절대경로로 만들고, 공백/한글/역슬래시/중복슬래시/이미-인코딩된 경우까지 안전 처리
@@ -164,7 +172,7 @@ export default function MovieDetail() {
     if (!movie) return <div className="p-6 text-gray-700">영화 데이터를 찾을 수 없습니다. (id: {movieId})</div>;
 
     return (
-        <div className="mx-auto max-w-6xl p-4">
+        <div className="mx-auto max-w-6xl">
             <div className="grid gap-6 md:grid-cols-3">
                 {/* 좌: 대표 포스터*/}
                 <div className="md:col-span-1 md:sticky md:top-6 self-start">
@@ -250,7 +258,7 @@ export default function MovieDetail() {
                     {primaryTrailer ? (
 
                         <div className="mt-4 mx-auto max-w-3xl">
-                            <h2 className="mb-3 text-lg font-bold text-start text-blue-700">예고편</h2>
+                            <SectionTitle>예고편</SectionTitle>
                             <div className="relative pt-[56.25%]">
                                 <video
                                     ref={videoRef}
@@ -276,7 +284,7 @@ export default function MovieDetail() {
                     {/* 스틸컷 & 추가 포스터: 중앙 정렬 + 너비 통일 */}
                     {galleryImages.length > 0 && (
                         <div className="mt-8 mx-auto max-w-3xl">
-                            <h2 className="mb-3 text-lg font-bold text-start text-blue-700">포스터 & 스틸컷</h2>
+                            <SectionTitle>포스터 & 스틸컷</SectionTitle>
                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                                 {galleryImages.map((src, idx) => (
                                     <img

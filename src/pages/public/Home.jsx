@@ -1,28 +1,59 @@
-import React from 'react';
-import {useMovieList} from "../../hooks/useMovies.js";
-import MovieList from "../../components/MovieList.jsx";
+import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
+import MovieList from "../../components/MovieList";
+import {useMovieList} from "../../hooks/useMovies";
+import {computeMovieStatus} from "../../utils/movieStatus.js";
 
 
+const TABS = [
+    { key: "now",      label: "현재상영작", match: (m) => computeMovieStatus(m) === "NOW_SHOWING" },
+    { key: "soon",     label: "개봉예정작", match: (m) => computeMovieStatus(m) === "COMING_SOON" },
+    { key: "finished", label: "상영종료",   match: (m) => computeMovieStatus(m) === "FINISHED" },
+];
 
 export default function Home() {
-    const { data, loading, err } = useMovieList(0, 24);
+    const [params, setParams] = useSearchParams();
+    const activeKey = params.get("tab") || "now";
+    const activeTab = TABS.find(t => t.key === activeKey) || TABS[0];
 
-    if (loading) return <div className="p-6">불러오는 중…</div>;
-    if (err) return <div className="p-6 text-red-600">{err}</div>;
+    const { data: pageData, isLoading: pending, error } = useMovieList({ page: 0, size: 24 });
 
-    // 응답 형태가 배열이거나 Page<{content: []}> 둘 다 안전하게 처리
-    const movies = Array.isArray(data) ? data : (data?.content ?? []);
+    // 페이지네이션/배열 응답 모두 대응
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const allMovies = pageData?.content ?? pageData ?? [];
+
+    const visibleMovies = useMemo(
+        () => (Array.isArray(allMovies) ? allMovies.filter(activeTab.match) : []),
+        [allMovies, activeTab]
+    );
 
     return (
-        <main className="max-w-[1200px] mx-auto px-4 py-16 min-h-[75vh]">
-            <div className="mx-auto max-w-6xl p-4">
-                <div className="mb-4 flex items-end justify-between">
-                    <h2 className="text-xl font-bold">지금 상영중</h2>
-                    <span className="text-sm text-gray-500">{Array.isArray(movies) ? movies.length : 0}건</span>
-                </div>
-                <MovieList movies={movies} />
+        <main className="mx-auto max-w-6xl px-4 py-6">
+            {/* 탭 */}
+            <div className="mb-4 inline-flex rounded-2xl bg-gray-100 p-1">
+                {TABS.map(t => (
+                    <button
+                        key={t.key}
+                        onClick={() => setParams({ tab: t.key })}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition
+              ${activeKey===t.key ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-800"}`}
+                        aria-pressed={activeKey===t.key}
+                    >
+                        {t.label}
+                    </button>
+                ))}
             </div>
+
+            {/* 리스트 */}
+            {pending ? (
+                <div className="py-10 text-center text-gray-500">로딩 중…</div>
+            ) : error ? (
+                <div className="py-10 text-center text-rose-500">불러오기 실패</div>
+            ) : visibleMovies.length === 0 ? (
+                <div className="py-10 text-center text-gray-400">표시할 영화가 없습니다.</div>
+            ) : (
+                <MovieList movies={visibleMovies} />
+            )}
         </main>
     );
 }
-

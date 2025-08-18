@@ -114,10 +114,9 @@ export default function MyPage() {
             {/* 퀵 액션 */}
             <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                 <QuickAction to="/mypage/bookings" label="예매 내역" />
-                <QuickAction to="/mypage/cart" label="찜목록" />
                 <QuickAction to="/mypage/points" label="포인트" />
                 <QuickAction to="/mypage/reviews" label="내 리뷰" />
-                {/*<QuickAction to="/mypage/settings" label="설정" />*/}
+                <QuickAction to="/mypage/settings" label="설정" />
             </section>
 
             {/* 최근 예매 내역 미리보기 */}

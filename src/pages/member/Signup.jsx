@@ -149,7 +149,7 @@ export default function Signup() {
             const res = await memberSignup(payload); // API 호출
             alert("회원가입 성공! 로그인 후 이용해주세요");
             console.log(res.data);
-            navigate("/member/Login"); // 로그인화면 이동
+            navigate("/Login"); // 로그인화면 이동
         } catch (error) {
             console.error(error);
             if (error.response) {

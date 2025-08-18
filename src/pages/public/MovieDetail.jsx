@@ -45,9 +45,17 @@ const normalizeUrl = (u) => {
 const uniq = (arr) => Array.from(new Set(arr.filter(Boolean)));
 const toArray = (v) =>
     Array.isArray(v)
-        ? v
+        ? v.filter(Boolean)
         : typeof v === 'string'
-            ? v.split(/[\s,|\n\r\t]+/).map((x) => x.trim()).filter(Boolean)
+            ? (() => {
+                const s = v.trim();
+                if (!s) return [];
+                // If the string contains commas, pipes or newlines/tabs, split on those.
+                // Otherwise, treat it as a single item and keep spaces inside names intact.
+                return /[\,\|\n\r\t]/.test(s)
+                    ? s.split(/[\,\|\n\r\t]+/).map((x) => x.trim()).filter(Boolean)
+                    : [s];
+              })()
             : v
                 ? [v]
                 : [];
@@ -307,10 +315,11 @@ export default function MovieDetail() {
                     {subtitle && <p className="text-xl font-semibold text-gray-600 mb-2">{subtitle}</p>}
 
                     <p className="text-base text-gray-800 font-semibold mt-4 mb-4">
-                        개봉일: {releaseDate}
-                        {genreText && <> | 장르: {genreText}</>}
-                        {rating && <> | 등급: {rating}</>}
-                        {runningMinutes && <> | 상영시간: {runningMinutes}분</>}
+                        {releaseDate} 개봉
+                        {genreText && <> | {genreText}</>}
+                        <span className="text-base text-yellow-500 font-semibold mt-4 mb-4">
+                            {rating && <>  |  {rating}</>}</span>
+                        {runningMinutes && <>  |  {runningMinutes}분</>}
                     </p>
 
                     {overview && <p className="leading-7 text-gray-800 mb-6">{overview}</p>}

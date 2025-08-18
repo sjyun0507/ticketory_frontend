@@ -13,14 +13,10 @@ export default function MovieList({ movies = [] }) {
 
     return (
         <div className="grid grid-cols-2 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {movies.map((movie) => (
-                <Link
-                    key={movie.movieId}
-                    to={`/movies/${movie.movieId}`}
-                    className="transform transition hover:scale-105"
-                >
-                    <MovieCard movie={movie} />
-                </Link>
+            {movies.map((m) => (
+                <div className="transform transition hover:scale-105" key={m.movieId}>
+                    <MovieCard movie={m} />
+                </div>
             ))}
         </div>
     );

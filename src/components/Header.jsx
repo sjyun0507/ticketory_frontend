@@ -49,6 +49,17 @@ const Header = () => {
     const roleStr = (getRoleFromToken() || '').trim().toUpperCase();
     const isAdmin = roleStr.includes('ADMIN');
 
+    const NAV_LINK_CLS = "relative py-2 hover:text-gray-900 after:content-[''] after:absolute after:left-0 after:-bottom-2 after:h-0.5 after:w-0 after:bg-blue-600 after:transition-all after:duration-200 hover:after:w-full";
+
+    const MenuLink = ({ to, children }) => (
+      <Link
+        to={to}
+        className={NAV_LINK_CLS}
+      >
+        {children}
+      </Link>
+    );
+
     const handleUserClick = () => {
         if (isLoggedIn) {
             navigate('/mypage');
@@ -133,52 +144,22 @@ const Header = () => {
 
             {/* Main Header */}
             <div className="w-full">
-                <div className="max-w-6xl mx-auto px-4 pb-2.5 flex items-center justify-between">
+                <div className="max-w-6xl mx-auto px-4 pb-1 flex items-center justify-between">
                     {/* 로고 */}
-                    <div>
+                    <div >
                         <Link to="/" aria-label="홈으로 이동">
-                            <img src={logo} alt="Ticketory" className="h-12 w-auto"/>
+                            <img src={logo} alt="Ticketory" className="h-13 w-auto"/>
                         </Link>
                     </div>
 
                     {/* 메뉴 */}
-                    <nav className="flex items-center space-x-8 text-gray-700 text-base md:text-xl font-medium">
-                        <Link
-                            to="/"
-                            className="relative py-2 hover:text-gray-900 after:content-[''] after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-gray-900 after:transition-all after:duration-200 hover:after:w-full"
-                        >
-                            영화
-                        </Link>
-                        <Link
-                            to="/booking"
-                            className="relative py-2 hover:text-gray-900 after:content-[''] after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-gray-900 after:transition-all after:duration-200 hover:after:w-full"
-                        >
-                            예매
-                        </Link>
-                        <Link
-                            to="/screenings"
-                            className="relative py-2 hover:text-gray-900 after:content-[''] after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-gray-900 after:transition-all after:duration-200 hover:after:w-full"
-                        >
-                            상영시간표
-                        </Link>
-                        <Link
-                            to="/story"
-                            className="relative py-2 hover:text-gray-900 after:content-[''] after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-gray-900 after:transition-all after:duration-200 hover:after:w-full"
-                        >
-                            스토리
-                        </Link>
-                        <Link
-                            to="/events"
-                            className="relative py-2 hover:text-gray-900 after:content-[''] after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-gray-900 after:transition-all after:duration-200 hover:after:w-full"
-                        >
-                            이벤트
-                        </Link>
-                        <Link
-                            to="/points"
-                            className="relative py-2 hover:text-gray-900 after:content-[''] after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-gray-900 after:transition-all after:duration-200 hover:after:w-full"
-                        >
-                            포인트
-                        </Link>
+                    <nav className="flex items-center space-x-9 text-gray-700 text-base md:text-xl font-medium">
+                        <MenuLink to="/">영화</MenuLink>
+                        <MenuLink to="/booking">예매</MenuLink>
+                        <MenuLink to="/screenings">상영시간표</MenuLink>
+                        <MenuLink to="/story">스토리</MenuLink>
+                        <MenuLink to="/events">이벤트</MenuLink>
+                        <MenuLink to="/points">포인트</MenuLink>
                     </nav>
 
                     {/* 오른쪽 아이콘 */}

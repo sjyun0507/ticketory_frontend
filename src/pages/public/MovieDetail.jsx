@@ -345,7 +345,7 @@ export default function MovieDetail() {
                         <div className="mt-4 text-sm text-gray-500 mx-auto max-w-3xl text-center">예고편이 없습니다.</div>
                     )}
 
-                    {/* 스틸컷 & 추가 포스터: 중앙 정렬 + 너비 통일 */}
+                    {/* 스틸컷 & 포스터: 중앙 정렬 + 너비 통일 */}
                     {galleryImages.length > 0 && (
                         <div className="mt-8 mx-auto max-w-3xl">
                             <SectionTitle>포스터 & 스틸컷</SectionTitle>

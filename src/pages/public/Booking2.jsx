@@ -2,7 +2,6 @@ import React, { useMemo, useState, useEffect } from "react";
 import { getMovies } from "../../api/movieApi.js";
 import {getScreenings} from "../../api/bookingApi.js";
 
-const DEBUG_SCHEDULE = true; // 전체 상영시간 로깅 on/off
 
 function formatKoreanDate(date) {
   const y = date.getFullYear();
@@ -30,11 +29,7 @@ const Badge = ({ text }) => {
     <span
       className={
         `inline-flex items-center justify-center rounded-md text-white text-base font-bold w-7 h-7 mr-1 ` +
-          (display === "ALL"
-              ? "bg-green-600"
-              : display === "19"
-                  ? "bg-red-600"
-                  : "bg-yellow-500")
+        (display === "ALL" ? "bg-green-600" : "bg-yellow-500")
       }
     >
       {display}
@@ -157,100 +152,56 @@ const Bookings = () => {
       0, 0, 0, 0
     )).toISOString().slice(0, 10);
 
-    if (DEBUG_SCHEDULE) {
-
-      console.info("[sched] params", { dateOnly, selectedUtcYmd, selectedMovieId });
-    }
-
     (async function fetchScreenings() {
       setScreeningsLoading(true);
       setScreeningsError(null);
       try {
-        // 하루 전체 상영표 조회 (UTC 기준 필터는 아래에서 수행)
-        const allOfDay = await getScreenings(dateOnly, null, {
-            page: 0, size: 200, allPages: true, maxPages: 20, debug: true
-        });
+        // 1차: 선택 영화 기준 조회
+        const numericMovieId = isNaN(Number(selectedMovieId)) ? selectedMovieId : Number(selectedMovieId);
+        const primary = await getScreenings(dateOnly, numericMovieId);
 
-        // Normalize response to a flat list
-        const list = Array.isArray(allOfDay?.content)
-          ? allOfDay.content
-          : (Array.isArray(allOfDay) ? allOfDay : []);
+        let list = Array.isArray(primary) ? primary : [];
+        let usedFallback = false;
 
-        // 0) 원시 리스트 로그
-        if (DEBUG_SCHEDULE) {
-          console.info("[sched] raw count", Array.isArray(list) ? list.length : null);
-          try {
-            console.table((list || []).slice(0, 10).map((it) => ({
-              screeningId: it.screeningId || it.id,
-              movieId: it.movieId || it.movie_id,
-              screenId: it.screenId || it.screen_id,
-              screenName: it.screenName || it.screen_name,
-              startAt: it.startAt || it.start_at,
-              endAt: it.endAt || it.end_at,
-            })));
-          } catch (_) {}
+        // 2차: 해당 영화 상영이 없으면, 같은 날짜 전체 상영표로 fallback
+        if (!list.length) {
+          const allOfDay = await getScreenings(dateOnly, null);
+          list = Array.isArray(allOfDay) ? allOfDay : [];
+          usedFallback = list.length > 0;
         }
 
-        // 1) UTC 기반 정규화 (표시용 라벨/필드 생성)
-        const normalized = (list || []).map((it) => {
-          const rawStart = it.startAt || it.start_at;
-          const rawEnd = it.endAt || it.end_at;
+        // 그룹핑 변환 (UTC 기준)
+        const grouped = list
+          .map((it) => {
+            const rawStart = it.startAt || it.start_at;
+            const rawEnd = it.endAt || it.end_at;
 
-          const startIso = new Date(rawStart).toISOString();
-          const endIso = rawEnd ? new Date(rawEnd).toISOString() : null;
+            const startIso = new Date(rawStart).toISOString();
+            const endIso = rawEnd ? new Date(rawEnd).toISOString() : null;
 
-          const startUtcYmd = startIso.slice(0, 10);
-          const startHH = startIso.substring(11, 13);
-          const startMM = startIso.substring(14, 16);
+            const startUtcYmd = startIso.slice(0, 10);       // YYYY-MM-DD in UTC
+            const startHH = startIso.substring(11, 13);      // HH in UTC
+            const startMM = startIso.substring(14, 16);      // MM in UTC
 
-          return {
-            id: it.screeningId || it.id,
-            hour: Number(startHH),
-            auditorium: it.screenName || it.screen_name || it.screenId || it.screen_id,
-            startLabel: `${startHH}:${startMM}`,
-            endLabel: endIso ? endIso.substring(11, 16) : null,
-            title: (it.movieTitle || it.title || (() => {
-              const mid = it.movieId || it.movie_id || null;
-              if (mid == null) return "";
-              const mv = movies.find((m) => (m._id ?? m.id ?? m.movieId) === mid);
-              return mv?.title || "";
-            })()),
-            _utcYmd: startUtcYmd,
-            _movieId: it.movieId || it.movie_id || null,
-          };
-        }).filter(Boolean);
-
-        if (DEBUG_SCHEDULE) {
-          // eslint-disable-next-line no-console
-          console.info("[sched] normalized count", normalized.length);
-        }
-
-        // 2) UTC 날짜 필터
-        const utcFiltered = normalized.filter((cur) => cur._utcYmd === selectedUtcYmd);
-        if (DEBUG_SCHEDULE) {
-          // eslint-disable-next-line no-console
-          console.info("[sched] utcFiltered count", utcFiltered.length, "(remain)");
-        }
-
-        // 3) 선택 영화 필터 (선택이 없는 경우 모두 통과)
-        const wantMovieId = Number(selectedMovieId);
-        const movieFiltered = Number.isNaN(wantMovieId)
-          ? utcFiltered
-          : utcFiltered.filter((cur) => cur._movieId === wantMovieId);
-
-        if (DEBUG_SCHEDULE) {
-          // eslint-disable-next-line no-console
-          console.info("[sched] movieFiltered count", movieFiltered.length, "(remain)");
-          try {
-            // eslint-disable-next-line no-console
-            console.table(movieFiltered.map((x) => ({
-              id: x.id, movieId: x._movieId, title: x.title, start: x.startLabel, end: x.endLabel, auditorium: x.auditorium, utcYmd: x._utcYmd,
-            })));
-          } catch (_) {}
-        }
-
-        // 4) 그룹화 및 정렬
-        const grouped = movieFiltered
+            return {
+              id: it.screeningId || it.id,
+              hour: Number(startHH),
+              auditorium: it.screenName || it.screen_name || it.screenId || it.screen_id,
+              startLabel: `${startHH}:${startMM}`,
+              endLabel: endIso ? endIso.substring(11, 16) : null,
+              title: (it.movieTitle || it.title || (() => {
+                const mid = it.movieId || it.movie_id || null;
+                if (mid == null) return "";
+                const mv = movies.find((m) => (m._id ?? m.id ?? m.movieId) === mid);
+                return mv?.title || "";
+              })()),
+              _utcYmd: startUtcYmd,
+            };
+          })
+          .filter(Boolean)
+          // 선택한 날짜의 UTC 기준 상영만 남김
+          .filter((cur) => cur._utcYmd === selectedUtcYmd)
+          // 시간대 그룹핑 및 정렬
           .reduce((acc, cur) => {
             const found = acc.find((b) => b.hour === cur.hour);
             const slot = {
@@ -266,15 +217,12 @@ const Bookings = () => {
           .sort((a, b) => a.hour - b.hour)
           .map((block) => ({ ...block, slots: block.slots.sort((s1, s2) => s1.start.localeCompare(s2.start)) }));
 
-        if (DEBUG_SCHEDULE) {
-          try {
-            console.info("[sched] grouped hours", grouped.map(g => g.hour));
-            console.table(grouped.flatMap(b => b.slots).map(s => ({ start: s.start, end: s.end, auditorium: s.auditorium, title: s.title })));
-          } catch (_) {}
-        }
-
         setScreenings(grouped);
-        setFallbackNotice("");
+        setFallbackNotice(
+          usedFallback
+            ? "선택한 영화의 상영이 없어 같은 날짜의 전체 상영표를 보여줍니다."
+            : ""
+        );
       } catch (err) {
         setScreenings([]);
         setFallbackNotice("");
@@ -354,6 +302,11 @@ const Bookings = () => {
         <section className="md:col-span-7 lg:col-span-8">
           <div className="rounded-xl border bg-white/70 backdrop-blur p-0">
             <div className="p-4">
+              {fallbackNotice && (
+                <div className="mb-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                  {fallbackNotice}
+                </div>
+              )}
               {screeningsLoading ? (
                 <div className="text-center text-gray-500 py-14">상영 시간을 불러오는 중...</div>
               ) : screeningsError ? (

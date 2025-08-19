@@ -12,12 +12,14 @@ import Events from "../pages/public/Events.jsx";
 import RequireAuth from "./RequireAuth.jsx";
 import Settings from "../pages/mypage/Settings.jsx";
 import MovieDetail from "../pages/public/MovieDetail.jsx";
+import Seat from "../pages/Seat.jsx";
 
 const routes = [
     {path: "/", element: <Home/>},
     {path: '/movies/:id', element: <MovieDetail /> },
     {path: "/booking", element: <Booking/>},
     {path: "/screenings", element: <Screenings/>},
+    {path: "/seat", element: <Seat />},
     {path: "/story", element: <Story/>},
     {path: "/events", element: <Events/>},
     {path: "/points", element: <Points/>},

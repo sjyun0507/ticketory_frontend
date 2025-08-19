@@ -1,9 +1,12 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { getMovies } from "../../api/movieApi.js";
 import {getScreenings} from "../../api/bookingApi.js";
+import { useNavigate } from "react-router-dom";
+/* 예매 사이트
+* 상영목록 > 날짜필터링에서 상영시간 노출> 예매하기 흐름
+*/
 
-const DEBUG_SCHEDULE = true; // 전체 상영시간 로깅 on/off
-
+//한국시간 포맷
 function formatKoreanDate(date) {
   const y = date.getFullYear();
   const m = date.getMonth() + 1;
@@ -12,6 +15,7 @@ function formatKoreanDate(date) {
   return `${y}년 ${m}월 ${d}일 ${weekday}`;
 }
 
+//관람등급
 const Badge = ({ text }) => {
   let display = "";
 
@@ -35,26 +39,28 @@ const Badge = ({ text }) => {
               : display === "19"
                   ? "bg-red-600"
                   : "bg-yellow-500")
-      }
+        }
     >
       {display}
     </span>
   );
 };
 
+//영화목록
 const MovieItem = ({ movie, active, onClick }) => (
   <button
     onClick={onClick}
     className={
-      `w-full flex items-center gap-3 px-2 py-2 text-left transition ` +
-      (active ? "font-semibold text-gray-700" : "text-gray-800")
+      `w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition ` +
+      (active ? "font-semibold text-white bg-zinc-700" : "text-gray-700 hover:bg-zinc-100")
     }
   >
     <Badge text={movie.rating || 'ALL'} />
-    <span className="text-base font-semibold">{movie.title}</span>
+    <span className="text-base font-semibold truncate">{movie.title}</span>
   </button>
 );
 
+//상영시간 목록
 const TimeCard = ({ auditorium, start, end, title, onClick }) => {
     const label =
         typeof auditorium === "string" && !auditorium.trim().endsWith("관")
@@ -64,10 +70,10 @@ const TimeCard = ({ auditorium, start, end, title, onClick }) => {
     return (
       <button
         onClick={onClick}
-        className="w-full flex items-center justify-between border-b border-gray-200 last:border-b-0 bg-white/80 backdrop-blur px-2 py-2 hover:bg-white transition"
+        className="w-full flex items-center justify-between px-3 py-2 rounded-md border bg-white/80 backdrop-blur hover:bg-white transition shadow-sm"
       >
         {/* Left: start/end time */}
-        <div className="w-16 text-right">
+        <div className="w-20 text-right">
           <div className="text-lg font-bold leading-none">{start}</div>
           <div className="text-xs text-gray-400 leading-none mt-1">~{end || ""}</div>
         </div>
@@ -79,7 +85,7 @@ const TimeCard = ({ auditorium, start, end, title, onClick }) => {
         </div>
 
         {/* Right: auditorium */}
-        <div className="w-36 text-right">
+        <div className="w-40 text-right">
           <div className="text-sm font-medium">Ticketory(대구)</div>
           <div className="text-sm font-medium">{label}</div>
         </div>
@@ -88,6 +94,7 @@ const TimeCard = ({ auditorium, start, end, title, onClick }) => {
 };
 
 const Bookings = () => {
+  const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [selectedMovieId, setSelectedMovieId] = useState(null);
   const [movies, setMovies] = useState([]);
@@ -149,7 +156,7 @@ const Bookings = () => {
     const dd = String(selectedDate.getDate()).padStart(2, "0");
     const dateOnly = `${yyyy}-${mm}-${dd}`; // 서버에서 이 포맷으로 받도록 가정: YYYY-MM-DD
 
-    // Compute selected UTC YYYY-MM-DD string for screening filtering
+
     const selectedUtcYmd = new Date(Date.UTC(
       selectedDate.getFullYear(),
       selectedDate.getMonth(),
@@ -157,10 +164,6 @@ const Bookings = () => {
       0, 0, 0, 0
     )).toISOString().slice(0, 10);
 
-    if (DEBUG_SCHEDULE) {
-
-      console.info("[sched] params", { dateOnly, selectedUtcYmd, selectedMovieId });
-    }
 
     (async function fetchScreenings() {
       setScreeningsLoading(true);
@@ -171,25 +174,10 @@ const Bookings = () => {
             page: 0, size: 200, allPages: true, maxPages: 20, debug: true
         });
 
-        // Normalize response to a flat list
         const list = Array.isArray(allOfDay?.content)
           ? allOfDay.content
           : (Array.isArray(allOfDay) ? allOfDay : []);
 
-        // 0) 원시 리스트 로그
-        if (DEBUG_SCHEDULE) {
-          console.info("[sched] raw count", Array.isArray(list) ? list.length : null);
-          try {
-            console.table((list || []).slice(0, 10).map((it) => ({
-              screeningId: it.screeningId || it.id,
-              movieId: it.movieId || it.movie_id,
-              screenId: it.screenId || it.screen_id,
-              screenName: it.screenName || it.screen_name,
-              startAt: it.startAt || it.start_at,
-              endAt: it.endAt || it.end_at,
-            })));
-          } catch (_) {}
-        }
 
         // 1) UTC 기반 정규화 (표시용 라벨/필드 생성)
         const normalized = (list || []).map((it) => {
@@ -220,34 +208,16 @@ const Bookings = () => {
           };
         }).filter(Boolean);
 
-        if (DEBUG_SCHEDULE) {
-          // eslint-disable-next-line no-console
-          console.info("[sched] normalized count", normalized.length);
-        }
 
         // 2) UTC 날짜 필터
         const utcFiltered = normalized.filter((cur) => cur._utcYmd === selectedUtcYmd);
-        if (DEBUG_SCHEDULE) {
-          // eslint-disable-next-line no-console
-          console.info("[sched] utcFiltered count", utcFiltered.length, "(remain)");
-        }
+
 
         // 3) 선택 영화 필터 (선택이 없는 경우 모두 통과)
         const wantMovieId = Number(selectedMovieId);
         const movieFiltered = Number.isNaN(wantMovieId)
           ? utcFiltered
           : utcFiltered.filter((cur) => cur._movieId === wantMovieId);
-
-        if (DEBUG_SCHEDULE) {
-          // eslint-disable-next-line no-console
-          console.info("[sched] movieFiltered count", movieFiltered.length, "(remain)");
-          try {
-            // eslint-disable-next-line no-console
-            console.table(movieFiltered.map((x) => ({
-              id: x.id, movieId: x._movieId, title: x.title, start: x.startLabel, end: x.endLabel, auditorium: x.auditorium, utcYmd: x._utcYmd,
-            })));
-          } catch (_) {}
-        }
 
         // 4) 그룹화 및 정렬
         const grouped = movieFiltered
@@ -265,13 +235,6 @@ const Bookings = () => {
           }, [])
           .sort((a, b) => a.hour - b.hour)
           .map((block) => ({ ...block, slots: block.slots.sort((s1, s2) => s1.start.localeCompare(s2.start)) }));
-
-        if (DEBUG_SCHEDULE) {
-          try {
-            console.info("[sched] grouped hours", grouped.map(g => g.hour));
-            console.table(grouped.flatMap(b => b.slots).map(s => ({ start: s.start, end: s.end, auditorium: s.auditorium, title: s.title })));
-          } catch (_) {}
-        }
 
         setScreenings(grouped);
         setFallbackNotice("");
@@ -293,9 +256,18 @@ const Bookings = () => {
   };
 
   const openSeatPage = (slot) => {
-    // 추후 router로 좌석 페이지로 이동 (예: `/seats?movieId=...&start=...`)
-    // 현재는 데모용으로 alert
-    alert(`${selectedMovieId}번 영화, ${slot.auditorium}, ${slot.start} 상영 선택`);
+    const params = new URLSearchParams({
+      movieId: String(selectedMovieId ?? ''),
+      screeningId: String(slot.id ?? ''),
+      date: dateInputValue,
+      start: slot.start ?? '',
+      end: slot.end ?? '',
+      auditorium: String(slot.auditorium ?? ''),
+      title: slot.title ?? ''
+    });
+
+    // 좌석 선택 페이지로 이동 (라우터에 /seat 경로가 매핑되어 있어야 함)
+    navigate(`/seat?${params.toString()}`);
   };
 
   const dateInputValue = useMemo(() => {
@@ -309,7 +281,8 @@ const Bookings = () => {
     <main className="max-w-[1200px] mx-auto px-4 py-10 min-h-[75vh]">
       {/* 상단: 날짜 선택 */}
       <div className="flex items-center justify-between gap-4 mb-6">
-        <h2 className="text-xl sm:text-xl font-extrabold">{formatKoreanDate(selectedDate)}</h2>
+        <h2 className="text-2xl font-semibold">빠른예매</h2>
+        {/*<h2 className="text-xl font-base">{formatKoreanDate(selectedDate)}</h2>*/}
         <label className="inline-flex items-center gap-3">
           <span className="text-sm text-gray-600">날짜 선택</span>
           <input
@@ -325,8 +298,11 @@ const Bookings = () => {
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* 좌측: 영화 리스트 */}
         <aside className="md:col-span-5 lg:col-span-4">
-          <div className="rounded-xl border bg-white/70 backdrop-blur p-6">
-            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+          <div className="rounded-xl border bg-white/70 backdrop-blur flex flex-col h-full">
+            <div className="px-4 py-3 border-b bg-white/60 sticky top-0 z-10">
+              <h3 className="text-base font-semibold">영화</h3>
+            </div>
+            <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto">
               {loading ? (
                 <div className="text-gray-500">로딩 중...</div>
               ) : error ? (
@@ -352,8 +328,11 @@ const Bookings = () => {
 
         {/* 우측: 시간표 */}
         <section className="md:col-span-7 lg:col-span-8">
-          <div className="rounded-xl border bg-white/70 backdrop-blur p-0">
-            <div className="p-4">
+          <div className="rounded-xl border bg-white/70 backdrop-blur flex flex-col h-full">
+            <div className="px-4 py-3 border-b bg-white/60 sticky top-0 z-10">
+              <h3 className="text-base font-semibold">시간</h3>
+            </div>
+            <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto">
               {screeningsLoading ? (
                 <div className="text-center text-gray-500 py-14">상영 시간을 불러오는 중...</div>
               ) : screeningsError ? (

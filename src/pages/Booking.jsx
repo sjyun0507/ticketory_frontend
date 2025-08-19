@@ -1,9 +1,10 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { getMovies } from "../../api/movieApi.js";
-import {getScreenings} from "../../api/bookingApi.js";
-import { useNavigate } from "react-router-dom";
+import { getMovies } from "../api/movieApi.js";
+import {getScreenings} from "../api/bookingApi.js";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useAuthStore } from "../store/useAuthStore.js";
 /* 예매 사이트
-* 상영목록 > 날짜필터링에서 상영시간 노출> 예매하기 흐름
+상영목록 > 날짜필터링에서 상영시간 노출> 예매하기 흐름
 */
 
 //한국시간 포맷
@@ -94,9 +95,14 @@ const TimeCard = ({ auditorium, start, end, title, onClick }) => {
 };
 
 const Bookings = () => {
+  const token = useAuthStore((s) => s.token);
+  const isAuthenticated = !!token;
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const preselectedMovieIdParam = searchParams.get("movieId");
+  const preselectedMovieId = preselectedMovieIdParam ? Number(preselectedMovieIdParam) : null;
   const [selectedDate, setSelectedDate] = useState(() => new Date());
-  const [selectedMovieId, setSelectedMovieId] = useState(null);
+  const [selectedMovieId, setSelectedMovieId] = useState(preselectedMovieId);
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -107,6 +113,12 @@ const Bookings = () => {
   const [fallbackNotice, setFallbackNotice] = useState("");
 
   useEffect(() => {
+    if (preselectedMovieId !== null && preselectedMovieId !== undefined) {
+      setSelectedMovieId(preselectedMovieId);
+    }
+  }, [preselectedMovieId]);
+
+  useEffect(() => {
     (async function fetchMovies() {
       try {
         // 전체 영화 목록을 백엔드에서 가져온 뒤, 프론트에서 status=true만 필터링
@@ -115,13 +127,11 @@ const Bookings = () => {
 
         const filtered = list.filter((m) => m && m.status === true);
 
-        // normalize id -> _id (fallback to movieId)
         const normalized = filtered.map((m) => ({
           ...m,
           _id: m.id ?? m.movieId ?? null,
         }));
 
-        // deduplicate by _id (fallback to title)
         const dedupMap = new Map();
         for (const m of normalized) {
           const key = (m._id ?? m.title ?? Math.random()).toString();
@@ -129,12 +139,24 @@ const Bookings = () => {
         }
         const dedup = Array.from(dedupMap.values());
 
+        const ids = dedup.map(m => m._id ?? m.id ?? m.movieId).filter(v => v !== null && v !== undefined);
+
+        if (ids.length > 0) {
+          if (preselectedMovieId !== null && preselectedMovieId !== undefined) {
+            const exists = ids.some(id => String(id) === String(preselectedMovieId));
+            setSelectedMovieId(exists ? preselectedMovieId : ids[0]);
+          } else if (selectedMovieId === null || selectedMovieId === undefined) {
+            setSelectedMovieId(ids[0]);
+          } else {
+            const exists = ids.some(id => String(id) === String(selectedMovieId));
+            if (!exists) setSelectedMovieId(ids[0]);
+          }
+        } else {
+          setSelectedMovieId(null);
+        }
+
         setMovies(dedup);
 
-        if (selectedMovieId === null && dedup.length > 0) {
-          const firstId = dedup[0]._id ?? dedup[0].id ?? dedup[0].movieId;
-          setSelectedMovieId(firstId ?? null);
-        }
       } catch (e) {
         setError(e?.message || '영화 목록을 불러오는 중 오류가 발생했습니다.');
         setMovies([]);
@@ -142,7 +164,7 @@ const Bookings = () => {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [preselectedMovieId]);
 
   useEffect(() => {
     // 날짜나 영화가 선택되지 않은 경우 초기화
@@ -150,12 +172,10 @@ const Bookings = () => {
       setScreenings([]);
       return;
     }
-
     const yyyy = selectedDate.getFullYear();
     const mm = String(selectedDate.getMonth() + 1).padStart(2, "0");
     const dd = String(selectedDate.getDate()).padStart(2, "0");
     const dateOnly = `${yyyy}-${mm}-${dd}`; // 서버에서 이 포맷으로 받도록 가정: YYYY-MM-DD
-
 
     const selectedUtcYmd = new Date(Date.UTC(
       selectedDate.getFullYear(),
@@ -163,7 +183,6 @@ const Bookings = () => {
       selectedDate.getDate(),
       0, 0, 0, 0
     )).toISOString().slice(0, 10);
-
 
     (async function fetchScreenings() {
       setScreeningsLoading(true);
@@ -177,7 +196,6 @@ const Bookings = () => {
         const list = Array.isArray(allOfDay?.content)
           ? allOfDay.content
           : (Array.isArray(allOfDay) ? allOfDay : []);
-
 
         // 1) UTC 기반 정규화 (표시용 라벨/필드 생성)
         const normalized = (list || []).map((it) => {
@@ -208,10 +226,8 @@ const Bookings = () => {
           };
         }).filter(Boolean);
 
-
         // 2) UTC 날짜 필터
         const utcFiltered = normalized.filter((cur) => cur._utcYmd === selectedUtcYmd);
-
 
         // 3) 선택 영화 필터 (선택이 없는 경우 모두 통과)
         const wantMovieId = Number(selectedMovieId);
@@ -266,8 +282,16 @@ const Bookings = () => {
       title: slot.title ?? ''
     });
 
-    // 좌석 선택 페이지로 이동 (라우터에 /seat 경로가 매핑되어 있어야 함)
-    navigate(`/seat?${params.toString()}`);
+    // 로그인 여부 확인 후 분기
+    const seatUrl = `/seat?${params.toString()}`;
+    if (!isAuthenticated) {
+      // 로그인 페이지로 이동하면서 로그인 후 다시 돌아올 경로를 전달
+      navigate(`/login?redirect=${encodeURIComponent(seatUrl)}`);
+      return;
+    }
+
+    // 좌석 선택 페이지로 이동
+    navigate(seatUrl);
   };
 
   const dateInputValue = useMemo(() => {
@@ -316,8 +340,8 @@ const Bookings = () => {
                     <MovieItem
                       key={keyId}
                       movie={m}
-                      active={keyId === selectedMovieId}
-                      onClick={() => setSelectedMovieId(keyId)}
+                      active={String(keyId) === String(selectedMovieId)}
+                      onClick={() => setSelectedMovieId(Number(keyId))}
                     />
                   );
                 })

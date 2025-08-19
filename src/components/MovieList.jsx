@@ -1,5 +1,6 @@
 import MovieCard from "./MovieCard.jsx";
 
+/* 전체 영화 리스트 출력하는 컴포넌트 */
 export default function MovieList({ movies = [] }) {
     // 개발 중 임시 체크
     if (!Array.isArray(movies)) {

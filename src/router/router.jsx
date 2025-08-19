@@ -4,7 +4,7 @@ import Login from "../pages/member/Login.jsx";
 import KakaoRedirectHandler from "../pages/member/KakaoRedirectHandler.jsx";
 import MyPage from "../pages/mypage/MyPage.jsx";
 import MyBookings from "../pages/mypage/MyBookings.jsx";
-import Booking from "../pages/public/Booking.jsx";
+import Booking from "../pages/Booking.jsx";
 import Screenings from "../pages/public/Screenings.jsx";
 import Story from "../pages/public/Story.jsx";
 import Points from "../pages/public/Points.jsx";

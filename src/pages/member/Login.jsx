@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { memberLogin, startKakaoLogin } from "../../api/memberApi.js";
 import "./Login.css";
 import kakaoLogin from "../../assets/styles/kakao_login_large_wide.png";
@@ -8,10 +8,24 @@ import { useAuthStore } from '../../store/useAuthStore.js';
 
 const Login = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const token = useAuthStore((s) => s.token);
     const [loginId, setLoginId] = useState("");
     const [password, setPassword] = useState("");
     const [errorMsg, setErrorMsg] = useState("");
     const [submitting, setSubmitting] = useState(false);
+
+    React.useEffect(() => {
+      if (!token) return;
+      const qs = new URLSearchParams(location.search);
+      const redirect = qs.get("redirect");
+      if (redirect) {
+        const to = decodeURIComponent(redirect);
+        navigate(to, { replace: true });
+      } else {
+        navigate("/", { replace: true });
+      }
+    }, [token, location.search, navigate]);
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -21,7 +35,10 @@ const Login = () => {
             const { data } = await memberLogin({ loginId, password });
             localStorage.setItem("accessToken", data.accessToken);
             useAuthStore.getState().login(data.accessToken);
-            navigate("/");
+            const qs = new URLSearchParams(location.search);
+            const redirect = qs.get("redirect");
+            const to = redirect ? decodeURIComponent(redirect) : "/";
+            navigate(to, { replace: true });
         } catch (err) {
             const status = err?.response?.status;
             const backendMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message;

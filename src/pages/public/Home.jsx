@@ -4,6 +4,10 @@ import MovieList from "../../components/MovieList";
 import {useMovieList} from "../../hooks/useMovies";
 import {computeMovieStatus} from "../../utils/movieStatus.js";
 
+/*메인 홈
+* 전체 영화 리스트 노출 (현재상영작/개봉예정작/상영종료 필터)
+* 빠른 예매하기 흐름
+*/
 
 const TABS = [
     { key: "now",      label: "현재상영작", match: (m) => computeMovieStatus(m) === "NOW_SHOWING" },

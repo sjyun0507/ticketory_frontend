@@ -1,8 +1,8 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { getMovies } from "../api/movieApi.js";
-import {getScreenings} from "../api/bookingApi.js";
+import { getMovies } from "../../api/movieApi.js";
+import {getScreenings} from "../../api/bookingApi.js";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useAuthStore } from "../store/useAuthStore.js";
+import { useAuthStore } from "../../store/useAuthStore.js";
 /* 예매 사이트
 상영목록 > 날짜필터링에서 상영시간 노출> 예매하기 흐름
 */
@@ -282,9 +282,19 @@ const Bookings = () => {
       title: slot.title ?? ''
     });
 
+    // 최신 토큰을 즉시 조회(스토어 hydration 지연 대응) + 로컬스토리지 폴백
+      const currentToken =
+          useAuthStore.getState().token ||
+          localStorage.getItem('accessToken') ||
+          localStorage.getItem('token') ||
+          sessionStorage.getItem('accessToken') ||
+          sessionStorage.getItem('token');
+
+      const authedNow = !!currentToken;
+
     // 로그인 여부 확인 후 분기
     const seatUrl = `/seat?${params.toString()}`;
-    if (!isAuthenticated) {
+    if (!authedNow) {
       // 로그인 페이지로 이동하면서 로그인 후 다시 돌아올 경로를 전달
       navigate(`/login?redirect=${encodeURIComponent(seatUrl)}`);
       return;

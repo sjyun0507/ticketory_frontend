@@ -16,6 +16,20 @@ const Login = () => {
     const [submitting, setSubmitting] = useState(false);
 
     React.useEffect(() => {
+      // 스토어 토큰이 비어있으면 스토리지에서 즉시 동기화
+      if (!token) {
+        const stored =
+          localStorage.getItem("accessToken") ||
+          sessionStorage.getItem("accessToken") ||
+          localStorage.getItem("token") ||
+          sessionStorage.getItem("token");
+        if (stored) {
+          useAuthStore.getState().login(stored);
+        }
+      }
+    }, [token]);
+
+    React.useEffect(() => {
       if (!token) return;
       const qs = new URLSearchParams(location.search);
       const redirect = qs.get("redirect");
@@ -68,6 +82,7 @@ const Login = () => {
     return (
         <div className="login-container">
             <div className="login-box" style={{ maxWidth: '340px', margin: '0 auto' }}>
+
                 <h2 className="login-title">로그인</h2>
                 {errorMsg && <p className="error-message" role="alert">{errorMsg}</p>}
                 <form onSubmit={handleLogin}>

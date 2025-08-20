@@ -12,6 +12,18 @@ function formatKoreanDate(date) {
   const weekday = date.toLocaleDateString("ko-KR", { weekday: "long" });
   return `${y}년 ${m}월 ${d}일 ${weekday}`;
 }
+// 로컬시간 헬퍼 (KST에서 24시간제 HH:mm 출력)
+function toYmdLocal(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+function toHHMMLocal(date) {
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
 
 // 관람등급 배지 (Booking 페이지와 통일)
 const Badge = ({ text }) => {
@@ -37,22 +49,22 @@ const Badge = ({ text }) => {
 const TimePill = ({ labelStart, labelEnd, auditorium, onClick }) => (
   <button
     onClick={onClick}
-    className="inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-white/80 backdrop-blur hover:bg-white transition text-sm mr-2 mb-2 shadow-sm"
+    className="inline-flex items-center gap-2 px-4 py-3 rounded-full border bg-gray-100 backdrop-blur transition text-sm mr-2 shadow-sm"
     title={auditorium ? `${auditorium} | ${labelStart}${labelEnd ? ` ~ ${labelEnd}` : ""}` : labelStart}
   >
     <span className="font-semibold leading-none">{labelStart}</span>
-    {labelEnd && <span className="text-gray-400 leading-none">~{labelEnd}</span>}
-    {auditorium && <span className="text-gray-600 leading-none">· {auditorium}</span>}
+    {labelEnd && <span className="text-gray-400 leading-none">~ {labelEnd}</span>}
+    {auditorium && <span className="text-gray-900 leading-none">| {auditorium}</span>}
   </button>
 );
 
 // 영화별 블록
-const MovieBlock = ({ movie, slots, onClickMovie, onClickTime }) => (
+const MovieBlock = ({ movie, slots, onClickTime }) => (
   <div className="border rounded-xl bg-white/70 backdrop-blur p-4 mb-4">
     <div className="flex items-center justify-between mb-3">
-      <button onClick={onClickMovie} className="flex items-center gap-2 text-left">
+      <button className="flex items-center gap-2 text-left">
         <Badge text={movie.rating || "ALL"} />
-        <h3 className="text-base sm:text-lg font-semibold hover:underline">
+        <h3 className="text-base sm:text-lg font-semibold">
           {movie.title}
         </h3>
       </button>
@@ -131,16 +143,7 @@ const Screenings = () => {
 
   // 해당 날짜의 전체 상영표 불러와 영화별로 그룹화
   useEffect(() => {
-    const yyyy = selectedDate.getFullYear();
-    const mm = String(selectedDate.getMonth() + 1).padStart(2, "0");
-    const dd = String(selectedDate.getDate()).padStart(2, "0");
-    const dateOnly = `${yyyy}-${mm}-${dd}`; // 서버: YYYY-MM-DD
-
-    const selectedUtcYmd = new Date(
-      Date.UTC(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 0, 0, 0, 0)
-    )
-      .toISOString()
-      .slice(0, 10);
+    const dateOnly = toYmdLocal(selectedDate); // 서버: YYYY-MM-DD (로컬/KST)
 
     (async () => {
       setScreeningsLoading(true);
@@ -160,12 +163,8 @@ const Screenings = () => {
             const rawEnd = it.endAt || it.end_at;
             if (!rawStart) return null;
 
-            const startIso = new Date(rawStart).toISOString();
-            const endIso = rawEnd ? new Date(rawEnd).toISOString() : null;
-
-            const startUtcYmd = startIso.slice(0, 10);
-            const startHH = startIso.substring(11, 13);
-            const startMM = startIso.substring(14, 16);
+            const startDate = new Date(rawStart);
+            const endDate = rawEnd ? new Date(rawEnd) : null;
 
             const mid = it.movieId || it.movie_id || null;
             const titleFromMovie = (() => {
@@ -179,13 +178,13 @@ const Screenings = () => {
               movieId: mid,
               title: it.movieTitle || it.title || titleFromMovie || "",
               auditorium: it.screenName || it.screen_name || it.screenId || it.screen_id,
-              start: `${startHH}:${startMM}`,
-              end: endIso ? endIso.substring(11, 16) : null,
-              _utcYmd: startUtcYmd,
+              start: toHHMMLocal(startDate),    // 24시간제 HH:mm
+              end: endDate ? toHHMMLocal(endDate) : null,
+              _ymd: toYmdLocal(startDate),      // 로컬 기준 날짜
             };
           })
           .filter(Boolean)
-          .filter((cur) => cur._utcYmd === selectedUtcYmd);
+          .filter((cur) => cur._ymd === dateOnly);
 
         // 영화별 그룹화
         const byMovie = new Map();
@@ -261,10 +260,10 @@ const Screenings = () => {
   };
 
   return (
-    <main className="max-w-[1200px] mx-auto px-4 py-10 min-h-[75vh]">
+    <main className="max-w-[1200px] mx-auto px-4 py-6 min-h-[75vh]">
       {/* 상단: 날짜 선택 */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <h2 className="text-2xl font-semibold">{formatKoreanDate(selectedDate)}</h2>
+      <div className="flex items-center justify-between gap-4 mb-4">
+          <h2 className="text-2xl font-semibold">상영시간표</h2>
         <label className="inline-flex items-center gap-3">
           <span className="text-sm text-gray-600">날짜 선택</span>
           <input

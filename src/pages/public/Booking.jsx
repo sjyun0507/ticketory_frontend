@@ -15,6 +15,17 @@ function formatKoreanDate(date) {
   const weekday = date.toLocaleDateString("ko-KR", { weekday: "long" });
   return `${y}년 ${m}월 ${d}일 ${weekday}`;
 }
+function toYmdLocal(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+}
+function toHHMMLocal(date) {
+    const hh = String(date.getHours()).padStart(2, "0");
+    const mm = String(date.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
+}
 
 //관람등급
 const Badge = ({ text }) => {
@@ -62,7 +73,7 @@ const MovieItem = ({ movie, active, onClick }) => (
 );
 
 //상영시간 목록
-const TimeCard = ({ auditorium, start, end, title, onClick }) => {
+const TimeCard = ({ auditorium, start, end, title, disabled = false, onClick }) => {
     const label =
         typeof auditorium === "string" && !auditorium.trim().endsWith("관")
             ? `${auditorium}관`
@@ -70,8 +81,13 @@ const TimeCard = ({ auditorium, start, end, title, onClick }) => {
 
     return (
       <button
-        onClick={onClick}
-        className="w-full flex items-center justify-between px-3 py-2 rounded-md border bg-white/80 backdrop-blur hover:bg-white transition shadow-sm"
+        onClick={disabled ? undefined : onClick}
+        disabled={disabled}
+        aria-disabled={disabled}
+        className={
+          "w-full flex items-center justify-between px-3 py-2 rounded-md border bg-white/80 backdrop-blur transition shadow-sm " +
+          (disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-white")
+        }
       >
         {/* Left: start/end time */}
         <div className="w-20 text-right">
@@ -172,23 +188,13 @@ const Bookings = () => {
       setScreenings([]);
       return;
     }
-    const yyyy = selectedDate.getFullYear();
-    const mm = String(selectedDate.getMonth() + 1).padStart(2, "0");
-    const dd = String(selectedDate.getDate()).padStart(2, "0");
-    const dateOnly = `${yyyy}-${mm}-${dd}`; // 서버에서 이 포맷으로 받도록 가정: YYYY-MM-DD
-
-    const selectedUtcYmd = new Date(Date.UTC(
-      selectedDate.getFullYear(),
-      selectedDate.getMonth(),
-      selectedDate.getDate(),
-      0, 0, 0, 0
-    )).toISOString().slice(0, 10);
+    const dateOnly = toYmdLocal(selectedDate); // YYYY-MM-DD (로컬/KST 기준)
 
     (async function fetchScreenings() {
       setScreeningsLoading(true);
       setScreeningsError(null);
       try {
-        // 하루 전체 상영표 조회 (UTC 기준 필터는 아래에서 수행)
+        // 하루 전체 상영표 조회 (로컬/KST 기준 필터는 아래에서 수행)
         const allOfDay = await getScreenings(dateOnly, null, {
             page: 0, size: 200, allPages: true, maxPages: 20, debug: true
         });
@@ -197,43 +203,42 @@ const Bookings = () => {
           ? allOfDay.content
           : (Array.isArray(allOfDay) ? allOfDay : []);
 
-        // 1) UTC 기반 정규화 (표시용 라벨/필드 생성)
+        // 1) 로컬(KST) 기반 정규화 (표시용 라벨/필드 생성)
         const normalized = (list || []).map((it) => {
           const rawStart = it.startAt || it.start_at;
           const rawEnd = it.endAt || it.end_at;
 
-          const startIso = new Date(rawStart).toISOString();
-          const endIso = rawEnd ? new Date(rawEnd).toISOString() : null;
+          const startDate = new Date(rawStart); // 백엔드가 KST로 보낸 값을 로컬로 그대로 사용
+          const endDate = rawEnd ? new Date(rawEnd) : null;
 
-          const startUtcYmd = startIso.slice(0, 10);
-          const startHH = startIso.substring(11, 13);
-          const startMM = startIso.substring(14, 16);
+          const startYmd = toYmdLocal(startDate); // 로컬 YYYY-MM-DD
 
           return {
             id: it.screeningId || it.id,
-            hour: Number(startHH),
+            hour: startDate.getHours(),
             auditorium: it.screenName || it.screen_name || it.screenId || it.screen_id,
-            startLabel: `${startHH}:${startMM}`,
-            endLabel: endIso ? endIso.substring(11, 16) : null,
+            startLabel: toHHMMLocal(startDate),
+            endLabel: endDate ? toHHMMLocal(endDate) : null,
             title: (it.movieTitle || it.title || (() => {
               const mid = it.movieId || it.movie_id || null;
               if (mid == null) return "";
               const mv = movies.find((m) => (m._id ?? m.id ?? m.movieId) === mid);
               return mv?.title || "";
             })()),
-            _utcYmd: startUtcYmd,
+            _ymd: startYmd,              // 로컬 기준 날짜
             _movieId: it.movieId || it.movie_id || null,
+            _startMs: startDate.getTime() // 로컬 기준 timestamp
           };
         }).filter(Boolean);
 
-        // 2) UTC 날짜 필터
-        const utcFiltered = normalized.filter((cur) => cur._utcYmd === selectedUtcYmd);
+        // 2) 로컬 날짜(KST) 필터
+        const localFiltered = normalized.filter((cur) => cur._ymd === dateOnly);
 
         // 3) 선택 영화 필터 (선택이 없는 경우 모두 통과)
         const wantMovieId = Number(selectedMovieId);
         const movieFiltered = Number.isNaN(wantMovieId)
-          ? utcFiltered
-          : utcFiltered.filter((cur) => cur._movieId === wantMovieId);
+          ? localFiltered
+          : localFiltered.filter((cur) => cur._movieId === wantMovieId);
 
         // 4) 그룹화 및 정렬
         const grouped = movieFiltered
@@ -245,6 +250,7 @@ const Bookings = () => {
               start: cur.startLabel,
               end: cur.endLabel,
               title: cur.title,
+              startMs: cur._startMs,
             };
             if (found) found.slots.push(slot); else acc.push({ hour: cur.hour, slots: [slot] });
             return acc;
@@ -282,6 +288,12 @@ const Bookings = () => {
       title: slot.title ?? ''
     });
 
+    // 지난 상영 시간 방지
+    if (slot?.startMs && slot.startMs <= Date.now()) {
+      alert("이미 지난 상영시간입니다. 다른 시간을 선택해주세요.");
+      return;
+    }
+
     // 최신 토큰을 즉시 조회(스토어 hydration 지연 대응) + 로컬스토리지 폴백
       const currentToken =
           useAuthStore.getState().token ||
@@ -311,12 +323,19 @@ const Bookings = () => {
     return `${yyyy}-${mm}-${dd}`;
   }, [selectedDate]);
 
+  const todayValue = useMemo(() => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }, []);
+
   return (
-    <main className="max-w-[1200px] mx-auto px-4 py-10 min-h-[75vh]">
+    <main className="max-w-[1200px] mx-auto px-4 py-6 min-h-[75vh]">
       {/* 상단: 날짜 선택 */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <h2 className="text-2xl font-semibold">빠른예매</h2>
-        {/*<h2 className="text-xl font-base">{formatKoreanDate(selectedDate)}</h2>*/}
+        <div className="flex items-center justify-between gap-4 mb-4">
+            <h2 className="text-2xl font-semibold">예매</h2>
         <label className="inline-flex items-center gap-3">
           <span className="text-sm text-gray-600">날짜 선택</span>
           <input
@@ -324,6 +343,7 @@ const Bookings = () => {
             value={dateInputValue}
             onChange={handleDateChange}
             className="border rounded-md px-3 py-2"
+            min={todayValue}
           />
         </label>
       </div>
@@ -382,6 +402,7 @@ const Bookings = () => {
                       start={s.start}
                       end={s.end}
                       title={s.title}
+                      disabled={typeof s.startMs === 'number' ? s.startMs <= Date.now() : false}
                       onClick={() => openSeatPage(s)}
                     />
                   ))

@@ -13,9 +13,11 @@ import RequireAuth from "./RequireAuth.jsx";
 import Settings from "../pages/mypage/Settings.jsx";
 import MovieDetail from "../pages/public/MovieDetail.jsx";
 import Seat from "../pages/Seat.jsx";
+import Search from "../components/Search.jsx";
 
 const routes = [
     {path: "/", element: <Home/>},
+    {path: "/search", element: <Search/>},
     {path: '/movies/:id', element: <MovieDetail /> },
     {path: "/booking", element: <Booking/>},
     {path: "/screenings", element: <Screenings/>},

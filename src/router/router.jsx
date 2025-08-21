@@ -14,6 +14,7 @@ import Settings from "../pages/mypage/Settings.jsx";
 import MovieDetail from "../pages/public/MovieDetail.jsx";
 import Seat from "../pages/Seat.jsx";
 import Search from "../components/Search.jsx";
+import Payment from "../pages/Payment.jsx";
 
 const routes = [
     {path: "/", element: <Home/>},
@@ -21,10 +22,13 @@ const routes = [
     {path: '/movies/:id', element: <MovieDetail /> },
     {path: "/booking", element: <Booking/>},
     {path: "/screenings", element: <Screenings/>},
+    {path: "/payment", element: <Payment />},
     {
         path: "/seat",
         element: <RequireAuth/>,
-        children: [{ index: true, element: <Seat /> }],
+        children: [
+            { index: true, element: <Seat /> },
+        ],
     },
     {path: "/story", element: <Story/>},
     {path: "/events", element: <Events/>},

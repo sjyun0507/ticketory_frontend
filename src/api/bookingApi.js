@@ -1,4 +1,4 @@
-import axiosInstance from "./axiosInstance.js";
+import api from "./axiosInstance.js";
 
 // 상영 시간 조회 API (전 페이지 수집 지원)
 export const getScreenings = async (date, movieId, opts = {}) => {
@@ -13,7 +13,7 @@ export const getScreenings = async (date, movieId, opts = {}) => {
   // 단일 페이지 모드
   if (!opts.allPages) {
     const params = { ...baseParams, page, size };
-    const { data } = await axiosInstance.get("/screenings", { params });
+    const { data } = await api.get("/screenings", { params });
     const list = Array.isArray(data?.items)
       ? data.items
       : Array.isArray(data?.content)
@@ -30,7 +30,7 @@ export const getScreenings = async (date, movieId, opts = {}) => {
   for (let i = 0; i < MAX_PAGES; i += 1) {
     const params = { ...baseParams, page, size };
 
-    const { data } = await axiosInstance.get("/screenings", { params });
+    const { data } = await api.get("/screenings", { params });
 
     // items/content/배열 대응
     const items = Array.isArray(data?.items)
@@ -57,3 +57,18 @@ export const getScreenings = async (date, movieId, opts = {}) => {
 
   return all;
 };
+
+ // *   movieId: 1,
+ // *   screeningId: 10,
+ // *   seatIds: ["A1","A2"],
+ // *   counts: { adult: 2, teen: 0 },
+ // *   status: "HOLD"
+
+
+export async function createBookingHold(payload) {
+    const res = await api.post("/bookings", {
+        ...payload,
+        status: "HOLD",
+    });
+    return res.data;
+}

@@ -1,6 +1,5 @@
 import api from './axiosInstance.js';
 
-
 // 좌석맵 조회 (screeningId 기준)
 // GET /api/seats/map?screeningId=123
 export const getSeatMap = (screeningId) =>

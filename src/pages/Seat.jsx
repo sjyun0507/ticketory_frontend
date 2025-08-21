@@ -2,6 +2,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import React, { useState, useMemo} from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getSeatMap } from "../api/seatApi";
+import { createBookingHold } from "../api/bookingApi";
 import enter from '../assets/styles/enter.png';
 import exit from '../assets/styles/exit.png';
 
@@ -20,7 +21,7 @@ const normalizeStatus = (s) => {
   return String(s).toUpperCase();
 };
 
-// 가격 정책 (필요 시 백엔드 값으로 교체)
+// 가격 정책
 const PRICE = { adult: 14000, teen: 11000 };
 
 const Seat = () => {
@@ -79,6 +80,46 @@ const Seat = () => {
           return next;
         });
     };
+
+    async function handleNext() {
+        const screeningIdNum = Number(screeningId);
+        const seatIds = [...selected]; // e.g., ["A1","A2"] as built in this component
+
+        // Basic validations to avoid server 500s
+        if (!screeningId) {
+            alert("상영 회차 정보가 없습니다.");
+            return;
+        }
+        if (!seatIds.length) {
+            alert("선택된 좌석이 없습니다.");
+            return;
+        }
+        if (totalPeople === 0 || selected.length !== totalPeople) {
+            alert("관람 인원과 선택 좌석 수가 일치해야 합니다.");
+            return;
+        }
+
+        try {
+            const payload = {
+                screeningId: Number.isNaN(screeningIdNum) ? screeningId : screeningIdNum,
+                seatIds,
+                counts: { adult: people.adult, teen: people.teen },
+                holdSeconds: 200,
+            };
+            console.log('[HOLD:req]', payload);
+
+            const res = await createBookingHold(payload);
+            console.log('[HOLD:res]', res);
+
+            // 다음 단계로 이동 (예: 결제 정보 입력 페이지)
+            // navigate(`/booking?bookingId=${res.id}`);
+        } catch (e) {
+            const status = e.response?.status;
+            const data = e.response?.data;
+            console.error('[HOLD:error]', status, data);
+            alert(data?.message ?? data?.error ?? '예약 생성 중 오류가 발생했습니다.');
+        }
+    }
 
     return (
 
@@ -249,7 +290,7 @@ const Seat = () => {
                         onClick={() => navigate(-1)}>이전</button>
                   <button
                     type="button"
-                    onClick={() => navigate(`/payment`)}
+                    onClick={handleNext}
                     disabled={totalPeople === 0 || selected.length === 0 || (totalPeople > 0 && selected.length !== totalPeople)}
                     className="px-5 py-2 rounded-lg text-white disabled:opacity-50 disabled:cursor-not-allowed bg-black"
                   >

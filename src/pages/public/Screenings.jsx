@@ -3,6 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { getMovies } from "../../api/movieApi.js";
 import { getScreenings } from "../../api/bookingApi.js";
 import {useAuthStore} from "../../store/useAuthStore.js";
+/* 상영시간표 페이지
+전체상영목록> 예매하기 흐름
+*/
 
 // 한국시간 포맷 라벨
 function formatKoreanDate(date) {
@@ -46,10 +49,15 @@ const Badge = ({ text }) => {
 };
 
 // 한 상영 시간 버튼
-const TimePill = ({ labelStart, labelEnd, auditorium, onClick }) => (
+const TimePill = ({ labelStart, labelEnd, auditorium, disabled = false, onClick }) => (
   <button
-    onClick={onClick}
-    className="inline-flex items-center gap-2 px-4 py-3 rounded-full border bg-gray-100 backdrop-blur transition text-sm mr-2 shadow-sm"
+    onClick={disabled ? undefined : onClick}
+    disabled={disabled}
+    aria-disabled={disabled}
+    className={
+      "inline-flex items-center gap-2 px-4 py-3 rounded-full border bg-gray-50 backdrop-blur transition text-sm mr-2 shadow-sm " +
+      (disabled ? "opacity-20 cursor-not-allowed pointer-events-none" : "hover:bg-white")
+    }
     title={auditorium ? `${auditorium} | ${labelStart}${labelEnd ? ` ~ ${labelEnd}` : ""}` : labelStart}
   >
     <span className="font-semibold leading-none">{labelStart}</span>
@@ -71,15 +79,19 @@ const MovieBlock = ({ movie, slots, onClickTime }) => (
     </div>
     {slots && slots.length ? (
       <div className="flex flex-wrap">
-        {slots.map((s) => (
-          <TimePill
-            key={s.id}
-            labelStart={s.start}
-            labelEnd={s.end}
-            auditorium={s.auditorium}
-            onClick={() => onClickTime(s)}
-          />
-        ))}
+        {slots.map((s) => {
+          const isPast = typeof s.startMs === 'number' ? s.startMs <= Date.now() : false;
+          return (
+            <TimePill
+              key={s.id}
+              labelStart={s.start}
+              labelEnd={s.end}
+              auditorium={s.auditorium}
+              disabled={isPast}
+              onClick={() => (!isPast ? onClickTime(s) : undefined)}
+            />
+          );
+        })}
       </div>
     ) : (
       <div className="text-sm text-gray-500">상영 시간이 없습니다.</div>
@@ -180,6 +192,7 @@ const Screenings = () => {
               auditorium: it.screenName || it.screen_name || it.screenId || it.screen_id,
               start: toHHMMLocal(startDate),    // 24시간제 HH:mm
               end: endDate ? toHHMMLocal(endDate) : null,
+              startMs: startDate.getTime(),
               _ymd: toYmdLocal(startDate),      // 로컬 기준 날짜
             };
           })
@@ -217,6 +230,10 @@ const Screenings = () => {
 
   // 이동: 시간 클릭 → 좌석 예약 (로그인 가드)
   const goSeatForTime = (slot) => {
+    if (slot && typeof slot.startMs === 'number' && slot.startMs <= Date.now()) {
+      alert('이미 지난 상영시간입니다. 다른 시간을 선택해주세요.');
+      return;
+    }
     // 최신 토큰을 즉시 조회(스토어 hydration 지연 대응) + 로컬스토리지 폴백
     const currentToken =
       useAuthStore.getState().token ||
@@ -245,20 +262,6 @@ const Screenings = () => {
     navigate(seatUrl);
   };
 
-  // 이동: 영화 제목 클릭 →
-  //  - 해당 영화의 상영회차가 1개면 곧바로 좌석 예약(goSeatForTime)
-  //  - 그 외에는 예매하기(Booking)로 이동하여 회차 선택
-  const onMovieClick = (movieId, slots) => {
-    const safeSlots = Array.isArray(slots) ? slots : [];
-    if (safeSlots.length === 1) {
-      const only = { ...safeSlots[0], movieId };
-      goSeatForTime(only);
-      return;
-    }
-    // 회차가 0개 또는 2개 이상이면 Booking으로 이동해 회차 선택
-    navigate(`/booking?movieId=${movieId}&date=${dateInputValue}`);
-  };
-
   return (
     <main className="max-w-[1200px] mx-auto px-4 py-6 min-h-[75vh]">
       {/* 상단: 날짜 선택 */}
@@ -271,6 +274,7 @@ const Screenings = () => {
             value={dateInputValue}
             onChange={handleDateChange}
             className="border rounded-md px-3 py-2"
+            min={toYmdLocal(new Date())}
           />
         </label>
       </div>

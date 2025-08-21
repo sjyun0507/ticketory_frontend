@@ -3,8 +3,8 @@ import { getMovies } from "../../api/movieApi.js";
 import {getScreenings} from "../../api/bookingApi.js";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../../store/useAuthStore.js";
-/* 예매 사이트
-상영목록 > 날짜필터링에서 상영시간 노출> 예매하기 흐름
+/* 예매 페이지
+영화별 상영목록 > 날짜필터링에서 상영시간 노출> 예매하기 흐름
 */
 
 //한국시간 포맷
@@ -86,7 +86,7 @@ const TimeCard = ({ auditorium, start, end, title, disabled = false, onClick }) 
         aria-disabled={disabled}
         className={
           "w-full flex items-center justify-between px-3 py-2 rounded-md border bg-white/80 backdrop-blur transition shadow-sm " +
-          (disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-white")
+          (disabled ? "opacity-20 cursor-not-allowed" : "hover:bg-white")
         }
       >
         {/* Left: start/end time */}

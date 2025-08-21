@@ -37,3 +37,7 @@ export const deleteMember = async () => {
     const { data } = await api.delete(`/members/me`);
     return data;
 };
+
+// 회원 ID로 포인트 조회
+export const getMemberPoints = (memberId) =>
+    api.get(`/members/${memberId}/points`);

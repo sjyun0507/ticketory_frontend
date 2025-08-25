@@ -1,12 +1,11 @@
 import { useSearchParams, useNavigate } from "react-router-dom";
 import React, { useState, useMemo} from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getSeatMap } from "../api/seatApi";
-import { createBookingHold } from "../api/bookingApi";
+import {getSeatMap, initBooking} from "../api/seatApi";
 import enter from '../assets/styles/enter.png';
 import exit from '../assets/styles/exit.png';
 
-/* 좌석 선택 페이
+/* 좌석 선택 & 페이
 screeningId를 param으로 불러와서 좌석배치 불러옴 {available, hold, booked} (백엔드) -> 프론트에서는 AVAILABLE/HELD/SOLD 로 변환하여 사용)
 */
 
@@ -36,7 +35,7 @@ const Seat = () => {
 
     // 인원 수 및 선택 좌석 상태
     const [people, setPeople] = useState({ adult: 0, teen: 0 });
-    const [selected, setSelected] = useState([]); // ["A1","A2"]
+    const [selected, setSelected] = useState([]); // [101, 102] 숫자로 매핑
     const totalPeople = useMemo(() => people.adult + people.teen, [people]);
     const totalAmount = useMemo(() => (people.adult * PRICE.adult) + (people.teen * PRICE.teen), [people]);
 
@@ -48,42 +47,67 @@ const Seat = () => {
     });
 
     // 좌석 id -> 좌석 객체 / 상태 맵
-    const seatById = useMemo(() => {
+    // code("A1") -> seat_id, seat_id -> code, seat_id -> status
+    const codeToSeatId = useMemo(() => {
         const m = new Map();
-        data?.seats?.forEach((s) => m.set(s.id, s));
+        data?.seats?.forEach((s) => {
+            const seatId = s.seatId ?? s.id;
+            const row = s.rowLabel ?? s.row_label ?? s.row;
+            const col = s.colNumber ?? s.col_number ?? s.col;
+            if (seatId != null && row != null && col != null) {
+                m.set(`${row}${col}`, Number(seatId));
+            }
+        });
         return m;
     }, [data]);
 
-    const seatStatusById = useMemo(() => {
+    const seatIdToCode = useMemo(() => {
         const m = new Map();
-        data?.seats?.forEach((s) => m.set(s.id, normalizeStatus(s.status)));
+        data?.seats?.forEach((s) => {
+            const seatId = s.seatId ?? s.id;
+            const row = s.rowLabel ?? s.row_label ?? s.row;
+            const col = s.colNumber ?? s.col_number ?? s.col;
+            if (seatId != null && row != null && col != null) {
+                m.set(Number(seatId), `${row}${col}`);
+            }
+        });
         return m;
     }, [data]);
 
-    const toggleSeat = (id) => {
+    const seatStatusBySeatId = useMemo(() => {
+        const m = new Map();
+        data?.seats?.forEach((s) => {
+            const seatId = Number(s.seatId ?? s.id);
+            m.set(seatId, normalizeStatus(s.status));
+        });
+        return m;
+    }, [data]);
+
+    const toggleSeat = (seatId) => {
+        if (!seatId) return;
         // 인원 미선택 시 좌석 선택 제한
         if (totalPeople === 0) {
           alert("관람 인원을 먼저 선택해주세요.");
           return;
         }
         if (!data) return;
-        const status = seatStatusById.get(id) || "AVAILABLE";
+        const status = seatStatusBySeatId.get(Number(seatId)) || "AVAILABLE";
         if (["SOLD", "BLOCKED", "HELD"].includes(status)) return;
         // 인원 수 제한: 선택 좌석 수는 총 인원 수 이하여야 함
-        const willSelect = !selected.includes(id);
+        const willSelect = !selected.includes(Number(seatId));
         if (willSelect && totalPeople > 0 && selected.length >= totalPeople) {
           alert("좌석 선택이 완료되었습니다.");
           return;
         }
         setSelected(prev => {
-          const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
-          return next;
+          const sid = Number(seatId);
+          return prev.includes(sid) ? prev.filter(s => s !== sid) : [...prev, sid];
         });
     };
 
     async function handleNext() {
         const screeningIdNum = Number(screeningId);
-        const seatIds = [...selected]; // e.g., ["A1","A2"] as built in this component
+        const seatIds = [...selected];
 
         // Basic validations to avoid server 500s
         if (!screeningId) {
@@ -108,7 +132,7 @@ const Seat = () => {
             };
             console.log('[HOLD:req]', payload);
 
-            const res = await createBookingHold(payload);
+            const res = await initBooking(payload);
             console.log('[HOLD:res]', res);
 
             // 다음 단계로 이동 (예: 결제 정보 입력 페이지)
@@ -178,17 +202,17 @@ const Seat = () => {
                               <div className="w-6 text-xs text-gray-500 text-right">{r}</div>
                               {[...Array(data.cols || 0)].map((_, idx) => {
                                 const c = idx + 1;
-                                const id = `${r}${c}`;
-                                const s = seatById.get(id);
-                                const status = seatStatusById.get(id) || (s ? normalizeStatus(s.status) : "BLOCKED");
-                                const isSel = selected.includes(id);
+                                const code = `${r}${c}`; // A1
+                                const seatId = codeToSeatId.get(code); //number | undefined
+                                const status = seatId? (seatStatusBySeatId.get(seatId) || "AVAILABLE") : "BLOCKED";
+                                const isSel = seatId? selected.includes(seatId) : false;
                                 const base = "relative w-8 h-8 rounded-md text-xs flex items-center justify-center border transition select-none";
                                 let overlay = null;
 
                                 // Build classes so that the selected style is appended LAST and wins
                                 const clsParts = ["cursor-pointer", "bg-white", "border-gray-300", "hover:border-blue-600"];
 
-                                if (!s || status === "BLOCKED") {
+                                if (status === "BLOCKED") {
                                   // 통로/미운영
                                   clsParts.splice(0, clsParts.length, "cursor-pointer", "bg-gray-100", "border-gray-200");
                                 } else if (status === "SOLD") {
@@ -223,10 +247,10 @@ const Seat = () => {
 
                                 return (
                                   <button
-                                    key={id}
+                                    key={code}
                                     className={`${base} ${cls}`}
-                                    onClick={() => toggleSeat(id)}
-                                    title={s ? `${id} · ${s.type}` : id}
+                                    onClick={() => toggleSeat(seatId)}
+                                    title={code}
                                     aria-pressed={isSel}
                                     data-selected={isSel ? '1' : '0'}
                                   >
@@ -264,7 +288,7 @@ const Seat = () => {
                   <div>
                     <div className="text-base font-semibold mb-2">선택좌석</div>
                     <div className="min-h-[72px] text-sm text-gray-700  bg-gray-100 border rounded p-2">
-                      {selected.length ? selected.join(", ") : "-"}
+                      {selected.length ? selected.map((sid) => seatIdToCode.get(Number(sid)) ?? String(sid)).join(', ') : "_"}
                     </div>
                   </div>
 

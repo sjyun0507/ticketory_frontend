@@ -58,17 +58,3 @@ export const getScreenings = async (date, movieId, opts = {}) => {
   return all;
 };
 
- // *   movieId: 1,
- // *   screeningId: 10,
- // *   seatIds: ["A1","A2"],
- // *   counts: { adult: 2, teen: 0 },
- // *   status: "HOLD"
-
-
-export async function createBookingHold(payload) {
-    const res = await api.post("/bookings", {
-        ...payload,
-        status: "HOLD",
-    });
-    return res.data;
-}

@@ -17,11 +17,16 @@ export default function Payment() {
     const { cart: cartFromState = [], totalPrice, amount: amountState, bookingId: bookingIdFromState } = location.state || {};
     const bookingIdFromQuery = new URLSearchParams(location.search).get('bookingId');
     const bookingId = bookingIdFromState || bookingIdFromQuery || null;
+    // 좌석 페이지로 돌아갈 때 사용할 screeningId를 파생
+    const screeningIdFromState = location.state?.screeningId || (Array.isArray(cart) && cart[0]?.screeningId) || null;
+    const screeningIdFromQuery = new URLSearchParams(location.search).get('screeningId');
+    const screeningId = screeningIdFromState || screeningIdFromQuery || null;
     // 새로고침 대비 폴백
     const cartFromStorage = (() => {
       try { return JSON.parse(localStorage.getItem('cartItems') || '[]'); } catch { return []; }
     })();
     const cart = cartFromState.length ? cartFromState : cartFromStorage;
+    const primaryMovieId = (Array.isArray(cart) && cart[0]?.movieId) || null;
     // 초기 결제금액 결정: state.amount.value > state.totalPrice > cart 합계
     const initialAmountValue = (() => {
       if (amountState && typeof amountState.value === 'number') return amountState.value;
@@ -44,6 +49,9 @@ export default function Payment() {
     const [availablePoints, setAvailablePoints] = useState(0);
 
     const [posterMap, setPosterMap] = useState({});
+
+    // 중복 뒤로가기 방지
+    const [releasing, setReleasing] = useState(false);
 
     useEffect(() => {
       const ids = Array.from(new Set((cart || []).map(it => it.movieId).filter(Boolean)));
@@ -132,6 +140,8 @@ export default function Payment() {
     // }, [memberId]);
 
     const handleBack = async () => {
+      if (releasing) return;
+      setReleasing(true);
       try {
         if (bookingId) {
           await releaseBookingHold(bookingId);
@@ -145,9 +155,17 @@ export default function Payment() {
       } finally {
         try { localStorage.removeItem('cartItems'); } catch {}
         try { sessionStorage.removeItem('sessionId'); } catch {}
-        // navigate(-1) 대신 이전 좌석 선택 페이지로 확실히 이동하고 싶다면 아래처럼 경로를 지정하세요.
-        // navigate('/seat?screeningId=...'); // 필요 시 교체
-        navigate(-1);
+        // 좌석 페이지에 상영 회차 + 영화 ID를 전달해 즉시 좌석/영화 정보를 재조회하도록 유도
+        if (screeningId) {
+          const params = new URLSearchParams({ screeningId: String(screeningId), refresh: '1' });
+          if (primaryMovieId) params.set('movieId', String(primaryMovieId));
+          navigate(`/seat?${params.toString()}`, {
+            state: { screeningId, movieId: primaryMovieId, from: 'payment' },
+          });
+        } else {
+          navigate('/');
+        }
+        setReleasing(false);
       }
     };
 
@@ -294,7 +312,7 @@ export default function Payment() {
                 </div>
 
                 {/* 결제 금액 박스 */}
-                <div className="bg-gray-900 text-white rounded-2xl p-6 h-fit space-y-4">
+                <div className="bg-zinc-700 text-white rounded-2xl p-6 h-fit space-y-4">
                     <h3 className="text-lg font-semibold">결제금액</h3>
                     {cart.map((item, i) => {
                       const qty = Number(item.quantity || 1);
@@ -320,7 +338,8 @@ export default function Payment() {
                     <div className="flex gap-3 mt-4">
                         <button
                             onClick={handleBack}
-                            className="w-1/2 bg-gray-500 hover:bg-gray-600 py-2 rounded-lg"
+                            disabled={releasing}
+                            className="w-1/2 bg-gray-500 hover:bg-gray-600 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             이전
                         </button>

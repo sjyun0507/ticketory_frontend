@@ -1,7 +1,8 @@
-import { useSearchParams, useNavigate } from "react-router-dom";
-import React, { useState, useMemo} from "react";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
+import React, { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {getSeatMap, initBooking} from "../api/seatApi";
+import { getMovieDetail } from "../api/movieApi";
 import enter from '../assets/styles/enter.png';
 import exit from '../assets/styles/exit.png';
 
@@ -25,18 +26,49 @@ const PRICE = { adult: 14000, teen: 11000 };
 
 const Seat = () => {
     const [params] = useSearchParams();
-    const movieId = params.get('movieId');
-    const screeningId = params.get('screeningId');
-    const date = params.get('date');
-    const start = params.get('start');
-    const auditorium = params.get('auditorium');
-    const title = params.get('title');
+    const location = useLocation();
+    const movieId = params.get('movieId') ?? location.state?.movieId ?? undefined;
+    const screeningId = params.get('screeningId') ?? location.state?.screeningId ?? undefined;
+    const date = params.get('date') ?? location.state?.date ?? undefined;
+    const start = params.get('start') ?? location.state?.start ?? undefined;
+    const auditorium = params.get('auditorium') ?? location.state?.auditorium ?? undefined;
+    const title = params.get('title') ?? location.state?.title ?? undefined;
+    const cameFromPayment = (location.state?.from === 'payment') || !!params.get('refresh');
+
+    // Fallbacks: restore summary from localStorage if params/state are missing
+    let savedSummary = {};
+    try {
+      const raw = localStorage.getItem('seatSummary');
+      if (raw) savedSummary = JSON.parse(raw);
+    } catch (_) {}
+
+    const resolvedAuditorium = auditorium ?? savedSummary.auditorium;
+    const resolvedDate = date ?? savedSummary.date;
+    const resolvedStart = start ?? savedSummary.start;
+    const resolvedTitle = (title ?? savedSummary.title) || '';
     const navigate = useNavigate();
     const queryClient = useQueryClient();
 
     // 인원 수 및 선택 좌석 상태
     const [people, setPeople] = useState({ adult: 0, teen: 0 });
     const [selected, setSelected] = useState([]); // [101, 102] 숫자로 매핑
+    const [submitting, setSubmitting] = useState(false);
+    const [movieDetail, setMovieDetail] = useState(null);
+    useEffect(() => {
+      let cancel = false;
+      (async () => {
+        if (!movieId) return;
+        try {
+          const res = await getMovieDetail(Number(movieId));
+          const raw = res?.data ?? res;
+          if (!cancel) setMovieDetail(raw);
+        } catch (e) {
+          console.warn('[seat] movie detail load failed', e?.response?.status, e?.response?.data || e);
+        }
+      })();
+      return () => { cancel = true; };
+    }, [movieId]);
+    const displayTitle = resolvedTitle || movieDetail?.title || movieDetail?.name || '';
     const totalPeople = useMemo(() => people.adult + people.teen, [people]);
     const totalAmount = useMemo(() => (people.adult * PRICE.adult) + (people.teen * PRICE.teen), [people]);
 
@@ -93,7 +125,7 @@ const Seat = () => {
         }
         if (!data) return;
         const status = seatStatusBySeatId.get(Number(seatId)) || "AVAILABLE";
-        if (["SOLD", "BLOCKED", "HELD"].includes(status)) return;
+        if (["SOLD", "BLOCKED", "HELD","HOLD","EXPIRED"].includes(status)) return;
         // 인원 수 제한: 선택 좌석 수는 총 인원 수 이하여야 함
         const willSelect = !selected.includes(Number(seatId));
         if (willSelect && totalPeople > 0 && selected.length >= totalPeople) {
@@ -107,8 +139,9 @@ const Seat = () => {
     };
 
     async function handleNext() {
+        if (submitting) return;
         const screeningIdNum = Number(screeningId);
-        const seatIds = [...selected];
+        const seatIds = Array.from(new Set(selected.map(Number)));
 
         // Basic validations to avoid server 500s
         if (!screeningId) {
@@ -125,6 +158,7 @@ const Seat = () => {
         }
 
         try {
+            setSubmitting(true);
             const payload = {
                 screeningId: Number.isNaN(screeningIdNum) ? screeningId : screeningIdNum,
                 seatIds,
@@ -149,10 +183,11 @@ const Seat = () => {
             }
 
             const res = await initBooking(payload);
-            console.log('[HOLD:res]', res);
+            console.log('[HOLD:res raw]', res);
+            const out = res?.data ?? res;
 
-            const bookingId = res?.bookingId ?? res?.id ?? res?.data?.bookingId;
-            const paymentId = res?.paymentId ?? res?.data?.paymentId;
+            const bookingId = out?.bookingId ?? out?.id;
+            const paymentId = out?.paymentId ?? out?.payment?.id;
             if (!bookingId) {
               throw new Error('bookingId가 응답에 없습니다.');
             }
@@ -171,10 +206,9 @@ const Seat = () => {
                 price,
                 quantity: 1,
                 // 화면 표시용
-                name: title,
-                label: title, // 우측 금액 박스에서 label || name 사용
-                posterUrl: posterUrl || undefined,
-                screeningInfo: `${auditorium} · ${date} ${start}`,
+                name: displayTitle || title || '',
+                label: displayTitle || title || '',
+                screeningInfo: `${resolvedAuditorium ?? ''} · ${resolvedDate ?? ''} ${resolvedStart ?? ''}`.trim(),
                 seatLabel: code,
                 code, // 호환성 유지
               };
@@ -185,32 +219,53 @@ const Seat = () => {
               amount: { value: amountValue },
               bookingId,
               screeningId: screeningIdNum,
-              title,
-              auditorium,
-              date,
-              start,
+              movieId: Number(movieId) || undefined,
+              title: displayTitle || resolvedTitle || '',
+              auditorium: resolvedAuditorium,
+              date: resolvedDate,
+              start: resolvedStart,
             };
             // Optional: backup for refresh
             try {
               localStorage.setItem('cartItems', JSON.stringify(cartItems));
               localStorage.setItem('cartAmount', String(amountValue));
+              localStorage.setItem('seatSummary', JSON.stringify({
+                movieId: Number(movieId) || undefined,
+                screeningId: screeningIdNum,
+                title: displayTitle || title || '',
+                auditorium: resolvedAuditorium,
+                date: resolvedDate,
+                start: resolvedStart,
+              }));
             } catch (_) {}
             const qs = new URLSearchParams({ bookingId: String(bookingId) });
             if (paymentId != null) qs.set('paymentId', String(paymentId));
+            if (movieId) qs.set('movieId', String(movieId));
+            if (screeningIdNum) qs.set('screeningId', String(screeningIdNum));
             navigate(`/payment?${qs.toString()}`, { state });
         } catch (e) {
-          const status = e.response?.status;
-          const data = e.response?.data;
-          console.error('[HOLD:error]', status, data);
-          // 409(CONFLICT) 또는 400류로 내려오는 게 이상적이지만, 현재는 500을 받는 경우가 있음
+          const status = e?.response?.status ?? 0;
+          const data = e?.response?.data;
+          console.error('[HOLD:error]', { status, data, error: e });
+          if (!status) {
+            // Network/JS error (no HTTP response)
+            if (typeof window !== 'undefined' && !navigator.onLine) {
+              alert('네트워크 연결이 없어 예약을 진행할 수 없습니다. 인터넷 연결을 확인해주세요.');
+            } else {
+              alert(e?.message || '예약 생성 중 알 수 없는 오류가 발생했습니다.');
+            }
+            return;
+          }
+          // HTTP error path
           const msg = (data?.message || data?.error || e.message || '').toString();
           if (msg.includes('이미 예매 완료된 좌석') || msg.includes('이미 예매') || status === 409) {
-            // 서버가 좌석 목록을 제공하지 않는다면 전체 좌석 맵을 갱신
             await queryClient.invalidateQueries({ queryKey: ["seat-map", screeningId] });
             alert('선택하신 좌석 중 일부가 이미 예매/선점 되었습니다. 좌석 상태를 새로고침했어요. 다시 선택해주세요.');
           } else {
-            alert(data?.message ?? data?.error ?? '예약 생성 중 오류가 발생했습니다.');
+            alert(data?.message ?? data?.error ?? `예약 생성 중 오류가 발생했습니다. (코드 ${status})`);
           }
+        } finally {
+          setSubmitting(false);
         }
     }
 
@@ -227,7 +282,7 @@ const Seat = () => {
                 {/* 관람 인원 선택 */}
                 <div className="border rounded-xl p-4 bg-white">
                   <div className="text-sm font-medium mb-3">관람인원선택</div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 gap-4">
                     {[{k:"adult",label:"성인"},{k:"teen",label:"청소년"}].map(item => (
                       <div key={item.k} className="flex items-center justify-between border rounded-lg px-3 py-2">
                         <span className="text-sm">{item.label}</span>
@@ -243,14 +298,14 @@ const Seat = () => {
                 </div>
 
                 {/* 좌석 영역 */}
-                <div className="border rounded-xl bg-white p-4">
+                <div className="border rounded-xl bg-zinc-700  p-4">
                   {isLoading && <div className="py-14 text-center text-gray-500">좌석 정보를 불러오는 중…</div>}
                   {isError && <div className="py-14 text-center text-red-600">좌석 정보를 불러오지 못했습니다.</div>}
                   {!isLoading && !isError && data && (
                     <div>
                       {/* SCREEN 바 */}
                       <div className="mx-auto mb-2 w-2/3 h-3 bg-gray-200 rounded-full" title="SCREEN" />
-                      <h2 className="text-center mb-3 font-semibold text-xl">SCREEN</h2>
+                      <h2 className="text-center mb-3 font-semibold text-gray-200 text-xl">SCREEN</h2>
 
                       {/* 좌석 그리드 */}
                       <div className="overflow-auto text-center justify-center border rounded-xl p-3 ">
@@ -268,7 +323,7 @@ const Seat = () => {
                         <div className="inline-block ">
                           {data.rows?.map((r) => (
                             <div key={r} className="flex items-center gap-2 mb-2">
-                              <div className="w-6 text-xs text-gray-500 text-right">{r}</div>
+                              <div className="w-6 text-xs text-gray-200 text-right">{r}</div>
                               {[...Array(data.cols || 0)].map((_, idx) => {
                                 const c = idx + 1;
                                 const code = `${r}${c}`; // A1
@@ -278,7 +333,6 @@ const Seat = () => {
                                 const base = "relative w-8 h-8 rounded-md text-xs flex items-center justify-center border transition select-none";
                                 let overlay = null;
 
-                                // Build classes so that the selected style is appended LAST and wins
                                 const clsParts = ["cursor-pointer", "bg-white", "border-gray-300", "hover:border-blue-600"];
 
                                 if (status === "BLOCKED") {
@@ -351,8 +405,8 @@ const Seat = () => {
                 <div className="flex flex-col gap-4 flex-1">
                   <div className="flex items-start justify-between">
                     <div className="pr-3">
-                      <p className="text-base font-semibold">{title}</p>
-                      <p className="text-sm text-gray-600">{auditorium} · {date} {start}</p>
+                      <p className="text-base font-semibold">{displayTitle}</p>
+                      <p className="text-sm text-gray-600">{resolvedAuditorium ?? ''} · {resolvedDate ?? ''} {resolvedStart ?? ''}</p>
                     </div>
                   </div>
 
@@ -381,12 +435,29 @@ const Seat = () => {
                 </div>
 
                 <div className="mt-auto flex items-center justify-between">
-                  <button type="button" className="px-4 py-2 rounded-lg border"
-                        onClick={() => navigate(-1)}>이전</button>
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => {
+                        if (submitting) return;
+                        if (cameFromPayment) {
+                            if (window.history.length > 2) {
+                                navigate(-2); // skip the payment page in the history stack
+                            } else {
+                                navigate('/'); // fallback if history is too short
+                            }
+                        } else {
+                            navigate(-1);
+                        }
+                    }}
+                    disabled={submitting}
+                  >
+                    이전
+                  </button>
                   <button
                     type="button"
                     onClick={handleNext}
-                    disabled={totalPeople === 0 || selected.length === 0 || (totalPeople > 0 && selected.length !== totalPeople)}
+                    disabled={submitting || totalPeople === 0 || selected.length === 0 || (totalPeople > 0 && selected.length !== totalPeople)}
                     className="px-5 py-2 rounded-lg text-white disabled:opacity-50 disabled:cursor-not-allowed bg-black"
                   >
                     다음

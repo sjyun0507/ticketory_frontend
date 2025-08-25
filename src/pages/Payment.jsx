@@ -6,7 +6,7 @@ import { createPaymentOrder } from '../api/paymentApi.js';
 
 import {useAuthStore} from "../store/useAuthStore.js";
 
-const clientKey = "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
+const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY || "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
 const customerKey = "lIUt5JCR8vA3XOlDluVSz";
 
 console.debug('[toss] clientKey:', import.meta.env.VITE_TOSS_CLIENT_KEY);
@@ -34,12 +34,19 @@ export default function Payment() {
             const w = tossPayments.widgets({ customerKey });
             setWidgets(w);
         }
-        loadWidgetsOnce();
-    }, []);
+        // 장바구니가 비어있으면 렌더 타겟이 없어 InvalidSelectorError가 발생할 수 있으므로, 비어있지 않을 때만 로드
+        if (cart.length > 0) {
+            loadWidgetsOnce();
+        }
+    }, [cart.length]);
 
     useEffect(() => {
         async function render() {
             if (!widgets) return;
+            if (cart.length === 0) return;
+            const pm = document.getElementById('payment-method');
+            const ag = document.getElementById('agreement');
+            if (!pm || !ag) return; // 타겟이 없으면 렌더 시도하지 않음
             await widgets.setAmount({ currency: 'KRW', value: amount.value });
             await Promise.all([
                 widgets.renderPaymentMethods({ selector: '#payment-method', variantKey: 'DEFAULT' }),
@@ -48,7 +55,7 @@ export default function Payment() {
             setReady(true);
         }
         render();
-    }, [widgets]);
+    }, [widgets, cart.length]);
 
     useEffect(() => {
         if (!widgets) return;

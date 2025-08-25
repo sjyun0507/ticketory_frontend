@@ -19,7 +19,6 @@ import AdminDashboard from "../pages/admin/AdminDashboard.jsx";
 import AdminBookings from "../pages/admin/AdminBookings.jsx";
 import AdminMovies from "../pages/admin/AdminMovies.jsx";
 import AdminStats from "../pages/admin/AdminStats.jsx";
-import AdminLayout from "../components/AdminLayout.jsx";
 import AdminScreenings from "../pages/admin/AdminScreenings.jsx";
 
 const routes = [
@@ -53,7 +52,7 @@ const routes = [
     },
     {
         path: "/admin",
-        element: <RequireAuth><AdminLayout/></RequireAuth>,
+        element: <RequireAuth/>,
         children: [
             { index: true, element: <AdminDashboard /> },
             { path: "bookings", element: <AdminBookings /> },

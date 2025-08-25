@@ -8,7 +8,7 @@ export function AdminSidebar() {
     return (
         <div className="h-full flex flex-col">
             {/* Menu */}
-            <nav className="flex-1 flex flex-col items-center px-3 text-lg font-semibold text-gray-800 uppercase space-y-3">
+            <nav className="flex-1 flex flex-col items-center px-3 text-lg font-semibold text-gray-600 uppercase space-y-3">
                 <NavLink to="/admin" end className={({isActive}) => (isActive ? `${item} ${active}` : item)}>
                     대시보드
                 </NavLink>

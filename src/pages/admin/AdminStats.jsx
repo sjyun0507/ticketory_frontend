@@ -1,7 +1,9 @@
 import React from "react";
+import {AdminLayout} from "../../components/AdminSidebar.jsx";
 
 const AdminStats = () => {
     return (
+    <AdminLayout>
         <main className="max-w-[1200px] mx-auto px-4 py-16 min-h-[75vh] flex items-center justify-center">
             <section className="w-full">
                 <div className="border rounded-lg bg-white/80 backdrop-blur p-10 text-center shadow-sm">
@@ -11,6 +13,7 @@ const AdminStats = () => {
                 </div>
             </section>
         </main>
+    </AdminLayout>
     );
 };
 

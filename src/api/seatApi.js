@@ -25,14 +25,15 @@ export const releaseHold = (holdId) =>
 export const extendHold = (holdId, extraSeconds = 120) =>
     api.patch(`/seats/hold/${holdId}`, { extraSeconds });
 
-// *   movieId: 1,
-// *   screeningId: 10,
-// *   seatIds: [101, 102],
-// *   counts: { adult: 2, teen: 0 },
-// *   status: "HOLD"
 
 // 예약 초기화 (Booking+Payment+SeatHold 생성)
+// movieId: 1,
+// screeningId: 10,
+// seatIds: [101, 102],
+// counts: { adult: 2, teen: 0 },
+// status: "HOLD"
 export async function initBooking({ screeningId, seatIds, counts, holdSeconds = 120, provider = "TOSS" }) {
+    console.log(seatIds, counts, holdSeconds, provider)
     const res = await api.post("/bookings", {
         screeningId,
         seatIds: Array.isArray(seatIds) ? seatIds.map(n => Number(n)) : [],

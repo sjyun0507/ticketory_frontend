@@ -15,6 +15,12 @@ import MovieDetail from "../pages/public/MovieDetail.jsx";
 import Seat from "../pages/Seat.jsx";
 import Search from "../components/Search.jsx";
 import Payment from "../pages/Payment.jsx";
+import AdminDashboard from "../pages/admin/AdminDashboard.jsx";
+import AdminBookings from "../pages/admin/AdminBookings.jsx";
+import AdminMovies from "../pages/admin/AdminMovies.jsx";
+import AdminStats from "../pages/admin/AdminStats.jsx";
+import AdminLayout from "../components/AdminLayout.jsx";
+import AdminScreenings from "../pages/admin/AdminScreenings.jsx";
 
 const routes = [
     {path: "/", element: <Home/>},
@@ -44,7 +50,18 @@ const routes = [
             { path: "bookings", element: <MyBookings /> },
             { path: "settings", element: <Settings /> },
         ],
-    }
+    },
+    {
+        path: "/admin",
+        element: <RequireAuth><AdminLayout/></RequireAuth>,
+        children: [
+            { index: true, element: <AdminDashboard /> },
+            { path: "bookings", element: <AdminBookings /> },
+            { path: "screenings", element: <AdminScreenings /> },
+            { path: "movies", element: <AdminMovies /> },
+            { path: "stats", element: <AdminStats /> },
+        ],
+    },
 ];
 
 export default routes;

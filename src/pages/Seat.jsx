@@ -135,8 +135,14 @@ const Seat = () => {
             const res = await initBooking(payload);
             console.log('[HOLD:res]', res);
 
-            // 다음 단계로 이동 (예: 결제 정보 입력 페이지)
-            // navigate(`/booking?bookingId=${res.id}`);
+            const bookingId = res?.bookingId ?? res?.id ?? res?.data?.bookingId;
+            const paymentId = res?.paymentId ?? res?.data?.paymentId;
+            if (!bookingId) {
+              throw new Error('bookingId가 응답에 없습니다.');
+            }
+            const qs = new URLSearchParams({ bookingId: String(bookingId) });
+            if (paymentId != null) qs.set('paymentId', String(paymentId));
+            navigate(`/payment?${qs.toString()}`);
         } catch (e) {
             const status = e.response?.status;
             const data = e.response?.data;

@@ -226,8 +226,8 @@ export default function Payment() {
                 failUrl: window.location.origin + '/fail',
                 customerEmail: user?.email || 'member@ticketory.app',
                 customerName: user?.name || '회원',
-                customerMobilePhone: user?.phone || '',
-            });
+                customerMobilePhone: user?.phone ? user.phone.replace(/\D/g, '') : undefined,
+        });
 
             setPaymentStatus('성공');
             localStorage.removeItem('cartItems');

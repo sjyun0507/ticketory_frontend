@@ -127,7 +127,7 @@ const Header = () => {
                     )}
                     {isAdmin && (
                         <button
-                            onClick={() => navigate('/admin')}
+                            onClick={() => navigate('/admin/dashboard')}
                             className="text-xs text-rose-700 font-semibold px-1 rounded hover:bg-rose-50"
                         >
                             관리자

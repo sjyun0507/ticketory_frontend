@@ -13,7 +13,19 @@ console.debug('[toss] clientKey:', import.meta.env.VITE_TOSS_CLIENT_KEY);
 export default function Payment() {
     const location = useLocation();
     const navigate = useNavigate();
-    const { cart = [], totalPrice = 0 } = location.state || {};
+    const { cart: cartFromState = [], totalPrice, amount: amountState } = location.state || {};
+    // 새로고침 대비 폴백
+    const cartFromStorage = (() => {
+      try { return JSON.parse(localStorage.getItem('cartItems') || '[]'); } catch { return []; }
+    })();
+    const cart = cartFromState.length ? cartFromState : cartFromStorage;
+    // 초기 결제금액 결정: state.amount.value > state.totalPrice > cart 합계
+    const initialAmountValue = (() => {
+      if (amountState && typeof amountState.value === 'number') return amountState.value;
+      if (typeof totalPrice === 'number') return totalPrice;
+      const sum = Array.isArray(cart) ? cart.reduce((s, it) => s + Number(it.price || 0) * Number(it.quantity || 1), 0) : 0;
+      return sum;
+    })();
 
     const user = useAuthStore((s) => s.user);
     const memberId = user?.id ?? user?.memberId ?? null;
@@ -23,7 +35,7 @@ export default function Payment() {
     const [orderId, setOrderId] = useState(null);
 
     const [widgets, setWidgets] = useState(null);
-    const [amount, setAmount] = useState({ currency: 'KRW', value: totalPrice });
+    const [amount, setAmount] = useState({ currency: 'KRW', value: initialAmountValue });
     const [ready, setReady] = useState(false);
 
     const [availablePoints, setAvailablePoints] = useState(0);
@@ -63,9 +75,10 @@ export default function Payment() {
     }, [amount, widgets]);
 
     useEffect(() => {
-        const newValue = Math.max(0, totalPrice - usedPoints);
-        setAmount({ currency: 'KRW', value: newValue });
-    }, [usedPoints, totalPrice]);
+      const base = typeof totalPrice === 'number' ? totalPrice : initialAmountValue;
+      const newValue = Math.max(0, base - usedPoints);
+      setAmount({ currency: 'KRW', value: newValue });
+    }, [usedPoints, totalPrice, initialAmountValue]);
 
     // useEffect(() => {
     //     if (!memberId) return;
@@ -146,22 +159,30 @@ export default function Payment() {
     }
 
     return (
-        <div className="min-h-screen bg-white p-8 font-sans">
-            <div className="max-w-4xl mx-auto grid md:grid-cols-3 gap-8">
+        <div className="max-w-[1200px]  mx-auto mb-6 px-4 py-6 ">
+            <div className="grid md:grid-cols-3 gap-8">
                 {/* 예매 정보 */}
                 <div className="md:col-span-2 bg-white shadow-lg rounded-2xl p-6 space-y-6">
                     <h2 className="text-xl font-bold mb-4">예매정보</h2>
-                    {cart.map((item, i) => (
+                    {cart.map((item, i) => {
+                      const qty = Number(item.quantity || 1);
+                      const lineTotal = Number(item.price || 0) * qty;
+                      return (
                         <div key={i} className="flex items-start gap-4 border-b border-gray-200 pb-4">
+                          {item.posterUrl ? (
                             <img src={item.posterUrl} alt="poster" className="w-20 h-28 rounded-md object-cover" />
-                            <div className="flex-1">
-                                <p className="font-semibold">{item.name}</p>
-                                <p className="text-sm text-gray-600">{item.screeningInfo}</p>
-                                <p className="text-sm text-gray-600">좌석: {item.seatLabel}</p>
-                            </div>
-                            <p className="font-medium">{(item.price * item.quantity).toLocaleString()}원</p>
+                          ) : (
+                            <div className="w-20 h-28 rounded-md bg-gray-200 flex items-center justify-center text-xs text-gray-500 select-none">No Image</div>
+                          )}
+                          <div className="flex-1">
+                            <p className="font-semibold">{item.name || item.label || '영화'}</p>
+                            {item.screeningInfo && <p className="text-sm text-gray-600">{item.screeningInfo}</p>}
+                            {item.seatLabel && <p className="text-sm text-gray-600">좌석: {item.seatLabel}</p>}
+                          </div>
+                          <p className="font-medium">{lineTotal.toLocaleString()}원</p>
                         </div>
-                    ))}
+                      );
+                    })}
 
                     {/* 할인 적용 - 포인트만 */}
                     <div>
@@ -188,17 +209,26 @@ export default function Payment() {
                             />
                         </div>
                     </div>
+                {/* 이동된 Toss 결제 위젯 영역 */}
+                <div className="flex flex-col items-start mt-6">
+                  <div id="payment-method" className="w-full max-w-md" />
+                  <div id="agreement" className="mt-2" />
+                </div>
                 </div>
 
                 {/* 결제 금액 박스 */}
                 <div className="bg-gray-900 text-white rounded-2xl p-6 h-fit space-y-4">
                     <h3 className="text-lg font-semibold">결제금액</h3>
-                    {cart.map((item, i) => (
+                    {cart.map((item, i) => {
+                      const qty = Number(item.quantity || 1);
+                      const lineTotal = Number(item.price || 0) * qty;
+                      return (
                         <div key={i} className="flex justify-between text-sm">
-                            <span>{item.label || item.name}</span>
-                            <span>{(item.price * item.quantity).toLocaleString()}원</span>
+                          <span>{item.label || item.name || '항목'}</span>
+                          <span>{lineTotal.toLocaleString()}원</span>
                         </div>
-                    ))}
+                      );
+                    })}
                     {usedPoints > 0 && (
                         <div className="flex justify-between text-sm text-amber-400">
                             <span>포인트 사용</span>
@@ -209,8 +239,7 @@ export default function Payment() {
                         <span>최종결제금액</span>
                         <span>{amount.value.toLocaleString()}원</span>
                     </div>
-                    <div id="payment-method" className="mt-4" />
-                    <div id="agreement" />
+                    {/* Toss 결제 위젯 영역이 좌측으로 이동됨 */}
                     <div className="flex gap-3 mt-4">
                         <button
                             onClick={handleBack}

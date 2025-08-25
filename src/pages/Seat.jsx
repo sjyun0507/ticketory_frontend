@@ -31,6 +31,7 @@ const Seat = () => {
     const start = params.get('start');
     const auditorium = params.get('auditorium');
     const title = params.get('title');
+    const posterUrl = params.get('posterUrl'); // 선택 사항: 이전 페이지에서 넘겨준 포스터 URL
     const navigate = useNavigate();
 
     // 인원 수 및 선택 좌석 상태
@@ -140,9 +141,48 @@ const Seat = () => {
             if (!bookingId) {
               throw new Error('bookingId가 응답에 없습니다.');
             }
+            // --- Build cart items from selected seats (assign adult first, then teen)
+            const cartItems = seatIds.map((sid, idx) => {
+              const isAdult = idx < people.adult;
+              const type = isAdult ? 'ADULT' : 'TEEN';
+              const price = isAdult ? PRICE.adult : PRICE.teen;
+              const code = seatIdToCode.get(Number(sid)) ?? String(sid);
+              return {
+                // 결제/주문 처리용
+                seatId: Number(sid),
+                movieId: Number(movieId) || undefined,
+                screeningId: screeningIdNum,
+                type,
+                price,
+                quantity: 1,
+                // 화면 표시용
+                name: title,
+                label: title, // 우측 금액 박스에서 label || name 사용
+                posterUrl: posterUrl || undefined,
+                screeningInfo: `${auditorium} · ${date} ${start}`,
+                seatLabel: code,
+                code, // 호환성 유지
+              };
+            });
+            const amountValue = cartItems.reduce((sum, it) => sum + Number(it.price || 0), 0);
+            const state = {
+              cart: cartItems,
+              amount: { value: amountValue },
+              bookingId,
+              screeningId: screeningIdNum,
+              title,
+              auditorium,
+              date,
+              start,
+            };
+            // Optional: backup for refresh
+            try {
+              localStorage.setItem('cartItems', JSON.stringify(cartItems));
+              localStorage.setItem('cartAmount', String(amountValue));
+            } catch (_) {}
             const qs = new URLSearchParams({ bookingId: String(bookingId) });
             if (paymentId != null) qs.set('paymentId', String(paymentId));
-            navigate(`/payment?${qs.toString()}`);
+            navigate(`/payment?${qs.toString()}`, { state });
         } catch (e) {
             const status = e.response?.status;
             const data = e.response?.data;

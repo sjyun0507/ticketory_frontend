@@ -58,3 +58,10 @@ export const getScreenings = async (date, movieId, opts = {}) => {
   return all;
 };
 
+
+
+//예약 HOLD를 해제(취소)
+export async function releaseBookingHold(bookingId) {
+  if (!bookingId) return;
+  return api.delete(`/bookings/${bookingId}/cancel`);
+}

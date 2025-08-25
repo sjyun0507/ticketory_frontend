@@ -1,6 +1,6 @@
 import { useSearchParams, useNavigate } from "react-router-dom";
 import React, { useState, useMemo} from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {getSeatMap, initBooking} from "../api/seatApi";
 import enter from '../assets/styles/enter.png';
 import exit from '../assets/styles/exit.png';
@@ -31,8 +31,8 @@ const Seat = () => {
     const start = params.get('start');
     const auditorium = params.get('auditorium');
     const title = params.get('title');
-    const posterUrl = params.get('posterUrl'); // 선택 사항: 이전 페이지에서 넘겨준 포스터 URL
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
 
     // 인원 수 및 선택 좌석 상태
     const [people, setPeople] = useState({ adult: 0, teen: 0 });
@@ -133,6 +133,21 @@ const Seat = () => {
             };
             console.log('[HOLD:req]', payload);
 
+            // Preflight: ensure all selected seats are AVAILABLE at this moment
+            const unavailable = seatIds.filter((sid) => {
+              const st = seatStatusBySeatId.get(Number(sid)) || "AVAILABLE";
+              return st !== "AVAILABLE";
+            });
+            if (unavailable.length > 0) {
+              const codes = unavailable.map((sid) => seatIdToCode.get(Number(sid)) ?? String(sid));
+              alert(`다음 좌석은 현재 선택할 수 없습니다: ${codes.join(", ")}`);
+              // 선택 목록에서 제거
+              setSelected((prev) => prev.filter((sid) => !unavailable.includes(sid)));
+              // 최신 상태로 새로고침
+              queryClient.invalidateQueries({ queryKey: ["seat-map", screeningId] });
+              return;
+            }
+
             const res = await initBooking(payload);
             console.log('[HOLD:res]', res);
 
@@ -184,10 +199,18 @@ const Seat = () => {
             if (paymentId != null) qs.set('paymentId', String(paymentId));
             navigate(`/payment?${qs.toString()}`, { state });
         } catch (e) {
-            const status = e.response?.status;
-            const data = e.response?.data;
-            console.error('[HOLD:error]', status, data);
+          const status = e.response?.status;
+          const data = e.response?.data;
+          console.error('[HOLD:error]', status, data);
+          // 409(CONFLICT) 또는 400류로 내려오는 게 이상적이지만, 현재는 500을 받는 경우가 있음
+          const msg = (data?.message || data?.error || e.message || '').toString();
+          if (msg.includes('이미 예매 완료된 좌석') || msg.includes('이미 예매') || status === 409) {
+            // 서버가 좌석 목록을 제공하지 않는다면 전체 좌석 맵을 갱신
+            await queryClient.invalidateQueries({ queryKey: ["seat-map", screeningId] });
+            alert('선택하신 좌석 중 일부가 이미 예매/선점 되었습니다. 좌석 상태를 새로고침했어요. 다시 선택해주세요.');
+          } else {
             alert(data?.message ?? data?.error ?? '예약 생성 중 오류가 발생했습니다.');
+          }
         }
     }
 
@@ -326,9 +349,11 @@ const Seat = () => {
               {/* 우측 요약/전설 (좌측 전체 높이에 맞춤) */}
               <aside className="border rounded-xl bg-white p-4 flex flex-col h-full self-stretch">
                 <div className="flex flex-col gap-4 flex-1">
-                  <div>
-                    <p className="text-base font-semibold">{title}</p>
-                    <p className="text-sm text-gray-600">{auditorium} · {date} {start}</p>
+                  <div className="flex items-start justify-between">
+                    <div className="pr-3">
+                      <p className="text-base font-semibold">{title}</p>
+                      <p className="text-sm text-gray-600">{auditorium} · {date} {start}</p>
+                    </div>
                   </div>
 
                   <div>

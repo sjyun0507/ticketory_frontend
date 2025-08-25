@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getMovies } from "../../api/movieApi.js";
 import { getScreenings } from "../../api/bookingApi.js";
 import {useAuthStore} from "../../store/useAuthStore.js";
+
 /* 상영시간표 페이지
 전체상영목록> 예매하기 흐름
 */
@@ -297,7 +298,6 @@ const Screenings = () => {
               key={movieId}
               movie={movie}
               slots={slots}
-              onClickMovie={() => onMovieClick(movieId, slots)}
               onClickTime={(s) => goSeatForTime({ ...s, movieId })}
             />
           ))

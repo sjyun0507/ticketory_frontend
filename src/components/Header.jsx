@@ -153,7 +153,6 @@ const Header = () => {
                         <MenuLink to="/screenings">상영시간표</MenuLink>
                         <MenuLink to="/story">스토리</MenuLink>
                         <MenuLink to="/events">이벤트</MenuLink>
-                        <MenuLink to="/points">포인트</MenuLink>
                     </nav>
 
                     {/* 오른쪽 아이콘 */}

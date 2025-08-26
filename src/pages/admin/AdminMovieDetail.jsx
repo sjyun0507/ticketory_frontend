@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AdminLayout } from "../../components/AdminSidebar.jsx";
-import {getAdminMovieById, patchMovie} from "../../api/adminApi.js";
+import { getAdminMovieById, patchMovie } from "../../api/adminApi.js";
 
 
 function toDateInputValue(isoOrDateStr) {
@@ -25,13 +25,15 @@ const AdminMovieDetail = () => {
 
     // 폼 상태
     const [form, setForm] = useState({
-        title: "",
-        genre: "",
-        runtime: "",
-        status: true,         // true=상영중, false=상영종료
-        releaseDate: "",
-        synopsis: "",
-        ageRating: "",        // 선택사항
+      title: "",
+      genre: "",
+      runningMinutes: "",
+      status: true,
+      releaseDate: "",
+      summary: "",
+      rating: "",
+      director: "",
+      actors: ""
     });
 
     // 초기 로드
@@ -45,13 +47,17 @@ const AdminMovieDetail = () => {
                 if (!mounted) return;
 
                 setForm({
-                    title: data.title ?? data.name ?? "",
-                    genre: data.genre ?? (Array.isArray(data.genres) ? data.genres.join(", ") : ""),
-                    runtime: typeof data.runtime === "number" ? String(data.runtime) : (data.runtime ?? ""),
-                    status: data.status === true, // boolean 보정
-                    releaseDate: toDateInputValue(data.releaseDate),
-                    synopsis: data.synopsis ?? "",
-                    ageRating: data.ageRating ?? "",
+                  title: data.title ?? data.name ?? "",
+                  genre: data.genre ?? (Array.isArray(data.genres) ? data.genres.join(", ") : ""),
+                  runningMinutes: (typeof data.runningMinutes === "number" || typeof data.runningMinutes === "string")
+                    ? String(data.runningMinutes)
+                    : "",
+                  status: data.status === true,
+                  releaseDate: toDateInputValue(data.releaseDate),
+                  summary: data.summary ?? "",
+                  rating: data.rating ?? "",
+                  director: data.director ?? "",
+                  actors: data.actors ?? ""
                 });
             } catch (e) {
                 setErr(e?.response?.data?.message || e.message || "영화 정보를 불러오지 못했어요.");
@@ -71,16 +77,18 @@ const AdminMovieDetail = () => {
         e.preventDefault();
         // 간단 유효성
         if (!form.title.trim()) return alert("제목을 입력하세요.");
-        if (form.runtime && isNaN(Number(form.runtime))) return alert("러닝타임은 숫자여야 합니다.");
+        if (form.runningMinutes && isNaN(Number(form.runningMinutes))) return alert("러닝타임은 숫자여야 합니다.");
 
         const payload = {
-            title: form.title.trim(),
-            genre: form.genre.trim(),
-            runtime: form.runtime ? Number(form.runtime) : null,
-            status: !!form.status,
-            releaseDate: form.releaseDate || null, // 서버에서 파싱 가능(yyyy-MM-dd)
-            synopsis: form.synopsis.trim(),
-            ageRating: form.ageRating.trim() || null,
+          title: form.title.trim(),
+          genre: form.genre.trim(),
+          runningMinutes: form.runningMinutes !== "" ? Number(form.runningMinutes) : null,
+          status: !!form.status,
+          releaseDate: form.releaseDate || null,
+          summary: form.summary.trim(),
+          rating: form.rating.trim() || null,
+          director: form.director.trim() || null,
+          actors: form.actors.trim() || null,
         };
 
         try {
@@ -96,6 +104,15 @@ const AdminMovieDetail = () => {
     };
 
     const statusLabel = useMemo(() => (form.status ? "상영중" : "상영종료"), [form.status]);
+
+  const handleStatusChange = (next) => {
+    if (next === false && form.status === true) {
+      if (!confirm("이 영화를 상영종료로 표시할까요?\n\n참고: 상영종료로 변경하면 예매 버튼이 비활성화되고, 향후 상영시간이 있다면 노출/예매 정책을 다시 확인해야 합니다.")) {
+        return;
+      }
+    }
+    setForm((prev) => ({ ...prev, status: next }));
+  };
 
     return (
         <AdminLayout>
@@ -121,7 +138,8 @@ const AdminMovieDetail = () => {
                 )}
 
                 {!loading && !err && (
-                    <form onSubmit={onSubmit} className="space-y-6 bg-white rounded-lg border p-6 shadow-sm">
+                    <form onSubmit={onSubmit} className="space-y-6 bg-white rounded-lg border p-6 shadow-sm ring-1 ring-gray-100">
+                        <h2 className="text-sm font-semibold text-gray-700 border-b pb-2">기본 정보</h2>
                         {/* 제목 */}
                         <div>
                             <label className="block text-sm font-medium mb-1">제목</label>
@@ -148,23 +166,29 @@ const AdminMovieDetail = () => {
                             <p className="mt-1 text-xs text-gray-500">콤마(,)로 여러 장르 구분 가능</p>
                         </div>
 
+                        <h2 className="text-sm font-semibold text-gray-700 border-b pb-2 mt-6">상영 정보</h2>
                         {/* 상영 상태 & 러닝타임 */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium mb-1">상태</label>
-                                <div className="flex items-center gap-3">
-                                    <input
-                                        id="status"
-                                        type="checkbox"
-                                        checked={form.status}
-                                        onChange={onChange("status")}
-                                        className="h-4 w-4"
-                                    />
-                                    <label htmlFor="status" className="text-sm">
-                                        {statusLabel} <span className="text-gray-400">(체크=상영중)</span>
-                                    </label>
-                                </div>
-                            </div>
+                <label className="block text-sm font-medium mb-1">상태</label>
+                <div className="inline-flex rounded-md border overflow-hidden">
+                  <button
+                    type="button"
+                    className={`px-3 py-1.5 text-sm ${form.status ? "bg-green-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                    onClick={() => handleStatusChange(true)}
+                  >
+                    상영중
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-3 py-1.5 text-sm border-l ${!form.status ? "bg-gray-700 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                    onClick={() => handleStatusChange(false)}
+                  >
+                    상영종료
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-gray-500">상태는 저장 시 반영됩니다. 상영종료로 바꾸면 예매 버튼이 비활성화됩니다.</p>
+              </div>
 
                             <div>
                                 <label className="block text-sm font-medium mb-1">러닝타임(분)</label>
@@ -172,8 +196,8 @@ const AdminMovieDetail = () => {
                                     type="number"
                                     inputMode="numeric"
                                     min="0"
-                                    value={form.runtime}
-                                    onChange={onChange("runtime")}
+                                    value={form.runningMinutes}
+                                    onChange={onChange("runningMinutes")}
                                     className="w-full rounded border px-3 py-2"
                                     placeholder="예: 120"
                                 />
@@ -191,24 +215,50 @@ const AdminMovieDetail = () => {
                             />
                         </div>
 
+                        <h2 className="text-sm font-semibold text-gray-700 border-b pb-2 mt-6">추가 정보</h2>
                         {/* 등급(선택) */}
                         <div>
                             <label className="block text-sm font-medium mb-1">관람등급(선택)</label>
                             <input
                                 type="text"
-                                value={form.ageRating}
-                                onChange={onChange("ageRating")}
+                                value={form.rating}
+                                onChange={onChange("rating")}
                                 className="w-full rounded border px-3 py-2"
                                 placeholder="예: 12세, 15세, 청불"
                             />
+                        </div>
+
+                        {/* 감독 */}
+                        <div>
+                          <label className="block text-sm font-medium mb-1">감독</label>
+                          <input
+                            type="text"
+                            value={form.director}
+                            onChange={onChange("director")}
+                            className="w-full rounded border px-3 py-2"
+                            placeholder="예: 조셉 코신스키"
+                          />
+                        </div>
+
+                        {/* 출연진 */}
+                        <div>
+                          <label className="block text-sm font-medium mb-1">출연진</label>
+                          <input
+                            type="text"
+                            value={form.actors}
+                            onChange={onChange("actors")}
+                            className="w-full rounded border px-3 py-2"
+                            placeholder="예: 브래드 피트, 댐슨 이드리스"
+                          />
+                          <p className="mt-1 text-xs text-gray-500">콤마(,)로 여러 명 입력</p>
                         </div>
 
                         {/* 줄거리 */}
                         <div>
                             <label className="block text-sm font-medium mb-1">줄거리</label>
                             <textarea
-                                value={form.synopsis}
-                                onChange={onChange("synopsis")}
+                                value={form.summary}
+                                onChange={onChange("summary")}
                                 className="w-full min-h-[120px] rounded border px-3 py-2"
                                 placeholder="줄거리(요약)"
                             />

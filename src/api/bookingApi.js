@@ -25,3 +25,18 @@ export async function releaseBookingHold(bookingId) {
   if (!bookingId) return;
   return api.delete(`/bookings/${bookingId}/cancel`);
 }
+
+// 특정 예매 상세 정보 조회
+export const getMemberBookings = async (bookingId) => {
+    const { data } = await api.get(`/bookings/${bookingId}`);
+    // 백엔드가 page형/배열형 모두 올 수 있으니 통일해서 반환
+    return Array.isArray(data?.content) ? data.content
+        : Array.isArray(data)          ? data
+            : data?.items ?? [];
+};
+
+// 회원별 예매 상세 정보 조회
+export const getBookingDetail = async (memberId) => {
+    const { data } = await api.get(`/${memberId}/booking`);
+    return data;
+};

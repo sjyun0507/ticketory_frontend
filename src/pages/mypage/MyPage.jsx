@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, Outlet } from 'react-router-dom';
 import { getMyInfo } from '../../api/memberApi.js';
-import { useAuthStore } from '../../store/useAuthStore.js';
+import { getBookingDetail } from '../../api/bookingApi.js';
 import defaultAvatar from '../../assets/styles/avatar-placeholder.png';
+import {useAuthStore} from "../../store/useAuthStore.js";
 
 // 마이페이지 홈
 export default function MyPage() {
@@ -14,6 +15,8 @@ export default function MyPage() {
         points: 0,
         avatarUrl: defaultAvatar,
     });
+
+    const [recentBookings, setRecentBookings] = useState([]);
 
     // ▼ 수정: memberId 계산을 useEffect 내부에서 “한 번만” 수행
     useEffect(() => {
@@ -53,6 +56,70 @@ export default function MyPage() {
             try {
                 const data = await getMyInfo(memberId);
                 if (mounted && data) setUser(data);
+
+                // 최근 예매 1건 불러오기
+                try {
+                    const res = await getBookingDetail(memberId); // GET /api/{memberId}/booking
+                    const data = res?.data;
+                    const list = Array.isArray(data) ? data : data ? [data] : [];
+                    // 날짜 후보 필드 추출 & 정렬 (최신 1건)
+                    const parseWhen = (b) => {
+                        const raw =
+                            b.screeningStartAt ||
+                            b.bookedAt ||
+                            b.createdAt ||
+                            b.bookingDate ||
+                            b.showTime ||
+                            null;
+                        const dt = raw ? new Date(raw) : null;
+                        return dt && !isNaN(dt.getTime()) ? dt : null;
+                    };
+                    const sorted = list
+                        .map((b) => ({ b, when: parseWhen(b) }))
+                        .filter((x) => x.when)
+                        .sort((a, b) => b.when - a.when);
+                    if (sorted.length && mounted) {
+                        const top = sorted[0].b;
+                        const when = sorted[0].when;
+                        // UI에 맞게 필드 매핑
+                        const title =
+                            top.movieTitle ||
+                            top.movie?.title ||
+                            top.title ||
+                            '제목 없음';
+                        const screen =
+                            top.theaterName ||
+                            top.screenName ||
+                            top.screen?.name ||
+                            top.theater ||
+                            '';
+                        const seatsStr = Array.isArray(top.seats)
+                            ? top.seats.map((s) => s.label || s.name || s).join(', ')
+                            : (top.seatInfo || top.seatLabels || top.seatNames || '');
+                        const id = top.bookingId || top.id;
+                        // 시간 포매팅 (간단 버전)
+                        const yyyy = when.getFullYear();
+                        const mm = String(when.getMonth() + 1).padStart(2, '0');
+                        const dd = String(when.getDate()).padStart(2, '0');
+                        const hh = String(when.getHours()).padStart(2, '0');
+                        const mi = String(when.getMinutes()).padStart(2, '0');
+                        const future = when.getTime() > Date.now();
+                        setRecentBookings([{
+                            id,
+                            title,
+                            date: `${yyyy}-${mm}-${dd}`,
+                            time: `${hh}:${mi}`,
+                            screen,
+                            seats: seatsStr,
+                            cancellable: future
+                        }]);
+                    } else if (mounted) {
+                        setRecentBookings([]);
+                    }
+                } catch (e) {
+                    console.error('최근 예매 불러오기 실패:', e);
+                    if (mounted) setRecentBookings([]);
+                }
             } catch (error) {
                 console.error('마이페이지 사용자 정보 로드 실패:', error);
             }
@@ -63,18 +130,6 @@ export default function MyPage() {
         };
     }, [navigate]);
     // ▲ 여기까지
-
-    const recentBookings = [
-        {
-            id: 'BK-20250812-001',
-            title: 'Inside Out 2',
-            date: '2025-09-16',
-            time: '19:20',
-            screen: 'VIP관',
-            seats: 'E10, E11',
-            cancellable: true,
-        },
-    ];
 
     const notifications = [
         { id: 'NT-01', text: '9월 신작 예매 오픈! (듄 파트2, 위키드)', link: '/events' },

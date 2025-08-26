@@ -1,4 +1,5 @@
 import MovieCard from "./MovieCard.jsx";
+import {computeMovieStatus} from "../utils/movieStatus.js";
 
 /* 전체 영화 리스트 출력하는 컴포넌트 */
 export default function MovieList({ movies = [] }) {
@@ -15,7 +16,11 @@ export default function MovieList({ movies = [] }) {
         <div className="grid grid-cols-2 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {movies.map((m) => (
                 <div className="transform transition hover:scale-105" key={m.movieId}>
-                    <MovieCard movie={m} />
+                    <MovieCard
+                        key={m.movieId}
+                        movie={m}
+                        computeMovieStatus={computeMovieStatus} // 상영 상태 전달
+                    />
                 </div>
             ))}
         </div>

@@ -1,10 +1,13 @@
 import { Link, useNavigate } from 'react-router-dom';
+
 /* 영화목록 카드
 * 포스터/제목/예매하기 버튼
 */
-export default function MovieCard({ movie }) {
+export default function MovieCard({ movie, computeMovieStatus }) {
     const { movieId, title, posterUrl } = movie;
     const navigate = useNavigate();
+    const derivedStatus = typeof computeMovieStatus === 'function' ? computeMovieStatus(movie) : movie.status;
+    const isFinished = derivedStatus === 'FINISHED' || derivedStatus === 'ENDED';
 
     return (
         <Link
@@ -30,11 +33,21 @@ export default function MovieCard({ movie }) {
             <div className="p-3 pt-0">
                 <button
                     type="button"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/booking?movieId=${movieId}`); }}
-                    className="w-full bg-sky-600 text-white py-2 px-4 rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-                    aria-label={`${title} 예매하기`}
-                    >
-                    예매하기
+                    disabled={isFinished}
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!isFinished) navigate(`/booking?movieId=${movieId}`);
+                    }}
+                    className={`w-full py-2 px-4 rounded focus:outline-none focus:ring-2 focus:ring-opacity-50 
+                        ${isFinished
+                            ? "bg-gray-400 text-white cursor-not-allowed"
+                            : "bg-sky-600 text-white hover:bg-indigo-600 focus:ring-violet-500"}
+                    `}
+                    aria-label={isFinished ? `${title} 예매불가 (상영종료)` : `${title} 예매하기`}
+                    data-status={derivedStatus}
+                >
+                    {isFinished ? "상영종료" : "예매하기"}
                 </button>
             </div>
         </Link>

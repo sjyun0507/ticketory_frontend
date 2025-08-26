@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAdminMovies, deleteMovie, toggleMovieStatus, getMovieMedia, uploadMovieImage, addMovieTrailer, deleteMedia } from "../../api/adminApi.js";
+import { getAdminMovies, deleteMovie, toggleMovieStatus, getMovieMedia, uploadMovieImage, addMovieTrailer, deleteMedia, createMovie } from "../../api/adminApi.js";
 import { AdminLayout} from "../../components/AdminSidebar.jsx";
 
 const PAGE_SIZE = 24;
@@ -29,6 +29,82 @@ const AdminMovies = () => {
   const [imageKind, setImageKind] = useState("POSTER");
   const [imageFile, setImageFile] = useState(null);
   const [trailerUrl, setTrailerUrl] = useState("");
+
+  // 새 영화 추가 모달 상태/폼
+  const [addOpen, setAddOpen] = useState(false);
+  const [form, setForm] = useState({
+    title: "",
+    originalTitle: "",
+    genre: "",
+    releaseDate: "",
+    runningMinutes: "",
+    status: true,
+    ageRating: "",
+    director: "",
+    cast: "",
+    overview: "",
+  });
+  // 새 영화 추가: 대표 포스터 파일
+  const [addPosterFile, setAddPosterFile] = useState(null);
+  const onChangeForm = (e) => {
+    const { name, value, type, checked } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const submitAdd = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        title: form.title?.trim() || "",
+        ...(form.originalTitle?.trim() ? { originalTitle: form.originalTitle.trim() } : {}),
+        ...(form.genre?.trim() ? { genre: form.genre.trim() } : {}),
+        ...(form.releaseDate ? { releaseDate: form.releaseDate } : {}),
+        ...(form.runningMinutes !== "" ? { runningMinutes: Number(form.runningMinutes) } : {}),
+        status: !!form.status,
+        ...(form.ageRating?.trim() ? { ageRating: form.ageRating.trim() } : {}),
+        ...(form.director?.trim() ? { director: form.director.trim() } : {}),
+        ...(form.cast?.trim() ? { cast: form.cast.trim() } : {}),
+        ...(form.overview?.trim() ? { overview: form.overview.trim() } : {}),
+      };
+
+      const created = await createMovie(payload);
+      if (created) {
+        const newId = created.id ?? created.movieId;
+        // 대표 포스터가 선택되어 있으면 즉시 업로드
+        if (addPosterFile && newId) {
+          try {
+            await uploadMovieImage(newId, addPosterFile, "POSTER");
+          } catch (err) {
+            console.error(err);
+            alert("영화는 등록되었지만 포스터 업로드에 실패했어요. 미디어 메뉴에서 다시 시도해 주세요.");
+          }
+        }
+        setMovies((prev) => [created, ...prev]);
+      }
+      setAddOpen(false);
+      setForm({
+        title: "",
+        originalTitle: "",
+        genre: "",
+        releaseDate: "",
+        runningMinutes: "",
+        status: true,
+        ageRating: "",
+        director: "",
+        cast: "",
+        overview: "",
+      });
+      setAddPosterFile(null);
+      await load({ ...params, page: 0 });
+      setPage(0);
+      alert("새 영화를 추가했어요.");
+    } catch (e) {
+      alert(e?.response?.data?.message || e.message || "영화 추가에 실패했어요.");
+    }
+  };
 
   const params = useMemo(() => ({
     page,
@@ -167,7 +243,7 @@ const AdminMovies = () => {
           <h1 className="text-2xl sm:text-3xl font-semibold">영화 관리</h1>
           <button
             type="button"
-            onClick={() => navigate("/admin/movies/new")}
+            onClick={() => setAddOpen(true)}
             className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
           >
             + 새 영화 추가
@@ -314,6 +390,175 @@ const AdminMovies = () => {
           </div>
         )}
 
+        {addOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setAddOpen(false)} />
+            <div className="relative z-10 w-[min(960px,92vw)] max-h-[92vh] overflow-y-auto rounded-lg border bg-white p-6 shadow-xl">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">새 영화 추가</h2>
+                <button onClick={() => setAddOpen(false)} className="rounded border px-2 py-1 text-sm text-gray-700 hover:bg-gray-100">닫기</button>
+              </div>
+
+              <form onSubmit={submitAdd} className="space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">제목 <span className="text-red-500">*</span></label>
+                    <input
+                      name="title"
+                      value={form.title}
+                      onChange={onChangeForm}
+                      required
+                      placeholder="예: 인셉션"
+                      className="w-full rounded border px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">부제목</label>
+                    <input
+                      name="originalTitle"
+                      value={form.originalTitle}
+                      onChange={onChangeForm}
+                      placeholder="예: Inception"
+                      className="w-full rounded border px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">장르</label>
+                    <input
+                      name="genre"
+                      value={form.genre}
+                      onChange={onChangeForm}
+                      placeholder="예: SF, 액션"
+                      className="w-full rounded border px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">개봉일</label>
+                    <input
+                      type="date"
+                      name="releaseDate"
+                      value={form.releaseDate}
+                      onChange={onChangeForm}
+                      className="w-full rounded border px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">러닝타임(분)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      name="runningMinutes"
+                      value={form.runningMinutes}
+                      onChange={onChangeForm}
+                      placeholder="예: 128"
+                      className="w-full rounded border px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">관람등급</label>
+                    <input
+                      name="ageRating"
+                      value={form.ageRating}
+                      onChange={onChangeForm}
+                      placeholder="예: 12세 관람가"
+                      className="w-full rounded border px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">감독</label>
+                    <input
+                      name="director"
+                      value={form.director}
+                      onChange={onChangeForm}
+                      placeholder="예: 크리스토퍼 놀란"
+                      className="w-full rounded border px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">출연</label>
+                    <input
+                      name="cast"
+                      value={form.cast}
+                      onChange={onChangeForm}
+                      placeholder="예: 디카프리오, 와타나베…"
+                      className="w-full rounded border px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">줄거리</label>
+                  <textarea
+                    name="overview"
+                    value={form.overview}
+                    onChange={onChangeForm}
+                    rows={4}
+                    placeholder="간단한 줄거리를 입력하세요."
+                    className="w-full rounded border px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-2">
+                  <label className="block text-xs text-gray-500 mb-1">대표 포스터 (선택)</label>
+                  <input
+                    id="addPosterInput"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setAddPosterFile(e.target.files?.[0] ?? null)}
+                    className="hidden"
+                  />
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('addPosterInput').click()}
+                      className="rounded border px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      포스터 선택
+                    </button>
+                    {addPosterFile && (
+                      <span className="text-xs text-gray-600 truncate max-w-[50%]">{addPosterFile.name}</span>
+                    )}
+                  </div>
+                  {addPosterFile && (
+                    <div className="mt-2">
+                      <img
+                        src={URL.createObjectURL(addPosterFile)}
+                        alt="poster-preview"
+                        className="max-h-40 rounded border"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    id="statusRunning"
+                    type="checkbox"
+                    name="status"
+                    checked={!!form.status}
+                    onChange={onChangeForm}
+                    className="h-4 w-4"
+                  />
+                  <label htmlFor="statusRunning" className="text-sm text-gray-700">상영중으로 등록</label>
+                </div>
+
+                <div className="text-right">
+                  <button type="button" onClick={() => setAddOpen(false)} className="mr-2 rounded border px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">취소</button>
+                  <button type="submit" className="rounded bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700">등록</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
         {mediaOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/40" onClick={() => setMediaOpen(false)} />

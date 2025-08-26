@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { loadTossPayments, ANONYMOUS } from '@tosspayments/tosspayments-sdk';
@@ -15,6 +15,14 @@ export default function Payment() {
     const location = useLocation();
     const navigate = useNavigate();
     const { cart: cartFromState = [], totalPrice, amount: amountState, bookingId: bookingIdFromState } = location.state || {};
+
+    const cartFromStorage = (() => {
+      try { return JSON.parse(localStorage.getItem('cartItems') || '[]'); } catch { return []; }
+    })();
+
+    const cart = (Array.isArray(cartFromState) && cartFromState.length > 0)
+      ? cartFromState
+      : cartFromStorage;
     const bookingIdFromQuery = new URLSearchParams(location.search).get('bookingId');
     const bookingId = bookingIdFromState || bookingIdFromQuery || null;
     // 좌석 페이지로 돌아갈 때 사용할 screeningId를 파생
@@ -22,10 +30,6 @@ export default function Payment() {
     const screeningIdFromQuery = new URLSearchParams(location.search).get('screeningId');
     const screeningId = screeningIdFromState || screeningIdFromQuery || null;
     // 새로고침 대비 폴백
-    const cartFromStorage = (() => {
-      try { return JSON.parse(localStorage.getItem('cartItems') || '[]'); } catch { return []; }
-    })();
-    const cart = cartFromState.length ? cartFromState : cartFromStorage;
     const primaryMovieId = (Array.isArray(cart) && cart[0]?.movieId) || null;
     // 초기 결제금액 결정: state.amount.value > state.totalPrice > cart 합계
     const initialAmountValue = (() => {
@@ -52,6 +56,62 @@ export default function Payment() {
 
     // 중복 뒤로가기 방지
     const [releasing, setReleasing] = useState(false);
+
+    // Helper to normalize various age group field values to canonical keys
+    const normalizeAge = (raw) => {
+      if (!raw) return 'ETC';
+      const s = String(raw).toUpperCase();
+      if (s.includes('ADULT') || s.includes('성인')) return 'ADULT';
+      if (s.includes('TEEN') || s.includes('TEENAGER') || s.includes('YOUTH') || s.includes('STUDENT') || s.includes('청소년')) return 'TEEN';
+      if (s.includes('CHILD') || s.includes('KID') || s.includes('INFANT') || s.includes('어린이') || s.includes('아동')) return 'CHILD';
+      return 'ETC';
+    };
+
+    const groupedCart = useMemo(() => {
+      const m = new Map();
+      (Array.isArray(cart) ? cart : []).forEach((it) => {
+        const q = Number(it.quantity || 1);
+        const key = [it.movieId, it.screeningId, it.name || it.label || '영화', it.price ?? 0].join('|');
+        const prev = m.get(key) || {
+          movieId: it.movieId,
+          screeningId: it.screeningId,
+          name: it.name || it.label || '영화',
+          price: Number(it.price || 0),
+          qty: 0,
+          total: 0,
+          age: { ADULT: 0, TEEN: 0, CHILD: 0, ETC: 0 },
+          seats: new Set(),
+          screeningInfo: it.screeningInfo,
+        };
+        prev.qty += q;
+        prev.total += Number(it.price || 0) * q;
+        // 좌석 라벨 추출 및 추가
+        const seatLabel = it.seatLabel || it.seatName || it.seat || (Array.isArray(it.seatIds) ? it.seatIds.join(', ') : (typeof it.seatId === 'string' ? it.seatId : null));
+        if (seatLabel) {
+          // 쉼표로 넘어오는 경우 개별 좌석으로 분해하여 추가
+          seatLabel.split(',').map(s => s.trim()).filter(Boolean).forEach(s => prev.seats.add(s));
+        }
+        const ageCandidate = it.ageGroup ?? it.kind ?? it.pricingKind ?? it.age ?? it.type;
+        const ageKey = normalizeAge(ageCandidate);
+        prev.age[ageKey] = (prev.age[ageKey] || 0) + q;
+        m.set(key, prev);
+      });
+      return Array.from(m.values()).map(g => ({ ...g, seats: Array.from(g.seats || []) }));
+    }, [cart]);
+
+    const ageSummary = useMemo(() => {
+      const sum = { ADULT: 0, TEEN: 0, CHILD: 0 };
+      groupedCart.forEach(g => {
+        sum.ADULT += g.age.ADULT || 0;
+        sum.TEEN += g.age.TEEN || 0;
+        sum.CHILD += g.age.CHILD || 0;
+      });
+      const parts = [];
+      if (sum.ADULT) parts.push(`성인 ${sum.ADULT}`);
+      if (sum.TEEN) parts.push(`청소년 ${sum.TEEN}`);
+      if (sum.CHILD) parts.push(`어린이 ${sum.CHILD}`);
+      return parts.join(' · ');
+    }, [groupedCart]);
 
     useEffect(() => {
       const ids = Array.from(new Set((cart || []).map(it => it.movieId).filter(Boolean)));
@@ -219,9 +279,10 @@ export default function Payment() {
             setOrderId(orderIdToUse);
 
             await widgets.setAmount({ currency: 'KRW', value: amount.value });
+            const dynOrderName = ageSummary ? `영화 예매 (${ageSummary})` : '영화 예매';
             await widgets.requestPayment({
                 orderId: orderIdToUse,
-                orderName: 'Ticketory 영화 예매',
+                orderName: dynOrderName,
                 successUrl: window.location.origin + '/success',
                 failUrl: window.location.origin + '/fail',
                 customerEmail: user?.email || 'member@ticketory.app',
@@ -257,24 +318,34 @@ export default function Payment() {
                 {/* 예매 정보 */}
                 <div className="md:col-span-2 bg-white shadow-lg rounded-2xl p-6 space-y-6">
                     <h2 className="text-xl font-bold mb-4">예매정보</h2>
-                    {cart.map((item, i) => {
-                      const qty = Number(item.quantity || 1);
-                      const lineTotal = Number(item.price || 0) * qty;
+                    {groupedCart.map((g, i) => {
+                      const ageBits = [
+                        g.age.ADULT ? `성인 ${g.age.ADULT}` : null,
+                        g.age.TEEN ? `청소년 ${g.age.TEEN}` : null,
+                        g.age.CHILD ? `어린이 ${g.age.CHILD}` : null,
+                        g.age.ETC ? `기타 ${g.age.ETC}` : null,
+                      ].filter(Boolean).join(' · ');
                       return (
                         <div key={i} className="flex items-start gap-4 border-b border-gray-200 pb-4">
-                          {posterMap[item.movieId] && (
+                          {posterMap[g.movieId] && (
                             <img
-                              src={posterMap[item.movieId]}
+                              src={posterMap[g.movieId]}
                               alt="poster"
                               className="w-20 h-28 rounded-md object-cover"
                             />
                           )}
                           <div className="flex-1">
-                            <p className="font-semibold">{item.name || item.label || '영화'}</p>
-                            {item.screeningInfo && <p className="text-sm text-gray-600">{item.screeningInfo}</p>}
-                            {item.seatLabel && <p className="text-sm text-gray-600">좌석: {item.seatLabel}</p>}
+                            <p className="font-semibold">{g.name}</p>
+                            {g.screeningInfo && <p className="text-sm text-gray-600">{g.screeningInfo}</p>}
+                            <p className="text-sm text-gray-600">인원: {ageBits || `${g.qty}명`}</p>
+                            {g.seats?.length > 0 && (
+                              <p className="text-sm text-gray-600">좌석: {g.seats.join(', ')}</p>
+                            )}
                           </div>
-                          <p className="font-medium">{lineTotal.toLocaleString()}원</p>
+                          <div className="text-right">
+                            <p className="font-medium">{g.total.toLocaleString()}원</p>
+                            <p className="text-xs text-gray-500">(단가 {g.price.toLocaleString()}원 × {g.qty})</p>
+                          </div>
                         </div>
                       );
                     })}
@@ -305,22 +376,28 @@ export default function Payment() {
                         </div>
                     </div>
                 {/* 이동된 Toss 결제 위젯 영역 */}
-                <div className="flex flex-col items-start mt-6">
-                  <div id="payment-method" className="w-full max-w-md" />
-                  <div id="agreement" className="mt-2" />
+                <div className="flex flex-col items-stretch mt-6">
+                  {/* 결제수단 영역: 상단 예매정보/할인영역과 동일 너비(full) */}
+                  <div id="payment-method" className="w-full" />
+                  {/* 약관 영역도 동일 폭 유지 */}
+                  <div id="agreement" className="mt-4 w-full" />
                 </div>
                 </div>
 
                 {/* 결제 금액 박스 */}
                 <div className="bg-zinc-700 text-white rounded-2xl p-6 h-fit space-y-4">
                     <h3 className="text-lg font-semibold">결제금액</h3>
-                    {cart.map((item, i) => {
-                      const qty = Number(item.quantity || 1);
-                      const lineTotal = Number(item.price || 0) * qty;
+                    {groupedCart.map((g, i) => {
+                      const ageBits = [
+                        g.age?.ADULT ? `성인 ${g.age.ADULT}` : null,
+                        g.age?.TEEN ? `청소년 ${g.age.TEEN}` : null,
+                        g.age?.CHILD ? `어린이 ${g.age.CHILD}` : null,
+                        g.age?.ETC ? `기타 ${g.age.ETC}` : null,
+                      ].filter(Boolean).join(' · ');
                       return (
                         <div key={i} className="flex justify-between text-sm">
-                          <span>{item.label || item.name || '항목'}</span>
-                          <span>{lineTotal.toLocaleString()}원</span>
+                          <span>{g.name} ({ageBits || `${g.qty}명`})</span>
+                          <span>{g.total.toLocaleString()}원</span>
                         </div>
                       );
                     })}

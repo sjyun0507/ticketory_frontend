@@ -39,24 +39,43 @@ export async function deleteMovie(movieId) {
 /**
  * 영화 이미지 업로드 (포스터/스틸/기타)
  * POST /admin/movies/{movieId}/media/image
+ *
+ * 사용 예:
+ *  uploadMovieImage(12, file, "POSTER")
+ *  uploadMovieImage(12, file, { type: "STILL", title: "Scene 1" })
+ *  uploadMovieImage(12, file, { kind: "OTHER" }) // kind도 허용(서버는 type 필수)
+ *
  * @param {number|string} movieId
- * @param {File|Blob} file           - 이미지 파일
- * @param {object} options
- * @param {"POSTER"|"STILL"|"OTHER"} [options.kind="POSTER"] - 미디어 구분
- * @param {string} [options.title]    - 이미지 제목/설명
- * @param {object} [options.extra]    - 백엔드가 추가로 받는 필드들(form-data로 함께 전송)
+ * @param {File|Blob}     file
+ * @param {string|object} typeOrOptions  - "POSTER" | "STILL" | "OTHER" 또는 옵션 객체({ type|kind, title, extra })
+ * @param {object}        [maybeOptions] - 세 번째 인자를 문자열로 넘긴 경우 추가 옵션({ title, extra })
  */
-export async function uploadMovieImage(movieId, file, options = {}) {
+export async function uploadMovieImage(movieId, file, typeOrOptions, maybeOptions) {
   if (!movieId) throw new Error("movieId is required");
   if (!file) throw new Error("file is required");
 
-  const { kind = "POSTER", title, extra } = options;
+  // 인자 정규화: (id, file, "POSTER") 또는 (id, file, { type|kind, ... }) 모두 지원
+  let opts = {};
+  let type = undefined;
+  if (typeof typeOrOptions === "string") {
+    type = typeOrOptions; // ex) "POSTER"
+    opts = maybeOptions || {};
+  } else if (typeof typeOrOptions === "object" && typeOrOptions) {
+    opts = typeOrOptions;
+    type = opts.type || opts.kind; // 백엔드 요구는 type이지만, kind를 넘겨도 호환
+  }
+  if (!type) type = "POSTER";
+
   const form = new FormData();
+  // 일부 백엔드는 키 이름을 다르게 받을 수 있어 둘 다 첨부
+  form.append("image", file);
   form.append("file", file);
-  form.append("kind", kind);
-  if (title) form.append("title", title);
-  if (extra && typeof extra === "object") {
-    Object.entries(extra).forEach(([k, v]) => {
+  form.append("type", type); // POSTER | STILL | OTHER
+
+  // 선택 파라미터
+  if (opts.title) form.append("title", opts.title);
+  if (opts.extra && typeof opts.extra === "object") {
+    Object.entries(opts.extra).forEach(([k, v]) => {
       if (v !== undefined && v !== null) form.append(k, v);
     });
   }

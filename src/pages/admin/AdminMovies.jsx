@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAdminMovies, deleteMovie, toggleMovieStatus,} from "../../api/adminApi.js";
+import { getAdminMovies, deleteMovie, toggleMovieStatus, getMovieMedia, uploadMovieImage, addMovieTrailer, deleteMedia } from "../../api/adminApi.js";
 import { AdminLayout} from "../../components/AdminSidebar.jsx";
 
 const PAGE_SIZE = 24;
@@ -20,6 +20,15 @@ const AdminMovies = () => {
   // 총 페이지/개수(백엔드가 주면 사용, 없으면 프론트에서 대충 계산)
   const [totalElements, setTotalElements] = useState(null);
   const [totalPages, setTotalPages] = useState(null);
+
+  // 미디어 모달 상태
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const [mediaMovie, setMediaMovie] = useState({ id: null, title: "" });
+  const [mediaList, setMediaList] = useState([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [imageKind, setImageKind] = useState("POSTER");
+  const [imageFile, setImageFile] = useState(null);
+  const [trailerUrl, setTrailerUrl] = useState("");
 
   const params = useMemo(() => ({
     page,
@@ -95,6 +104,62 @@ const AdminMovies = () => {
     }
   };
 
+  const openMedia = async (m) => {
+    const id = m.id ?? m.movieId;
+    setMediaMovie({ id, title: m.title ?? m.name ?? "" });
+    setMediaOpen(true);
+    await refreshMedia(id);
+  };
+
+  const refreshMedia = async (movieId = mediaMovie.id) => {
+    if (!movieId) return;
+    try {
+      setMediaLoading(true);
+      const list = await getMovieMedia(movieId);
+      setMediaList(Array.isArray(list) ? list : (list?.content ?? []));
+    } catch (e) {
+      alert(e?.response?.data?.message || e.message || "미디어 목록을 불러오지 못했어요.");
+    } finally {
+      setMediaLoading(false);
+    }
+  };
+
+  const handleUploadImage = async (e) => {
+    e.preventDefault();
+    if (!imageFile) return alert("이미지 파일을 선택하세요.");
+    try {
+      await uploadMovieImage(mediaMovie.id, imageFile, imageKind);
+      setImageFile(null);
+      await refreshMedia();
+      alert("이미지를 업로드했어요.");
+    } catch (e) {
+      alert(e?.response?.data?.message || e.message || "이미지 업로드에 실패했어요.");
+    }
+  };
+
+  const handleAddTrailer = async (e) => {
+    e.preventDefault();
+    if (!trailerUrl.trim()) return alert("트레일러 URL을 입력하세요.");
+    try {
+      await addMovieTrailer(mediaMovie.id, trailerUrl.trim());
+      setTrailerUrl("");
+      await refreshMedia();
+      alert("트레일러를 등록했어요.");
+    } catch (e) {
+      alert(e?.response?.data?.message || e.message || "트레일러 등록에 실패했어요.");
+    }
+  };
+
+  const handleDeleteMedia = async (mediaId) => {
+    if (!confirm("이 미디어를 삭제할까요?")) return;
+    try {
+      await deleteMedia(mediaId);
+      await refreshMedia();
+    } catch (e) {
+      alert(e?.response?.data?.message || e.message || "삭제에 실패했어요.");
+    }
+  };
+
   return (
     <AdminLayout>
       <main className="max-w-[1200px] mx-auto px-4 py-10 min-h-[75vh]">
@@ -103,7 +168,7 @@ const AdminMovies = () => {
           <button
             type="button"
             onClick={() => navigate("/admin/movies/new")}
-            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 active:bg-indigo-800"
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
           >
             + 새 영화 추가
           </button>
@@ -129,7 +194,7 @@ const AdminMovies = () => {
           </select>
           <button
             type="submit"
-            className="h-10 rounded-md bg-gray-800 px-4 text-sm text-white hover:bg-black"
+            className="h-10 rounded-md border px-4 text-sm text-gray-700 hover:bg-gray-100"
           >
             검색
           </button>
@@ -151,77 +216,77 @@ const AdminMovies = () => {
         )}
 
         {!loading && !err && movies.length > 0 && (
-          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {movies.map((m) => {
-              const id = m.id ?? m.movieId;
-              const isRunning = m.status === true; // true=상영중, false=상영종료
-              return (
-                <li key={id ?? Math.random()} className="rounded-lg border bg-white p-4 shadow-sm">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="text-lg font-semibold mb-1">
-                        {m.title ?? m.name ?? "(제목 없음)"}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {m.genre ?? m.genres?.join(", ") ?? ""}
-                      </div>
-                      {m.releaseDate && (
-                        <div className="text-xs text-gray-400 mt-1">
-                          개봉: {m.releaseDate}
-                        </div>
-                      )}
-                      <div className="mt-2 inline-flex items-center gap-2">
-                        <span
-                          className={`inline-flex items-center rounded px-2 py-0.5 text-xs ${isRunning ? "bg-green-50 text-green-700 border border-green-200" : "bg-gray-100 text-gray-500 border border-gray-200"}`}
-                        >
+          <div className="overflow-x-auto rounded-lg border bg-white">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 text-center text-xs uppercase tracking-wider text-gray-500">
+                <tr>
+                  <th className="px-4 py-3 w-16">ID</th>
+                  <th className="px-4 py-3">제목</th>
+                  <th className="px-4 py-3">장르</th>
+                  <th className="px-4 py-3 w-30">개봉일</th>
+                  <th className="px-4 py-3 w-24">러닝타임</th>
+                  <th className="px-4 py-3 w-28">상태</th>
+                  <th className="px-4 py-3 w-75">작업</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-center">
+                {movies.map((m) => {
+                  const id = m.id ?? m.movieId;
+                  const isRunning = m.status === true; // true=상영중, false=상영종료
+                  const minutes = m.runningMinutes ?? m.runtime; // 호환 처리
+                  return (
+                    <tr key={id ?? Math.random()} className="hover:bg-gray-50/60">
+                      <td className="px-4 py-3 text-gray-500">{id}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-gray-900">{m.title ?? m.name ?? "(제목 없음)"}</div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">{m.genre ?? m.genres?.join(", ") ?? ""}</td>
+                      <td className="px-4 py-3 text-gray-700">{m.releaseDate ?? "-"}</td>
+                      <td className="px-4 py-3 text-gray-700">{typeof minutes === "number" ? `${minutes}분` : (minutes ?? "-")}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs ${isRunning ? "border-gray-300 text-gray-700 bg-white" : "border-gray-300 text-gray-500 bg-white"}`}>
+                          <span className={`inline-block h-1.5 w-1.5 rounded-full ${isRunning ? "bg-green-500" : "bg-gray-400"}`}></span>
                           {isRunning ? "상영중" : "상영종료"}
                         </span>
-                        {typeof m.runtime === "number" && (
-                          <span className="text-xs text-gray-500">{m.runtime}분</span>
-                        )}
-                      </div>
-                    </div>
-                    <span className="text-xs text-gray-400">#{id}</span>
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/admin/movies/${id}`)}
-                        className="text-indigo-600 hover:underline"
-                      >
-                        상세/수정
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/admin/movies/${id}/media`)}
-                        className="text-sky-600 hover:underline"
-                      >
-                        미디어
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onToggle(m)}
-                        className={`rounded border px-2 py-1 text-xs ${isRunning ? "border-amber-300 text-amber-700 hover:bg-amber-50" : "border-green-300 text-green-700 hover:bg-green-50"}`}
-                      >
-                        {isRunning ? "비활성화" : "활성화"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDelete(m)}
-                        className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/admin/movies/${id}`)}
+                            className="rounded px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                          >
+                            상세/수정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openMedia(m)}
+                            className="rounded px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                          >
+                            미디어
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onToggle(m)}
+                            className="rounded px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                          >
+                            상태 변경
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDelete(m)}
+                            className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {/* 간단 페이지네이션 (백엔드 totalPages 제공 시) */}
@@ -246,6 +311,134 @@ const AdminMovies = () => {
             >
               다음
             </button>
+          </div>
+        )}
+
+        {mediaOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setMediaOpen(false)} />
+            <div className="relative z-10 w-[min(960px,92vw)] max-h-[90vh] overflow-y-auto rounded-lg border bg-white p-6 shadow-xl">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">미디어 관리 — {mediaMovie.title} <span className="text-gray-400">#{mediaMovie.id}</span></h2>
+                <button onClick={() => setMediaOpen(false)} className="rounded border px-2 py-1 text-sm text-gray-700 hover:bg-gray-100">닫기</button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <form onSubmit={handleUploadImage} className="rounded-md border p-4">
+                      <h3 className="mb-3 text-sm font-semibold text-gray-700">
+                          이미지 업로드 (포스터/스틸/기타)
+                      </h3>
+
+                      {/* 종류 선택 */}
+                      <div className="mb-3">
+                          <label className="block text-xs text-gray-500 mb-1">종류</label>
+                          <select
+                              value={imageKind}
+                              onChange={(e) => setImageKind(e.target.value)}
+                              className="w-full rounded border px-3 py-2 text-sm"
+                          >
+                              <option value="POSTER">포스터</option>
+                              <option value="STILL">스틸컷</option>
+                              <option value="OTHER">기타</option>
+                          </select>
+                      </div>
+
+                      {/* 파일 선택 버튼 */}
+                      <div className="mb-4">
+                          <label className="block text-xs text-gray-500 mb-1">이미지 파일</label>
+                          <input
+                              id="movieImageInput"
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                              className="hidden" // 기본 input 숨김
+                          />
+                          <button
+                              type="button"
+                              onClick={() => document.getElementById("movieImageInput").click()}
+                              className="rounded border px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          >
+                              이미지 선택
+                          </button>
+
+                          {imageFile && (
+                              <div className="mt-3">
+                                  <img
+                                      src={URL.createObjectURL(imageFile)}
+                                      alt="preview"
+                                      className="max-h-40 rounded border"
+                                  />
+                              </div>
+                          )}
+                      </div>
+
+                      {/* 업로드 버튼 */}
+                      <div className="text-right">
+                          <button
+                              type="submit"
+                              className="rounded bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
+                          >
+                              업로드
+                          </button>
+                      </div>
+                  </form>
+
+                {/* 트레일러 등록 */}
+                <form onSubmit={handleAddTrailer} className="rounded-md border p-4">
+                  <h3 className="mb-3 text-sm font-semibold text-gray-700">트레일러(URL) 등록</h3>
+                  <input
+                    type="url"
+                    value={trailerUrl}
+                    onChange={(e) => setTrailerUrl(e.target.value)}
+                    placeholder="예: https://www.youtube.com/watch?v=..."
+                    className="w-full rounded border px-3 py-2 text-sm"
+                  />
+                  <div className="mt-3 text-right">
+                    <button type="submit" className="rounded border px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">등록</button>
+                  </div>
+                </form>
+              </div>
+
+              {/* 미디어 목록 */}
+              <div className="mt-6">
+                <div className="mb-2 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-gray-700">등록된 미디어</h3>
+                  <button onClick={() => refreshMedia()} className="rounded border px-2 py-1 text-xs text-gray-700 hover:bg-gray-100">새로고침</button>
+                </div>
+                {mediaLoading ? (
+                  <div className="py-10 text-center text-gray-500">불러오는 중…</div>
+                ) : mediaList.length === 0 ? (
+                  <div className="rounded-md border bg-white p-6 text-center text-gray-500">등록된 미디어가 없습니다.</div>
+                ) : (
+                  <ul className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {mediaList.map((it) => (
+                      <li key={it.mediaId ?? it.id} className="rounded-lg border p-2">
+                        <div className="mb-2 flex items-center justify-between text-xs text-gray-500">
+                          <span>{it.kind ?? it.type ?? "MEDIA"}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteMedia(it.mediaId ?? it.id)}
+                            className="rounded px-2 py-0.5 text-[11px] text-red-600 hover:bg-red-50"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                        {it.url && (
+                          it.url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                            <img src={it.url} alt="media" className="aspect-[4/3] w-full rounded object-cover" />
+                          ) : (
+                            <a href={it.url} target="_blank" rel="noreferrer" className="block truncate text-xs text-sky-600 hover:underline">{it.url}</a>
+                          )
+                        )}
+                        {it.createdAt && (
+                          <div className="mt-2 text-[11px] text-gray-400">{it.createdAt}</div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </main>

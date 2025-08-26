@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams} from 'react-router-dom';
 import { useMovieDetail } from '../../hooks/useMovies.js';
 
@@ -77,6 +77,46 @@ const isProbablyImage = (u) => {
         const base = String(u).split(/[?#]/)[0].toLowerCase();
         return /\.(jpg|jpeg|png|webp|gif|bmp|jfif|pjpeg|pjp)$/i.test(base);
     } catch { return false; }
+};
+const getYouTubeId = (u) => {
+    try {
+        const s = String(u);
+        const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([A-Za-z0-9_-]{11})/);
+        return m ? m[1] : null;
+    } catch { return null; }
+};
+
+const toYouTubeEmbed = (u) => {
+    const s = String(u || '');
+    const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([A-Za-z0-9_-]{11})/);
+    const id = m ? m[1] : null;
+    if (!id) return null;
+    let origin = '';
+    try { origin = encodeURIComponent(window.location.origin); } catch {}
+    return `https://www.youtube-nocookie.com/embed/${id}?rel=0&modestbranding=1&enablejsapi=1${origin ? `&origin=${origin}` : ''}`;
+};
+
+// --- Loader for YouTube Iframe API ---
+let __ytApiPromise;
+const loadYouTubeIframeAPI = () => {
+    if (window.YT && window.YT.Player) return Promise.resolve(window.YT);
+    if (__ytApiPromise) return __ytApiPromise;
+    __ytApiPromise = new Promise((resolve, reject) => {
+        const tag = document.createElement('script');
+        tag.src = 'https://www.youtube.com/iframe_api';
+        tag.async = true;
+        tag.onload = () => {
+            // YT fires global callback when ready
+        };
+        tag.onerror = reject;
+        document.head.appendChild(tag);
+        const prev = window.onYouTubeIframeAPIReady;
+        window.onYouTubeIframeAPIReady = function() {
+            prev && prev();
+            resolve(window.YT);
+        };
+    });
+    return __ytApiPromise;
 };
 const collectMediaImageUrls = (m) => {
     const out = [];
@@ -203,25 +243,44 @@ export default function MovieDetail() {
 
 
     // 예고편: trailerUrl 우선
-    const rawTrailers = useMemo(
-        () => uniq([ normalizeUrl(movie?.trailerUrl) ].filter(Boolean)),
-        [movie]
-    );
+    const rawTrailers = useMemo(() => {
+        const t = movie?.trailerUrl;
+        if (!t) return [];
+        let s = String(t).trim();
+        if (/youtu(?:\.be|be\.com)/i.test(s)) {
+            // leave YouTube URLs as-is (just ensure https)
+            if (!/^https?:/i.test(s)) s = 'https://' + s.replace(/^\/+/, '');
+            return [s];
+        }
+        return [normalizeUrl(s)].filter(Boolean);
+    }, [movie]);
 
     const trailers = useMemo(() => {
-        const typeOf = (u) => {
-            const cleaned = (u || '').toLowerCase().split(/[?#]/)[0];
-            if (cleaned.includes('.m3u8')) return 'hls';
-            if (cleaned.includes('.mp4'))  return 'mp4';
-            if (cleaned.includes('.webm')) return 'webm';
+        const detect = (u) => {
+            const raw = String(u || '');
+            if (/youtu(?:\.be|be\.com)/i.test(raw)) return 'youtube';
+            const cleaned = raw.toLowerCase().split(/[?#]/)[0];
+            if (cleaned.endsWith('.m3u8')) return 'hls';
+            if (cleaned.endsWith('.mp4'))  return 'mp4';
+            if (cleaned.endsWith('.webm')) return 'webm';
             return 'file';
         };
-        return rawTrailers.map((u) => ({ url: u, kind: typeOf(u) }));
+        return rawTrailers.map((u) => {
+            const id = getYouTubeId(u);
+            return {
+                url: u,
+                kind: detect(u),
+                ytId: id,
+                embedUrl: toYouTubeEmbed(u),
+                watchUrl: id ? `https://www.youtube.com/watch?v=${id}` : u,
+            };
+        });
     }, [rawTrailers]);
 
     // HLS(.m3u8)
     const videoRef = useRef(null);
     const primaryTrailer = trailers[0];
+    const [ytError, setYtError] = useState(null);
     useEffect(() => {
         if (!videoRef.current) return;
         if (!primaryTrailer || primaryTrailer.kind !== 'hls') return;
@@ -243,6 +302,29 @@ export default function MovieDetail() {
             }
         })();
         return () => { if (hls) hls.destroy(); if (script) script.remove(); };
+    }, [primaryTrailer]);
+
+    useEffect(() => {
+        setYtError(null);
+        if (!primaryTrailer || primaryTrailer.kind !== 'youtube' || !primaryTrailer.embedUrl) return;
+        let player;
+        (async () => {
+            try {
+                const YT = await loadYouTubeIframeAPI();
+                player = new YT.Player('yt-player', {
+                    events: {
+                        onReady: () => {/* no-op */},
+                        onError: (e) => {
+                            // e.data: 2 (bad params), 5 (html5 error), 100 (removed/private), 101/150 (embedding disabled)
+                            setYtError(e?.data || 'unknown');
+                        },
+                    },
+                });
+            } catch (err) {
+                setYtError('api-load-failed');
+            }
+        })();
+        return () => { try { player && player.destroy && player.destroy(); } catch {} };
     }, [primaryTrailer]);
 
     if (loading) return <div className="p-6">불러오는 중…</div>;
@@ -349,25 +431,51 @@ export default function MovieDetail() {
 
                     {/* 예고편: 중앙 정렬 + 너비 통일 */}
                     {primaryTrailer ? (
-
                         <div className="mt-4 mx-auto max-w-3xl">
                             <SectionTitle>예고편</SectionTitle>
                             <div className="relative pt-[56.25%]">
-                                <video
-                                    ref={videoRef}
-                                    className="absolute inset-0 h-full w-full rounded-xl"
-                                    controls
-                                    preload="metadata"
-                                    poster={posterSrc}
-                                >
-                                    {primaryTrailer.kind === 'mp4'  && <source src={primaryTrailer.url} type="video/mp4" />}
-                                    {primaryTrailer.kind === 'webm' && <source src={primaryTrailer.url} type="video/webm" />}
-                                    {primaryTrailer.kind === 'hls'  && <source src={primaryTrailer.url} type="application/x-mpegURL" />}
-                                    {(!primaryTrailer.kind || primaryTrailer.kind === 'file') && <source src={primaryTrailer.url} />}
-                                    <track kind="captions" />
-                                    브라우저가 비디오 태그를 지원하지 않습니다.{' '}
-                                    <a href={primaryTrailer.url} target="_blank" rel="noreferrer">영상 열기</a>
-                                </video>
+                                {primaryTrailer.kind === 'youtube' && primaryTrailer.embedUrl ? (
+                                    <>
+                                        <iframe
+                                            id="yt-player"
+                                            className="absolute inset-0 h-full w-full rounded-xl"
+                                            src={primaryTrailer.embedUrl}
+                                            title="YouTube video player"
+                                            frameBorder="0"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                            allowFullScreen
+                                        />
+                                        <div className="absolute -bottom-10 left-0 right-0 flex items-center justify-between">
+                                            <div className="text-xs text-gray-500">
+                                                {ytError === 101 || ytError === 150 ? '업로더가 임베드를 차단한 영상입니다.' : ytError ? `재생 오류 (코드: ${ytError})` : ''}
+                                            </div>
+                                            <a
+                                                href={primaryTrailer.watchUrl || primaryTrailer.url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="text-sm text-sky-600 hover:underline"
+                                            >
+                                                YouTube에서 열기
+                                            </a>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <video
+                                        ref={videoRef}
+                                        className="absolute inset-0 h-full w-full rounded-xl"
+                                        controls
+                                        preload="metadata"
+                                        poster={posterSrc}
+                                    >
+                                        {primaryTrailer.kind === 'mp4'  && <source src={primaryTrailer.url} type="video/mp4" />}
+                                        {primaryTrailer.kind === 'webm' && <source src={primaryTrailer.url} type="video/webm" />}
+                                        {primaryTrailer.kind === 'hls'  && <source src={primaryTrailer.url} type="application/x-mpegURL" />}
+                                        {(!primaryTrailer.kind || primaryTrailer.kind === 'file') && <source src={primaryTrailer.url} />}
+                                        <track kind="captions" />
+                                        브라우저가 비디오 태그를 지원하지 않습니다{" "}
+                                        <a href={primaryTrailer.url} target="_blank" rel="noreferrer">영상 열기</a>
+                                    </video>
+                                )}
                             </div>
                         </div>
                     ) : (

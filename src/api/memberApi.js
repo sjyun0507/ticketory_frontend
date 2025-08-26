@@ -33,8 +33,8 @@ export const updateMember = async (memberId, payload) => {
 };
 
 // 내 정보 삭제
-export const deleteMember = async () => {
-    const { data } = await api.delete(`/members/me`);
+export const deleteMember = async (memberId,payload) => {
+    const { data } = await api.delete(`/members/${memberId}`,payload);
     return data;
 };
 

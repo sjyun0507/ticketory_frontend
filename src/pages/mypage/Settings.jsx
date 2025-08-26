@@ -97,7 +97,7 @@ export default function Settings() {
     if (!window.confirm(confirmText)) return;
     try {
       setLoading(true);
-      await deleteMember();
+      await deleteMember(memberIdStr);
       // 토큰/스토어 완전 초기화
       localStorage.removeItem('accessToken');
       if (typeof clearAuth === 'function') clearAuth();

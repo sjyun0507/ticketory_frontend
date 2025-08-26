@@ -22,6 +22,7 @@ import AdminStats from "../pages/admin/AdminStats.jsx";
 import AdminScreenings from "../pages/admin/AdminScreenings.jsx";
 import PaymentSuccess from "../pages/payment/PaymentSuccess.jsx";
 import PaymentFail from "../pages/payment/PaymentFail.jsx";
+import AdminMovieDetail from "../pages/admin/AdminMovieDetail.jsx";
 
 const routes = [
     {path: "/", element: <Home/>},
@@ -63,6 +64,7 @@ const routes = [
             { path: "screenings", element: <AdminScreenings /> },
             { path: "movies", element: <AdminMovies /> },
             { path: "stats", element: <AdminStats /> },
+            { path: "movies/:id", element: <AdminMovieDetail /> },
         ],
     },
 ];

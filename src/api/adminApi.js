@@ -96,7 +96,7 @@ export async function deleteMedia(mediaId) {
   return res.data;
 }
 
-// (선택) 단건 조회가 필요하면 사용: GET /admin/movies/{movieId}
+// 단건 조회
 export async function getAdminMovieById(movieId) {
   if (!movieId) throw new Error("movieId is required");
   const res = await api.get(`/admin/movies/${movieId}`);

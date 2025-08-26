@@ -1,12 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-import {
-  getAdminMovies,
-  deleteMovie,
-  toggleMovieStatus,
-} from "../../api/adminApi.js";
-import {AdminLayout} from "../../components/AdminSidebar.jsx"; // ✅ 새 Admin API 사용
+import { getAdminMovies, deleteMovie, toggleMovieStatus,} from "../../api/adminApi.js";
+import { AdminLayout} from "../../components/AdminSidebar.jsx";
 
 const PAGE_SIZE = 24;
 

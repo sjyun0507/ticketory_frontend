@@ -6,6 +6,8 @@ import { getMovieDetail } from "../api/movieApi";
 import enter from '../assets/styles/enter.png';
 import exit from '../assets/styles/exit.png';
 import {initBooking} from "../api/bookingApi.js";
+import api from "../api/axiosInstance.js";
+import {getPricingRules} from "../api/adminApi.js";
 
 /* 좌석 선택 & 페이
 screeningId를 param으로 불러와서 좌석배치 불러옴 {available, hold, booked} (백엔드) -> 프론트에서는 AVAILABLE/HELD/SOLD 로 변환하여 사용)
@@ -22,10 +24,26 @@ const normalizeStatus = (s) => {
   return String(s).toUpperCase();
 };
 
-// 가격 정책
-const PRICE = { adult: 14000, teen: 11000 };
+// 가격 정책 (기본값)
+const DEFAULT_PRICE = { adult: 14000, teen: 11000 };
 
 const Seat = () => {
+  // 동적 가격: screen_id + kind(ADULT/TEEN) 기반
+  const [price, setPrice] = useState(DEFAULT_PRICE);
+
+  // seat-map 응답에서 screen_id 추출 시도
+  const resolveScreenId = React.useCallback((payload) => {
+    if (!payload) return undefined;
+    // 가능성 있는 경로를 차례로 확인
+    return (
+      payload.screenId ??
+      payload.screen_id ??
+      payload.screen?.id ??
+      payload.auditorium?.id ??
+      payload.auditoriumId ??
+      undefined
+    );
+  }, []);
     const [params] = useSearchParams();
     const location = useLocation();
     const movieId = params.get('movieId') ?? location.state?.movieId ?? undefined;
@@ -71,7 +89,7 @@ const Seat = () => {
     }, [movieId]);
     const displayTitle = resolvedTitle || movieDetail?.title || movieDetail?.name || '';
     const totalPeople = useMemo(() => people.adult + people.teen, [people]);
-    const totalAmount = useMemo(() => (people.adult * PRICE.adult) + (people.teen * PRICE.teen), [people]);
+    const totalAmount = useMemo(() => (people.adult * price.adult) + (people.teen * price.teen), [people, price]);
 
     // 좌석 맵 조회 (screeningId 기준)
     const { data, isLoading, isError } = useQuery({
@@ -79,6 +97,44 @@ const Seat = () => {
         queryFn: () => getSeatMap(Number(screeningId)).then(res => res.data),
         enabled: !!screeningId,
     });
+
+    // 가격 정책 불러오기: screen_id 기준
+    useEffect(() => {
+      let cancel = false;
+      async function loadPricing() {
+        try {
+          const sid = resolveScreenId(data);
+          if (!sid) return; // 좌석 데이터에 screen_id가 없으면 기본가 유지
+
+            const list = await getPricingRules(Number(sid));
+
+          // kind(TEEN, ADULT)별로 priority가 가장 높은(숫자 작을수록 우선) 규칙을 선택
+          const pickByKind = (kind) => {
+            const candidates = list
+              .filter(r => (r.kind ?? r.KIND ?? "").toString().toUpperCase() === kind)
+              .map(r => ({
+                amount: Number(r.amount ?? r.AMOUNT ?? 0),
+                priority: Number(r.priority ?? r.PRIORITY ?? 9999)
+              }))
+              .sort((a, b) => a.priority - b.priority);
+            return candidates.length ? candidates[0].amount : undefined;
+          };
+
+          const next = {
+            adult: pickByKind("ADULT") ?? DEFAULT_PRICE.adult,
+            teen: pickByKind("TEEN") ?? DEFAULT_PRICE.teen,
+          };
+          if (!cancel) setPrice(next);
+        } catch (e) {
+          console.warn("[pricing] load failed, fallback to default", e?.response?.status, e?.response?.data || e);
+          if (!cancel) setPrice(DEFAULT_PRICE);
+        }
+      }
+      if (data && !isLoading && !isError) {
+        loadPricing();
+      }
+      return () => { cancel = true; };
+    }, [data, isLoading, isError, resolveScreenId]);
 
     // 좌석 id -> 좌석 객체 / 상태 맵
     // code("A1") -> seat_id, seat_id -> code, seat_id -> status
@@ -196,7 +252,7 @@ const Seat = () => {
             const cartItems = seatIds.map((sid, idx) => {
               const isAdult = idx < people.adult;
               const type = isAdult ? 'ADULT' : 'TEEN';
-              const price = isAdult ? PRICE.adult : PRICE.teen;
+              const unitPrice = isAdult ? price.adult : price.teen;
               const code = seatIdToCode.get(Number(sid)) ?? String(sid);
               return {
                 // 결제/주문 처리용
@@ -204,7 +260,7 @@ const Seat = () => {
                 movieId: Number(movieId) || undefined,
                 screeningId: screeningIdNum,
                 type,
-                price,
+                price: unitPrice,
                 quantity: 1,
                 // 화면 표시용
                 name: displayTitle || title || '',
@@ -434,8 +490,8 @@ const Seat = () => {
 
                 {/* 가격 요약 (하단 고정) */}
                 <div className="text-sm border rounded p-3 mb-4 mt-auto  bg-gray-100">
-                    <div className="flex justify-between mb-1"><span>성인 × {people.adult}</span><span>{(people.adult * PRICE.adult).toLocaleString()}원</span></div>
-                    <div className="flex justify-between mb-2"><span>청소년 × {people.teen}</span><span>{(people.teen * PRICE.teen).toLocaleString()}원</span></div>
+                    <div className="flex justify-between mb-1"><span>성인 × {people.adult}</span><span>{(people.adult * price.adult).toLocaleString()}원</span></div>
+                    <div className="flex justify-between mb-2"><span>청소년 × {people.teen}</span><span>{(people.teen * price.teen).toLocaleString()}원</span></div>
                     <div className="h-px bg-gray-200 my-2" />
                     <div className="flex justify-between font-semibold text-base"><span>합계</span><span>{totalAmount.toLocaleString()}원</span></div>
                 </div>

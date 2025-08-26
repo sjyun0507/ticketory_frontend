@@ -8,28 +8,28 @@ export async function getAdminMovies(params = {}) {
   return res.data;
 }
 
-/** 영화 생성 POST /admin/movies */
+// 영화 생성 POST /admin/movies
 export async function createMovie(payload) {
   // payload 예: { title, originalTitle, overview, releaseDate, runtime, status, genres:[], rating, ... }
   const res = await api.post("/admin/movies", payload);
   return res.data;
 }
 
-/** 영화 수정(전체) PUT /admin/movies/{movieId} */
+// 영화 수정(전체) PUT /admin/movies/{movieId}
 export async function updateMovie(movieId, payload) {
   if (!movieId) throw new Error("movieId is required");
   const res = await api.put(`/admin/movies/${movieId}`, payload);
   return res.data;
 }
 
-/** 영화 부분 수정 PATCH /admin/movies/{movieId} */
+// 영화 부분 수정 PATCH /admin/movies/{movieId}
 export async function patchMovie(movieId, partial) {
   if (!movieId) throw new Error("movieId is required");
   const res = await api.patch(`/admin/movies/${movieId}`, partial);
   return res.data;
 }
 
-/** 영화 삭제(소프트) DELETE /admin/movies/{movieId} */
+// 영화 삭제(소프트) DELETE /admin/movies/{movieId}
 export async function deleteMovie(movieId) {
   if (!movieId) throw new Error("movieId is required");
   const res = await api.delete(`/admin/movies/${movieId}`);
@@ -82,30 +82,44 @@ export async function addMovieTrailer(movieId, url, meta = {}) {
   return res.data;
 }
 
-/** 영화 미디어 목록 조회 GET /admin/movies/{movieId}/media */
+// 영화 미디어 목록 조회 GET /admin/movies/{movieId}/media
 export async function getMovieMedia(movieId) {
   if (!movieId) throw new Error("movieId is required");
   const res = await api.get(`/admin/movies/${movieId}/media`);
   return res.data;
 }
 
-/** 영화 미디어 삭제 DELETE /admin/media/{mediaId} */
+// 영화 미디어 삭제 DELETE /admin/media/{mediaId}
 export async function deleteMedia(mediaId) {
   if (!mediaId) throw new Error("mediaId is required");
   const res = await api.delete(`/admin/media/${mediaId}`);
   return res.data;
 }
 
-/** (선택) 단건 조회가 필요하면 사용: GET /admin/movies/{movieId} */
+// (선택) 단건 조회가 필요하면 사용: GET /admin/movies/{movieId}
 export async function getAdminMovieById(movieId) {
   if (!movieId) throw new Error("movieId is required");
   const res = await api.get(`/admin/movies/${movieId}`);
   return res.data;
 }
 
-/** (선택) 상태 토글 등 간단 액션 패턴 */
+// (선택) 상태 토글 등 간단 액션 패턴
 export async function toggleMovieStatus(movieId, enabled) {
   if (!movieId) throw new Error("movieId is required");
   const res = await api.patch(`/admin/movies/${movieId}`, { enabled });
   return res.data;
+}
+
+// pricing_rule 목록(또는 페이지네이션 content)을 통일된 배열로 리턴
+export async function getPricingRules(screenId) {
+    try {
+        const res = await api.get('/admin/pricing', { params: { screenId: Number(screenId) } });
+        const raw = res?.data;
+        if (Array.isArray(raw)) return raw;
+        if (raw && Array.isArray(raw.content)) return raw.content;
+        return [];
+    } catch (e) {
+        console.warn('[adminApi] getPricingRules failed', e?.response?.status, e?.response?.data || e);
+        return []; // 프론트는 기본가로 폴백
+    }
 }

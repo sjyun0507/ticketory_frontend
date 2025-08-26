@@ -1,13 +1,13 @@
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import React, { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {getSeatMap} from "../api/seatApi";
-import { getMovieDetail } from "../api/movieApi";
-import enter from '../assets/styles/enter.png';
-import exit from '../assets/styles/exit.png';
-import {initBooking} from "../api/bookingApi.js";
-import api from "../api/axiosInstance.js";
-import {getPricingRules} from "../api/adminApi.js";
+import {getSeatMap} from "../../api/seatApi.js";
+import { getMovieDetail } from "../../api/movieApi.js";
+import enter from '../../assets/styles/enter.png';
+import exit from '../../assets/styles/exit.png';
+import {initBooking} from "../../api/bookingApi.js";
+import api from "../../api/axiosInstance.js";
+import {getPricingRules} from "../../api/adminApi.js";
 
 /* 좌석 선택 & 페이
 screeningId를 param으로 불러와서 좌석배치 불러옴 {available, hold, booked} (백엔드) -> 프론트에서는 AVAILABLE/HELD/SOLD 로 변환하여 사용)

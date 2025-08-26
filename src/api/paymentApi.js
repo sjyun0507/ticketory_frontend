@@ -8,3 +8,9 @@ export const createPaymentOrder = (payload) =>
 // 결제 상태 조회
 export const getPaymentStatus = (paymentId) =>
     api.get(`/payments/${paymentId}`);
+
+// 결제 승인(서버 → Toss 승인 API 연동)
+export function confirmPayment({ paymentKey, orderId, amount }) {
+    // 예: 백엔드 라우팅 POST /api/payments/confirm
+    return api.post('/payments/confirm', { paymentKey, orderId, amount });
+}

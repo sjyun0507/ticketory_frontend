@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { loadTossPayments, ANONYMOUS } from '@tosspayments/tosspayments-sdk';
-import { createPaymentOrder } from '../api/paymentApi.js';
-import {useAuthStore} from "../store/useAuthStore.js";
-import { releaseBookingHold } from '../api/bookingApi.js';
-import { getMovieDetail } from '../api/movieApi.js';
+import { createPaymentOrder } from '../../api/paymentApi.js';
+import {useAuthStore} from "../../store/useAuthStore.js";
+import { releaseBookingHold } from '../../api/bookingApi.js';
+import { getMovieDetail } from '../../api/movieApi.js';
 
 const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY || "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
 const customerKey = "lIUt5JCR8vA3XOlDluVSz";

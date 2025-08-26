@@ -12,14 +12,16 @@ import Events from "../pages/public/Events.jsx";
 import RequireAuth from "./RequireAuth.jsx";
 import Settings from "../pages/mypage/Settings.jsx";
 import MovieDetail from "../pages/public/MovieDetail.jsx";
-import Seat from "../pages/Seat.jsx";
+import Seat from "../pages/payment/Seat.jsx";
 import Search from "../components/Search.jsx";
-import Payment from "../pages/Payment.jsx";
+import Payment from "../pages/payment/Payment.jsx";
 import AdminDashboard from "../pages/admin/AdminDashboard.jsx";
 import AdminBookings from "../pages/admin/AdminBookings.jsx";
 import AdminMovies from "../pages/admin/AdminMovies.jsx";
 import AdminStats from "../pages/admin/AdminStats.jsx";
 import AdminScreenings from "../pages/admin/AdminScreenings.jsx";
+import PaymentSuccess from "../pages/payment/PaymentSuccess.jsx";
+import PaymentFail from "../pages/payment/PaymentFail.jsx";
 
 const routes = [
     {path: "/", element: <Home/>},
@@ -28,6 +30,8 @@ const routes = [
     {path: "/booking", element: <Booking/>},
     {path: "/screenings", element: <Screenings/>},
     {path: "/payment", element: <Payment />},
+    {path: '/success', element: <PaymentSuccess /> },
+    {path: '/fail', element: <PaymentFail /> },
     {
         path: "/seat",
         element: <RequireAuth/>,

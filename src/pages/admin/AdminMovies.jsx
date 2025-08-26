@@ -18,7 +18,7 @@ const AdminMovies = () => {
 
   // 검색/필터 상태
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState(""); // '', 'ENABLED', 'DISABLED' 등 백엔드와 합의된 값
+  const [status, setStatus] = useState(""); // '', true, false
   const [page, setPage] = useState(0);
   const size = PAGE_SIZE;
 
@@ -26,7 +26,13 @@ const AdminMovies = () => {
   const [totalElements, setTotalElements] = useState(null);
   const [totalPages, setTotalPages] = useState(null);
 
-  const params = useMemo(() => ({ page, size, q: q || undefined, status: status || undefined }), [page, size, q, status]);
+  const params = useMemo(() => ({
+    page,
+    size,
+    q: q || undefined,
+    // 백엔드 boolean(status)과 맞추기: ''는 undefined, 그 외는 true/false로 전달
+    status: status === "" ? undefined : (status === "true")
+  }), [page, size, q, status]);
 
   // 목록 로드
   const load = async (p = params) => {
@@ -63,11 +69,11 @@ const AdminMovies = () => {
     const id = m.id ?? m.movieId;
     if (!id) return;
     try {
-      await toggleMovieStatus(id, !(m.enabled ?? m.active ?? true));
-      // 낙관적 갱신
+      await toggleMovieStatus(id, !(m.status === true));
+      // 낙관적 갱신: status(boolean) 뒤집기
       setMovies((prev) =>
         prev.map((x) =>
-          (x.id ?? x.movieId) === id ? { ...x, enabled: !(m.enabled ?? m.active ?? true) } : x
+          (x.id ?? x.movieId) === id ? { ...x, status: !(m.status === true) } : x
         )
       );
     } catch (e) {
@@ -123,8 +129,8 @@ const AdminMovies = () => {
             className="h-10 rounded border px-3 text-sm"
           >
             <option value="">전체 상태</option>
-            <option value="ENABLED">ENABLED</option>
-            <option value="DISABLED">DISABLED</option>
+            <option value="true">상영중</option>
+            <option value="false">상영종료</option>
           </select>
           <button
             type="submit"
@@ -153,7 +159,7 @@ const AdminMovies = () => {
           <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {movies.map((m) => {
               const id = m.id ?? m.movieId;
-              const enabled = m.enabled ?? m.active ?? true;
+              const isRunning = m.status === true; // true=상영중, false=상영종료
               return (
                 <li key={id ?? Math.random()} className="rounded-lg border bg-white p-4 shadow-sm">
                   <div className="flex items-start justify-between">
@@ -170,8 +176,10 @@ const AdminMovies = () => {
                         </div>
                       )}
                       <div className="mt-2 inline-flex items-center gap-2">
-                        <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs ${enabled ? "bg-green-50 text-green-700 border border-green-200" : "bg-gray-100 text-gray-500 border border-gray-200"}`}>
-                          {enabled ? "ENABLED" : "DISABLED"}
+                        <span
+                          className={`inline-flex items-center rounded px-2 py-0.5 text-xs ${isRunning ? "bg-green-50 text-green-700 border border-green-200" : "bg-gray-100 text-gray-500 border border-gray-200"}`}
+                        >
+                          {isRunning ? "상영중" : "상영종료"}
                         </span>
                         {typeof m.runtime === "number" && (
                           <span className="text-xs text-gray-500">{m.runtime}분</span>
@@ -202,9 +210,9 @@ const AdminMovies = () => {
                       <button
                         type="button"
                         onClick={() => onToggle(m)}
-                        className={`rounded border px-2 py-1 text-xs ${enabled ? "border-amber-300 text-amber-700 hover:bg-amber-50" : "border-green-300 text-green-700 hover:bg-green-50"}`}
+                        className={`rounded border px-2 py-1 text-xs ${isRunning ? "border-amber-300 text-amber-700 hover:bg-amber-50" : "border-green-300 text-green-700 hover:bg-green-50"}`}
                       >
-                        {enabled ? "비활성화" : "활성화"}
+                        {isRunning ? "비활성화" : "활성화"}
                       </button>
                       <button
                         type="button"

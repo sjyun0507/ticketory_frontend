@@ -1,6 +1,6 @@
 import api from "./axiosInstance";
 
-/** 영화 목록 (Admin) GET /admin/movies */
+//영화 목록 (Admin) GET /admin/movies
 export async function getAdminMovies(params = {}) {
   // params: { page=0, size=20, q, status, sort }
   const { page = 0, size = 20, ...rest } = params;
@@ -103,13 +103,12 @@ export async function getAdminMovieById(movieId) {
   return res.data;
 }
 
-// (선택) 상태 토글 등 간단 액션 패턴
-export async function toggleMovieStatus(movieId, enabled) {
-  if (!movieId) throw new Error("movieId is required");
-  const res = await api.patch(`/admin/movies/${movieId}`, { enabled });
-  return res.data;
+// status: true(상영중) / false(상영종료)
+// 백엔드: PATCH /api/admin/movies/{id}  Body: { status: boolean }
+export async function toggleMovieStatus(movieId, status) {
+    const { data } = await api.patch(`/admin/movies/${movieId}`, { status });
+    return data;
 }
-
 // pricing_rule 목록(또는 페이지네이션 content)을 통일된 배열로 리턴
 export async function getPricingRules(screenId) {
     try {

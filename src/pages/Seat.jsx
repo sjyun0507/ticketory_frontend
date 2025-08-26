@@ -308,7 +308,7 @@ const Seat = () => {
                       <h2 className="text-center mb-3 font-semibold text-gray-200 text-xl">SCREEN</h2>
 
                       {/* 좌석 그리드 */}
-                      <div className="overflow-auto text-center justify-center border rounded-xl p-3 ">
+                      <div className="overflow-auto bg-zinc-300 text-center justify-center border rounded-xl p-3 ">
 
                         <div className="flex">
                           <div className="h-6 w-6 overflow-hidden ml-auto">
@@ -323,7 +323,7 @@ const Seat = () => {
                         <div className="inline-block ">
                           {data.rows?.map((r) => (
                             <div key={r} className="flex items-center gap-2 mb-2">
-                              <div className="w-6 text-xs text-gray-200 text-right">{r}</div>
+                              <div className="w-6 text-xs text-gray-800 text-right">{r}</div>
                               {[...Array(data.cols || 0)].map((_, idx) => {
                                 const c = idx + 1;
                                 const code = `${r}${c}`; // A1
@@ -336,12 +336,17 @@ const Seat = () => {
                                 const clsParts = ["cursor-pointer", "bg-white", "border-gray-300", "hover:border-blue-600"];
 
                                 if (status === "BLOCKED") {
-                                  // 통로/미운영
-                                  clsParts.splice(0, clsParts.length, "cursor-pointer", "bg-gray-100", "border-gray-200");
-                                } else if (status === "SOLD") {
-                                  clsParts.splice(0, clsParts.length, "cursor-pointer", "bg-gray-300", "border-gray-300");
+                                  // 통로/미운영: 연한 회색 배경 + 대각선 표시
+                                  clsParts.splice(0, clsParts.length, "cursor-pointer", "bg-gray-600");
                                   overlay = (
-                                    <svg viewBox="0 0 20 20" className="absolute inset-0 m-auto w-3.5 h-3.5 text-gray-700 opacity-70 pointer-events-none">
+                                    <svg viewBox="0 0 20 20" className="absolute inset-0 m-auto w-3.5 h-3.5 text-white border-gray-300 pointer-events-none">
+                                      <line x1="3" y1="17" x2="17" y2="3" stroke="currentColor" strokeWidth="2" />
+                                    </svg>
+                                  );
+                                } else if (status === "SOLD") {
+                                  clsParts.splice(0, clsParts.length, "cursor-pointer", "bg-zinc-700", "border-gray-300");
+                                  overlay = (
+                                    <svg viewBox="0 0 20 20" className="absolute inset-0 m-auto w-3.5 h-3.5 text-white opacity-70 pointer-events-none">
                                       <line x1="4" y1="4" x2="16" y2="16" stroke="currentColor" strokeWidth="2" />
                                       <line x1="16" y1="4" x2="4" y2="16" stroke="currentColor" strokeWidth="2" />
                                     </svg>
@@ -420,9 +425,9 @@ const Seat = () => {
                   <ul className="text-xs text-gray-600 space-y-2">
                     <li className="flex items-center gap-2"><span className="inline-block w-3.5 h-3.5 rounded-sm bg-blue-600"></span>선택 좌석</li>
                     <li className="flex items-center gap-2"><span className="inline-block w-3.5 h-3.5 rounded-sm border border-gray-300"></span>선택 가능</li>
-                    <li className="flex items-center gap-2"><span className="relative inline-block w-3.5 h-3.5 rounded-sm bg-gray-300"><svg viewBox="0 0 20 20" className="absolute inset-0 m-auto w-3 h-3 text-gray-700 opacity-70"><line x1="4" y1="4" x2="16" y2="16" stroke="currentColor" strokeWidth="2" /><line x1="16" y1="4" x2="4" y2="16" stroke="currentColor" strokeWidth="2" /></svg></span>예매완료</li>
+                    <li className="flex items-center gap-2"><span className="relative inline-block w-3.5 h-3.5 rounded-sm bg-zinc-700"><svg viewBox="0 0 20 20" className="absolute inset-0 m-auto w-3 h-3 text-white opacity-70"><line x1="4" y1="4" x2="16" y2="16" stroke="currentColor" strokeWidth="2" /><line x1="16" y1="4" x2="4" y2="16" stroke="currentColor" strokeWidth="2" /></svg></span>예매완료</li>
                     <li className="flex items-center gap-2"><span className="relative inline-block w-3.5 h-3.5 rounded-sm bg-amber-100 border border-amber-300"><svg viewBox="0 0 20 20" className="absolute inset-0 m-auto w-3 h-3 text-amber-700 opacity-80"><line x1="3" y1="17" x2="17" y2="3" stroke="currentColor" strokeWidth="2" /></svg></span>임시선점</li>
-                    <li className="flex items-center gap-2"><span className="inline-block w-3.5 h-3.5 rounded-sm bg-gray-100 border border-gray-200"></span>미운영/통로</li>
+                    <li className="flex items-center gap-2"><span className="relative inline-block w-3.5 h-3.5 rounded-sm bg-gray-600 border"><svg viewBox="0 0 20 20" className="absolute inset-0 m-auto w-3 h-3 text-white opacity-80"><line x1="3" y1="17" x2="17" y2="3" stroke="currentColor" strokeWidth="2" /></svg></span>미운영/통로</li>
                   </ul>
                 </div>
 

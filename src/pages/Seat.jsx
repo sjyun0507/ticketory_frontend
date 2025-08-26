@@ -1,10 +1,11 @@
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import React, { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {getSeatMap, initBooking} from "../api/seatApi";
+import {getSeatMap} from "../api/seatApi";
 import { getMovieDetail } from "../api/movieApi";
 import enter from '../assets/styles/enter.png';
 import exit from '../assets/styles/exit.png';
+import {initBooking} from "../api/bookingApi.js";
 
 /* 좌석 선택 & 페이
 screeningId를 param으로 불러와서 좌석배치 불러옴 {available, hold, booked} (백엔드) -> 프론트에서는 AVAILABLE/HELD/SOLD 로 변환하여 사용)
@@ -178,7 +179,7 @@ const Seat = () => {
               // 선택 목록에서 제거
               setSelected((prev) => prev.filter((sid) => !unavailable.includes(sid)));
               // 최신 상태로 새로고침
-              queryClient.invalidateQueries({ queryKey: ["seat-map", screeningId] });
+              await queryClient.invalidateQueries({queryKey: ["seat-map", screeningId]});
               return;
             }
 

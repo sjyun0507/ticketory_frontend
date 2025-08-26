@@ -1,6 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { getMovies } from "../../api/movieApi.js";
-import {getScreenings} from "../../api/bookingApi.js";
+import {getMovies, getScreenings} from "../../api/movieApi.js";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../../store/useAuthStore.js";
 /* 예매 페이지

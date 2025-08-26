@@ -26,22 +26,3 @@ export const extendHold = (holdId, extraSeconds = 120) =>
     api.patch(`/seats/hold/${holdId}`, { extraSeconds });
 
 
-// 예약 초기화 (Booking+Payment+SeatHold 통합 생성 API)
-// screeningId: number,
-// seatIds: number[],
-// counts: { adult: number, teen: number, ... },
-// holdSeconds?: number,
-// provider?: string
-// 이 API는 Booking, Payment, SeatHold를 한 번에 생성합니다.
-export async function initBooking({ screeningId, seatIds, counts, holdSeconds = 120, provider = "TOSS" }) {
-    const res = await api.post("/bookings", {
-        screeningId,
-        seatIds: Array.isArray(seatIds) ? seatIds.map(n => Number(n)) : [],
-        counts,
-        holdSeconds,
-        provider
-    }, {
-        headers: { "Idempotency-Key": crypto?.randomUUID?.() ?? String(Date.now()) }
-    });
-    return res.data;
-}

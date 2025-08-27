@@ -211,7 +211,7 @@ const MyBookings = () => {
             const keyId = bookingId || id;
             return (
               <div
-                key={keyId}
+                key={`booking-${keyId}`}
                 style={{
                   display: "flex",
                   gap: "20px",

@@ -39,7 +39,7 @@ export const getMemberBookings = async (memberId, { status, from, to } = {}) => 
     if (from) params.from = from;         // ISO date or datetime
     if (to) params.to = to;               // ISO date or datetime
 
-    const path = `/${n}/bookings`;
+    const path = `/${n}/booking`;
     console.log('[bookingApi] GET', path, { params, baseURL: api?.defaults?.baseURL });
     return await api.get(path, { params });
 };

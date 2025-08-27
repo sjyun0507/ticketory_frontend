@@ -41,3 +41,4 @@ export const deleteMember = async (memberId,payload) => {
 // 회원 ID로 포인트 조회
 export const getMemberPoints = (memberId) =>
     api.get(`/members/${memberId}/points`);
+

@@ -1,4 +1,7 @@
 import {Link} from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import {useAuthStore} from "../../store/useAuthStore.js";
+import {useMemberPoints} from "../../hooks/usePoints.js";
 
 function formatDate(input, pattern = "YYYY.MM.DD HH:mm") {
   if (!input) return "";
@@ -29,9 +32,6 @@ function formatCurrency(value) {
 }
 
 
-import React, { useEffect, useMemo, useState } from "react";
-import {useAuthStore} from "../../store/useAuthStore.js";
-import {useMemberPoints} from "../../hooks/usePoints.js";
 
 const TYPE_OPTIONS = [
     { label: "전체", value: "" },
@@ -41,12 +41,58 @@ const TYPE_OPTIONS = [
 ];
 
 export default function PointsHistory() {
-    const memberId = useAuthStore((s) => s.user?.memberId);
+    const authState = useAuthStore((s) => s);
+
+    const storeMemberId =
+      authState?.user?.memberId ??
+      authState?.user?.id ??
+      authState?.member?.memberId ??
+      authState?.member?.id ??
+      authState?.userId ??
+      null;
+
+    function base64UrlDecode(str) {
+      try {
+        const pad = (s) => s + "===".slice((s.length + 3) % 4);
+        const b64 = pad(str.replace(/-/g, "+").replace(/_/g, "/"));
+        return atob(b64);
+      } catch {
+        return "";
+      }
+    }
+
+    const token =
+      authState?.accessToken ||
+      (typeof window !== "undefined" ? localStorage.getItem("accessToken") : null) ||
+      (typeof window !== "undefined" ? localStorage.getItem("token") : null);
+
+    let tokenMemberId = null;
+    if (token) {
+      try {
+        const payloadRaw = token.split(".")[1] || "";
+        const payloadJson = JSON.parse(base64UrlDecode(payloadRaw) || "{}");
+        if (payloadJson?.memberId != null && String(payloadJson.memberId).match(/^\d+$/)) {
+          tokenMemberId = Number(payloadJson.memberId);
+        } else if (payloadJson?.sub && String(payloadJson.sub).match(/^\d+$/)) {
+          tokenMemberId = Number(payloadJson.sub);
+        }
+      } catch (e) {
+        console.warn("[PointsHistory] token decode failed:", e);
+      }
+    }
+
+    const memberId = storeMemberId != null ? Number(storeMemberId) : (tokenMemberId != null ? tokenMemberId : undefined);
+    // --------------------------------------------------------
     const [page, setPage] = useState(0);
     const [size, setSize] = useState(10);
     const [type, setType] = useState("");
     const [from, setFrom] = useState(""); // YYYY-MM-DD
     const [to, setTo] = useState("");     // YYYY-MM-DD
+
+    useEffect(() => {
+      setPage(0);
+    }, [type, from, to, size]);
+
 
     const { data, isLoading, isError, error, refetch } = useMemberPoints({
         memberId,
@@ -55,19 +101,37 @@ export default function PointsHistory() {
         type: type || undefined,
         from: from || undefined,
         to: to || undefined,
-    });
+    },
+        { enabled: memberId !== null && memberId !== undefined }
+    );
 
+    // ---- 응답 정규화 (Spring Page 혹은 커스텀 래퍼 모두 대응) ----
+    const raw = data ?? {};
+    const items =
+      raw?.content ??
+      raw?.items ??
+      raw?.data ??
+      [];
 
-    useEffect(() => {
-        // 필터 변경 시 첫 페이지로
-        setPage(0);
-    }, [type, from, to, size]);
+    const totalElements =
+      typeof raw?.totalElements === "number" ? raw.totalElements
+      : typeof raw?.total === "number" ? raw.total
+      : Array.isArray(items) ? items.length
+      : 0;
 
-    const items = data?.content ?? [];
-    const totalElements = data?.totalElements ?? 0;
-    const totalPages = data?.totalPages ?? 0;
-    const first = data?.first ?? true;
-    const last = data?.last ?? true;
+    const totalPages =
+      typeof raw?.totalPages === "number" ? raw.totalPages
+      : (typeof totalElements === "number" && (raw?.pageable?.pageSize || size))
+          ? Math.max(1, Math.ceil(totalElements / (raw?.pageable?.pageSize || size)))
+          : 0;
+
+    const pageNumber =
+      typeof raw?.pageable?.pageNumber === "number" ? raw.pageable.pageNumber
+      : (typeof raw?.page === "number" ? raw.page : page);
+
+    const first = raw?.first ?? (pageNumber === 0);
+    const last = raw?.last ?? (totalPages ? pageNumber >= totalPages - 1 : items.length < size);
+    // ----------------------------------------------------------
 
     // 현재 페이지 합계(시각적 요약)
     const pageSum = useMemo(() => {
@@ -95,7 +159,7 @@ export default function PointsHistory() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                 <SummaryCard title="현재 잔액(최근 내역 기준)">
                     {typeof balance === "number" ? (
-                        <strong className="text-xl">{formatCurrency(balance)}P</strong>
+                        <strong className="text-xl text-green-600">{formatCurrency(balance)}P</strong>
                     ) : (
                         <span className="text-gray-500">-</span>
                     )}
@@ -172,6 +236,15 @@ export default function PointsHistory() {
                 </div>
             </div>
 
+            {/* Guard UI if memberId is missing */}
+            {!memberId && (
+              <div className="rounded-xl border p-4 bg-yellow-50 text-yellow-800 mb-4">
+                로그인 정보를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.
+                <div className="text-xs mt-2">
+                  (DEBUG) storeMemberId: {String(storeMemberId)}, token: {token ? "present" : "missing"}
+                </div>
+              </div>
+            )}
             {/* 테이블 */}
             <div className="overflow-x-auto rounded-2xl border">
                 <table className="min-w-full text-sm">
@@ -196,7 +269,8 @@ export default function PointsHistory() {
                     {isError && (
                         <tr>
                             <td colSpan={6} className="p-5 text-center text-red-600">
-                                포인트 내역을 불러오는 중 오류가 발생했습니다: {String(error?.message || "")}
+                                포인트 내역을 불러오는 중 오류가 발생했습니다:
+                                {` ${error?.response?.status || ""} ${error?.response?.data?.message || error?.message || ""}`}
                             </td>
                         </tr>
                     )}

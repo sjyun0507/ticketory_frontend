@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import {getMemberPoints} from "../api/memberApi.js";
+import { getMemberPoints } from "../api/memberApi"; // 기존 memberApi의 함수 사용
 
 export const useMemberPoints = ({ memberId, page, size, type, from, to }) => {
     return useQuery({

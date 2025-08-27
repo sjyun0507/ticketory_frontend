@@ -9,19 +9,18 @@ export default function MovieCard({ movie, computeMovieStatus }) {
     const derivedStatus = typeof computeMovieStatus === 'function' ? computeMovieStatus(movie) : movie.status;
     const isFinished = derivedStatus === 'FINISHED' || derivedStatus === 'ENDED';
 
-    return (
-        <Link
-            to={`/movies/${movieId}`}
-            className="block overflow-hidden rounded-xl border border-gray-200 hover:shadow-md"
-            aria-label={`${title} 상세보기`}
-        >
+    const CardContent = (
+        <>
             <div className="aspect-[2/3] bg-gray-100">
                 {posterUrl ? (
                     <img
                         src={posterUrl}
                         alt={`${title} 포스터`}
                         loading="lazy"
-                        className="h-full w-full object-cover"
+                        className={`h-full w-full object-cover
+                           ${isFinished
+                            ? 'cursor-not-allowed' : ''}`}
+
                     />
                 ) : (
                     <div className="flex h-full items-center justify-center text-gray-400">No Image</div>
@@ -50,6 +49,23 @@ export default function MovieCard({ movie, computeMovieStatus }) {
                     {isFinished ? "상영종료" : "예매하기"}
                 </button>
             </div>
+        </>
+    );
+
+    return isFinished ? (
+        <div
+            className="block overflow-hidden rounded-xl border border-gray-200"
+            aria-label={`${title} 상세보기`}
+        >
+            {CardContent}
+        </div>
+    ) : (
+        <Link
+            to={`/movies/${movieId}`}
+            className="block overflow-hidden rounded-xl border border-gray-200 hover:shadow-md"
+            aria-label={`${title} 상세보기`}
+        >
+            {CardContent}
         </Link>
     );
 }

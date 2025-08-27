@@ -49,7 +49,7 @@ export const getMemberBookings = async (memberId, { status, from, to } = {}) => 
     return res.data;
 };
 
-// 특정 예매 ID 하나에 대한 모든 상세(결제/상영/좌석/포스터 등)
+// 특정 예매 ID 하나에 대한 모든 상세(결제/상영/좌석등)
 export const getBookingDetail = async (bookingId) => {
     if (!bookingId && bookingId !== 0) throw new Error("bookingId is required");
     const path = `/bookings/${bookingId}`;

@@ -67,6 +67,20 @@ const MyBookings = () => {
     // 취소 진행 상태
     const [cancelingId, setCancelingId] = useState(null);
 
+    // 취소 모달 상태 및 사유 선택
+    const [cancelOpen, setCancelOpen] = useState(false);
+    const [cancelTarget, setCancelTarget] = useState(null); // 선택된 예약(bk)
+    const [cancelReason, setCancelReason] = useState("CHANGE_OF_PLANS");
+    const cancelReasons = [
+        { value: "CHANGE_OF_PLANS", label: "일정 변경" },
+        { value: "MISTAKE", label: "잘못된 예매" },
+        { value: "PRICE", label: "가격/좌석 재선택" },
+        { value: "WEATHER", label: "날씨/이동 문제" },
+        { value: "HEALTH", label: "건강 문제" },
+        { value: "OTHER", label: "기타" },
+    ];
+    const [cancelEtc, setCancelEtc] = useState("");
+
     // 상영 시작 30분 전까지만 취소 가능
     const canCancel = (startAt) => {
         if (!startAt) return false;
@@ -78,6 +92,7 @@ const MyBookings = () => {
     };
 
     const handleCancel = async (bk) => {
+        // 모달을 띄우는 경로로 변경
         try {
             if (!bk?.bookingId) {
                 alert("예약 정보가 올바르지 않습니다.");
@@ -87,12 +102,34 @@ const MyBookings = () => {
                 alert("상영시간 30분 전까지만 취소할 수 있어요.");
                 return;
             }
-            const ok = window.confirm("정말 이 예매를 취소할까요?\n(취소 후 좌석은 해제됩니다)");
-            if (!ok) return;
+            setCancelTarget(bk);
+            setCancelReason("CHANGE_OF_PLANS");
+            setCancelEtc("");
+            setCancelOpen(true);
+        } catch (e) {
+            console.error("[MyBookings] 취소 모달 오픈 실패:", e);
+        }
+    };
+
+    // 실제 취소 확정
+    const confirmCancel = async () => {
+        const bk = cancelTarget;
+        if (!bk?.bookingId) {
+            setCancelOpen(false);
+            return;
+        }
+        try {
             setCancelingId(bk.bookingId);
+
+            // 선택 사유를 백엔드로 보내려면 releaseBookingHold 시그니처를 확장하세요.
+            // 예: releaseBookingHold(bk.bookingId, { reason: cancelReason, memo: cancelEtc })
             await releaseBookingHold(bk.bookingId);
+
             // 성공 시 목록에서 제거 (서버 재조회 전 UX 반영)
             setBookings(prev => prev.filter(item => item.bookingId !== bk.bookingId));
+            setCancelOpen(false);
+            setCancelTarget(null);
+            setCancelEtc("");
         } catch (e) {
             console.error("[MyBookings] 예매 취소 실패:", e);
             const msg = e?.response?.data?.message || e?.message || "취소 처리 중 오류가 발생했습니다.";
@@ -100,6 +137,12 @@ const MyBookings = () => {
         } finally {
             setCancelingId(null);
         }
+    };
+
+    const closeCancelModal = () => {
+        setCancelOpen(false);
+        setCancelTarget(null);
+        setCancelEtc("");
     };
 
     // 포스터 URL이 보호 자원(/api/...)이거나 상대경로인 경우, 토큰을 사용해 Blob으로 가져와서 ObjectURL로 변환
@@ -273,37 +316,30 @@ const MyBookings = () => {
                         const cancellable = canCancel(bk.screeningStartAt);
                         return (
                             <div
-                                key={bk.bookingId}
-                                style={{
-                                    display: "flex",
-                                    gap: "20px",
-                                    border: "1px solid #ddd",
-                                    borderRadius: "8px",
-                                    padding: "10px",
-                                    alignItems: "center",
-                                }}
+                              key={bk.bookingId}
+                              className="flex items-center gap-5 border border-gray-200 rounded-lg p-3"
                             >
                                 {bk.posterUrl ? (
                                     <img
                                         src={bk.posterUrl}
                                         alt={bk.movieTitle}
-                                        style={{ width: "100px", height: "150px", objectFit: "cover", borderRadius: "4px" }}
+                                        className="w-[100px] h-[150px] object-cover rounded"
                                     />
                                 ) : (
-                                    <div style={{ width: "100px", height: "150px", backgroundColor: "#ccc", borderRadius: "4px" }} />
+                                    <div className="w-[100px] h-[150px] bg-gray-300 rounded" />
                                 )}
 
-                                <div>
-                                    <h3 style={{ margin: "4px 0" }}><strong>영화제목 :</strong> {bk.movieTitle}</h3>
-                                    <p style={{ margin: "4px 0" }}><strong>상영관 :</strong> {bk.screenName || "-"}</p>
-                                    <p style={{ margin: "4px 0" }}><strong>좌석 :</strong> {seatsText || "-"}</p>
-                                    <p style={{ margin: "4px 0" }}><strong>상영시간 :</strong> {when ? `${y}-${m}-${d} ${hh}:${mi}` : "-"}{endWhen ? ` ~ ${eh}:${emi}` : ""}</p>
-                                    <div style={{ marginTop: "8px" }}>
-                                        <div className={"gap-2 flex"}>
+                                <div className="space-y-1">
+                                    <h3 className="my-1"><strong>영화제목 :</strong> {bk.movieTitle}</h3>
+                                    <p className="my-1"><strong>상영관 :</strong> {bk.screenName || "-"}</p>
+                                    <p className="my-1"><strong>좌석 :</strong> {seatsText || "-"}</p>
+                                    <p className="my-1"><strong>상영시간 :</strong> {when ? `${y}-${m}-${d} ${hh}:${mi}` : "-"}{endWhen ? ` ~ ${eh}:${emi}` : ""}</p>
+                                    <div className="mt-2">
+                                        <div className="flex gap-2">
                                             <button
                                                 type="button"
                                                 onClick={() => openDetail(bk)}
-                                                style={{ fontSize: 12, padding: "6px 10px", border: "1px solid #ddd", borderRadius: 6, background: "#f8f8f8" }}
+                                                className="text-[12px] px-2.5 py-1.5 border border-gray-200 rounded bg-gray-50 hover:bg-gray-100"
                                             >
                                                 티켓보기
                                             </button>
@@ -312,15 +348,7 @@ const MyBookings = () => {
                                                 onClick={() => handleCancel(bk)}
                                                 disabled={!cancellable || cancelingId === bk.bookingId}
                                                 title={!cancellable ? "상영 30분 전 이후에는 취소할 수 없습니다" : ""}
-                                                style={{
-                                                    fontSize: 12,
-                                                    padding: "6px 10px",
-                                                    border: "1px solid #ddd",
-                                                    borderRadius: 6,
-                                                    background: (!cancellable || cancelingId === bk.bookingId) ? "#eee" : "#f8f8f8",
-                                                    color: (!cancellable || cancelingId === bk.bookingId) ? "#999" : "inherit",
-                                                    cursor: (!cancellable || cancelingId === bk.bookingId) ? "not-allowed" : "pointer"
-                                                }}
+                                                className={`text-[12px] px-2.5 py-1.5 border border-gray-200 rounded ${(!cancellable || cancelingId === bk.bookingId) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-indigo-100 hover:bg-indigo-200'}`}
                                             >
                                                 {cancelingId === bk.bookingId ? "취소 중..." : "예매취소"}
                                             </button>
@@ -332,44 +360,104 @@ const MyBookings = () => {
                     })}
                 </div>
             )}
+            {/* 취소 사유 선택 모달 */}
+            <Modal
+                isOpen={cancelOpen}
+                onClose={cancelingId ? undefined : closeCancelModal}
+                contentStyle={{ width: "min(92vw, 520px)", padding: 20, borderRadius: 10, backgroundColor: "#fff" }}
+            >
+                <div className="max-w-[600px] p-5 rounded-lg bg-white">
+                    <h3 className="font-bold text-[18px] mb-3">예매 취소</h3>
+                    <p className="text-gray-600 mb-3">
+                        예매 취소 사유를 선택해 주세요. (서비스 개선에만 활용됩니다)
+                    </p>
+
+                    <label className="block text-sm mb-1">취소 사유</label>
+                    <select
+                        value={cancelReason}
+                        onChange={(e) => setCancelReason(e.target.value)}
+                        disabled={!!cancelingId}
+                        className="w-full px-2.5 py-2 border border-gray-200 rounded"
+                    >
+                        {cancelReasons.map(r => (
+                            <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                    </select>
+
+                    {cancelReason === "OTHER" && (
+                        <div className="mt-2.5">
+                            <label className="block text-sm mb-1">기타 사유 (선택)</label>
+                            <textarea
+                                value={cancelEtc}
+                                onChange={(e) => setCancelEtc(e.target.value)}
+                                maxLength={200}
+                                placeholder="최대 200자"
+                                disabled={!!cancelingId}
+                                className="w-full min-h-20 p-2.5 border border-gray-200 rounded resize-y"
+                            />
+                        </div>
+                    )}
+
+                    <div className="flex gap-2.5 justify-end mt-4">
+                        <button
+                            type="button"
+                            onClick={closeCancelModal}
+                            disabled={!!cancelingId}
+                            className="px-3 py-2 border border-gray-200 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
+                        >
+                            닫기
+                        </button>
+                        <button
+                            type="button"
+                            onClick={confirmCancel}
+                            disabled={!!cancelingId}
+                            className={`px-3 py-2 border border-gray-200 rounded ${cancelingId ? 'bg-gray-200' : 'bg-indigo-100 hover:bg-indigo-200'} disabled:opacity-60`}
+                            title={!cancelTarget || !canCancel(cancelTarget?.screeningStartAt) ? "상영 30분 전 이후에는 취소할 수 없습니다" : ""}
+                        >
+                            {cancelingId ? "처리 중..." : "예매 취소"}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
             <Modal isOpen={detailOpen} onClose={() => setDetailOpen(false)}
                    contentStyle={{ width: "min(92vw, 720px)", padding: 20, borderRadius: 10, backgroundColor: "#fff" }}
             >
                 {detailData ? (
-                    <div style={{ maxWidth: 520 }}>
-                        <p style={{ margin: "4px 0" }}>
+                    <div className="max-w-[520px]">
+                        <p className="my-1">
                             <strong>제목 :</strong>{" "}
                             {detailData.movieTitle}
                         </p>
-                        <p style={{ margin: "4px 0" }}>
+                        <p className="my-1">
                             <strong>상영관 :</strong>{" "}
                             {detailData.screenName || "-"}
                         </p>
-                        <p style={{ margin: "4px 0" }}>
+                        <p className="my-1">
                             <strong>좌석 :</strong>{" "}
                             {Array.isArray(detailData.seats) && detailData.seats.length > 0 ? detailData.seats.join(", ") : "-"}
                         </p>
-                        <p style={{ margin: "4px 0" }}>
+                        <p className="my-1">
                             <strong>상영시간 :</strong>{" "}
                             {detailData.screeningStartAt ? new Date(detailData.screeningStartAt).toLocaleString() : "-"}
                         </p>
-                        <p style={{ margin: "4px 0" }}>
+                        <p className="my-1">
                             <strong>종료시간 :</strong>{" "}
                             {detailData.screeningEndAt ? new Date(detailData.screeningEndAt).toLocaleString() : "-"}
                         </p>
-                        <p style={{ margin: "4px 0" }}>
+                        <p className="my-1">
                             <strong>예매일시 :</strong>{" "}
                             {detailData.bookingTime ? new Date(detailData.bookingTime).toLocaleString() : "-"}
                         </p>
-                        <p style={{ margin: "4px 0" }}>
+                        <p className="my-1">
                             <strong>총액 :</strong>{" "}{Number(detailData.totalPrice).toLocaleString()}원
                         </p>
 
-                        <div style={{ marginTop: 12 }}>
+                        <div className="mt-3">
                             {detailData.qrCodeUrl ? (
-                                <img src={detailData.qrCodeUrl} alt="QR" style={{ width: 180, height: 180 }} />
+                                <img src={detailData.qrCodeUrl} alt="QR" className="w-[180px] h-[180px]" />
                             ) : (
-                                <p style={{ color: "#666" }}>QR을 불러오지 못했습니다.</p>
+                                <p className="text-gray-600">QR을 불러오지 못했습니다.</p>
                             )}
                         </div>
                     </div>

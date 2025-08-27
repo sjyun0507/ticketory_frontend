@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, Outlet } from 'react-router-dom';
 import { getMyInfo } from '../../api/memberApi.js';
-import { getBookingDetail } from '../../api/bookingApi.js';
+import { getMemberBookings } from '../../api/bookingApi.js';
 import defaultAvatar from '../../assets/styles/avatar-placeholder.png';
 import {useAuthStore} from "../../store/useAuthStore.js";
 
@@ -57,15 +57,16 @@ export default function MyPage() {
                 const data = await getMyInfo(memberId);
                 if (mounted && data) setUser(data);
 
-                // 최근 예매 1건 불러오기
+                // 최근 예매 1건 불러오기 (목록 API → 최신 1건 선별)
                 try {
-                    const res = await getBookingDetail(memberId); // GET /api/{memberId}/booking
-                    const data = res?.data;
+                    const res = await getMemberBookings(memberId, { status: 'CONFIRMED' });
+                    const data = res?.data ?? res;
                     const list = Array.isArray(data) ? data : data ? [data] : [];
-                    // 날짜 후보 필드 추출 & 정렬 (최신 1건)
+
                     const parseWhen = (b) => {
                         const raw =
                             b.screeningStartAt ||
+                            b.screening?.startAt ||
                             b.bookedAt ||
                             b.createdAt ||
                             b.bookingDate ||
@@ -74,45 +75,28 @@ export default function MyPage() {
                         const dt = raw ? new Date(raw) : null;
                         return dt && !isNaN(dt.getTime()) ? dt : null;
                     };
+
                     const sorted = list
                         .map((b) => ({ b, when: parseWhen(b) }))
                         .filter((x) => x.when)
                         .sort((a, b) => b.when - a.when);
+
                     if (sorted.length && mounted) {
                         const top = sorted[0].b;
                         const when = sorted[0].when;
-                        // UI에 맞게 필드 매핑
-                        const title =
-                            top.movieTitle ||
-                            top.movie?.title ||
-                            top.title ||
-                            '제목 없음';
-                        const screen =
-                            top.theaterName ||
-                            top.screenName ||
-                            top.screen?.name ||
-                            top.theater ||
-                            '';
+                        const title = top.movieTitle || top.movie?.title || top.title || '제목 없음';
+                        const screen = top.theaterName || top.screenName || top.screen?.name || top.theater || '';
                         const seatsStr = Array.isArray(top.seats)
                             ? top.seats.map((s) => s.label || s.name || s).join(', ')
                             : (top.seatInfo || top.seatLabels || top.seatNames || '');
                         const id = top.bookingId || top.id;
-                        // 시간 포매팅 (간단 버전)
                         const yyyy = when.getFullYear();
                         const mm = String(when.getMonth() + 1).padStart(2, '0');
                         const dd = String(when.getDate()).padStart(2, '0');
                         const hh = String(when.getHours()).padStart(2, '0');
                         const mi = String(when.getMinutes()).padStart(2, '0');
                         const future = when.getTime() > Date.now();
-                        setRecentBookings([{
-                            id,
-                            title,
-                            date: `${yyyy}-${mm}-${dd}`,
-                            time: `${hh}:${mi}`,
-                            screen,
-                            seats: seatsStr,
-                            cancellable: future
-                        }]);
+                        setRecentBookings([{ id, title, date: `${yyyy}-${mm}-${dd}`, time: `${hh}:${mi}`, screen, seats: seatsStr, cancellable: future }]);
                     } else if (mounted) {
                         setRecentBookings([]);
                     }

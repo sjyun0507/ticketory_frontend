@@ -121,8 +121,17 @@ const MyBookings = () => {
         try {
             setCancelingId(bk.bookingId);
 
-            await releaseBookingHold(bk.bookingId,{
-                reason:cancelReasons});
+            // NOTE: 백엔드는 단일 사유와(선택) 비고 문자열을 받도록 전송합니다.
+            if (cancelReason === "OTHER" && !cancelEtc.trim()) {
+                alert("기타 사유를 입력해주세요.");
+                setCancelingId(null);
+                return;
+            }
+
+            await releaseBookingHold(bk.bookingId, {
+                reason: cancelReason,                  // "CHANGE_OF_PLANS" | "MISTAKE" | "PRICE" | "WEATHER" | "HEALTH" | "OTHER"
+                note: cancelReason === "OTHER" ? cancelEtc.trim() : ""  // 선택 입력
+            });
 
             // 성공 시 목록에서 제거 (서버 재조회 전 UX 반영)
             setBookings(prev => prev.filter(item => item.bookingId !== bk.bookingId));

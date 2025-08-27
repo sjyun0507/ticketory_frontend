@@ -121,9 +121,8 @@ const MyBookings = () => {
         try {
             setCancelingId(bk.bookingId);
 
-            // 선택 사유를 백엔드로 보내려면 releaseBookingHold 시그니처를 확장하세요.
-            // 예: releaseBookingHold(bk.bookingId, { reason: cancelReason, memo: cancelEtc })
-            await releaseBookingHold(bk.bookingId);
+            await releaseBookingHold(bk.bookingId,{
+                reason:cancelReasons});
 
             // 성공 시 목록에서 제거 (서버 재조회 전 UX 반영)
             setBookings(prev => prev.filter(item => item.bookingId !== bk.bookingId));

@@ -21,9 +21,12 @@ export async function initBooking({ screeningId, seatIds, counts, holdSeconds = 
 }
 
 //예약 해제(취소)
-export async function releaseBookingHold(bookingId) {
+export async function releaseBookingHold(bookingId,reason) {
     if (!bookingId) return;
-    return api.delete(`/bookings/${bookingId}/cancel`);
+    return api.delete(`/bookings/${bookingId}/cancel`,{
+        params:reason
+    });
+
 }
 
 // 특정 회원의 예매 목록(상태/기간 필터 가능)

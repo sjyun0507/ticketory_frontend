@@ -1,6 +1,6 @@
 import {useEffect, useMemo, useState} from "react";
 import {useLocation, useNavigate} from "react-router-dom";
-import {searchMovies} from "../api/movieApi.js";
+import {searchMovies, getMovieDetail} from "../api/movieApi.js";
 
 function useQueryParam(name) {
     const {search} = useLocation();
@@ -49,7 +49,7 @@ const Search = () => {
                     placeholder="영화 제목을 입력하세요"
                     className="flex-1 border px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                 />
-                <button className="px-4 py-2 rounded-md bg-sky-600 text-white hover:bg-blue-600 focus:outline-none focus:ring-2 ">
+                <button className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 ">
                     검색
                 </button>
             </form>
@@ -63,7 +63,21 @@ const Search = () => {
                 {results.map((m) => (
                     <li key={m.id} className="border rounded-md overflow-hidden hover:shadow">
                         <button
-                            onClick={() => navigate(`/movies/${m.id}`)}
+                            onClick={async () => {
+                                const movieId = m.id ?? m.movieId;
+                                if (!movieId) {
+                                    console.error("검색 결과 항목에 id가 없습니다:", m);
+                                    return;
+                                }
+                                try {
+                                    const detail = await getMovieDetail(movieId);
+                                    const detailId = detail?.id ?? detail?.movieId ?? movieId;
+                                    navigate(`/movies/${detailId}`);
+                                } catch (err) {
+                                    console.error("영화 상세 불러오기 실패, 기본 id로 이동합니다.", err);
+                                    navigate(`/movies/${movieId}`);
+                                }
+                            }}
                             className="text-left w-full"
                             aria-label={`${m.title} 상세로 이동`}
                         >

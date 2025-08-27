@@ -250,7 +250,7 @@ const MyBookings = () => {
                     ← 마이페이지로
                 </Link>
             </div>
-            <h2>나의 예매 내역</h2>
+            <h1 className="text-xl md:text-2xl font-bold mb-4">예매 내역</h1>
             {loading ? (
                 <p>로딩 중...</p>
             ) : error ? (

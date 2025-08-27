@@ -41,8 +41,14 @@ const Badge = ({ text }) => {
   }
   return (
     <span
-      className={`inline-flex items-center justify-center rounded-md text-white text-xs font-bold w-6 h-6 mr-1 ` +
-        (display === "ALL" ? "bg-green-600" : display === "19" ? "bg-red-600" : "bg-yellow-500")}
+      className={
+        `inline-flex items-center justify-center rounded-md text-white text-xs font-bold w-6 h-6 mr-2 shadow-sm ` +
+        (display === "ALL"
+          ? "bg-emerald-600"
+          : display === "19"
+          ? "bg-rose-600"
+          : "bg-amber-500")
+      }
     >
       {display}
     </span>
@@ -56,8 +62,10 @@ const TimePill = ({ labelStart, labelEnd, auditorium, disabled = false, onClick 
     disabled={disabled}
     aria-disabled={disabled}
     className={
-      "inline-flex items-center gap-2 px-4 py-3 rounded-full border bg-gray-50 backdrop-blur transition text-sm mr-2 shadow-sm " +
-      (disabled ? "opacity-20 cursor-not-allowed pointer-events-none" : "hover:bg-white")
+      "inline-flex items-center gap-2 px-4 py-3 rounded-full border bg-white/60 backdrop-blur ring-1 ring-black/5 transition text-sm mr-2 shadow-sm " +
+      (disabled
+        ? "opacity-30 cursor-not-allowed pointer-events-none"
+        : "hover:bg-white hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40")
     }
     title={auditorium ? `${auditorium} | ${labelStart}${labelEnd ? ` ~ ${labelEnd}` : ""}` : labelStart}
   >
@@ -69,7 +77,7 @@ const TimePill = ({ labelStart, labelEnd, auditorium, disabled = false, onClick 
 
 // 영화별 블록
 const MovieBlock = ({ movie, slots, onClickTime }) => (
-  <div className="border rounded-xl bg-white/70 backdrop-blur p-4 mb-4">
+  <div className="border rounded-2xl bg-white/70 backdrop-blur p-5 mb-5 shadow-sm hover:shadow-md transition">
     <div className="flex items-center justify-between mb-3">
       <button className="flex items-center gap-2 text-left">
         <Badge text={movie.rating || "ALL"} />
@@ -79,7 +87,7 @@ const MovieBlock = ({ movie, slots, onClickTime }) => (
       </button>
     </div>
     {slots && slots.length ? (
-      <div className="flex flex-wrap">
+      <div className="flex flex-wrap gap-y-3">
         {slots.map((s) => {
           const isPast = typeof s.startMs === 'number' ? s.startMs <= Date.now() : false;
           return (
@@ -95,7 +103,7 @@ const MovieBlock = ({ movie, slots, onClickTime }) => (
         })}
       </div>
     ) : (
-      <div className="text-sm text-gray-500">상영 시간이 없습니다.</div>
+      <div className="text-sm text-gray-500 italic">등록된 상영 시간이 없습니다.</div>
     )}
   </div>
 );
@@ -112,6 +120,19 @@ const Screenings = () => {
     const dd = String(selectedDate.getDate()).padStart(2, "0");
     return `${yyyy}-${mm}-${dd}`;
   }, [selectedDate]);
+
+  // 오늘로 이동 버튼
+  const handleToday = () => {
+    setSelectedDate(new Date());
+  };
+
+  // 날짜 변경 핸들러
+  const handleDateChange = (e) => {
+    const val = e.target.value; // yyyy-mm-dd
+    if (!val) return;
+    const [yy, mm, dd] = val.split("-");
+    setSelectedDate(new Date(Number(yy), Number(mm) - 1, Number(dd)));
+  };
 
   // 영화 목록
   const [movies, setMovies] = useState([]);
@@ -145,14 +166,6 @@ const Screenings = () => {
       }
     })();
   }, []);
-
-  // 날짜 변경 핸들러
-  const handleDateChange = (e) => {
-    const val = e.target.value; // yyyy-mm-dd
-    if (!val) return;
-    const [yy, mm, dd] = val.split("-");
-    setSelectedDate(new Date(Number(yy), Number(mm) - 1, Number(dd)));
-  };
 
   // 해당 날짜의 전체 상영표 불러와 영화별로 그룹화
   useEffect(() => {
@@ -264,32 +277,35 @@ const Screenings = () => {
   };
 
   return (
-    <main className="max-w-[1200px] mx-auto px-4 py-6 min-h-[75vh]">
-      {/* 상단: 날짜 선택 */}
-      <div className="flex items-center justify-between gap-4 mb-4">
-          <h2 className="text-2xl font-semibold">상영시간표</h2>
-        <label className="inline-flex items-center gap-3">
-          <span className="text-sm text-gray-600">날짜 선택</span>
-          <input
-            type="date"
-            value={dateInputValue}
-            onChange={handleDateChange}
-            className="border rounded-md px-3 py-2"
-            min={toYmdLocal(new Date())}
-          />
-        </label>
-      </div>
+      <main className="max-w-[1200px] mx-auto px-4 py-10 min-h-[75vh] bg-gradient-to-b from-white via-indigo-50/40 to-white rounded-2xl">
+          {/* 헤더 & 날짜 선택*/}
+          <header className="mb-8 flex items-end justify-between">
+              <div>
+                  <h1 className="text-2xl font-semibold">상영시간표</h1>
+                  <p className="mt-1 text-gray-500 text-sm">상영중인 영화 시간표를 한눈에 확인하세요. 상영 시간 시작 30분 전까지 예매 또는 취소가 가능합니다.</p>
+              </div>
+              <label className="inline-flex items-center gap-3">
+                  <span className="text-sm text-gray-600">날짜 선택</span>
+                  <input
+                      type="date"
+                      value={dateInputValue}
+                      onChange={handleDateChange}
+                      className="border rounded-md px-3 py-2"
+                      min={toYmdLocal(new Date())}
+                  />
+              </label>
+          </header>
 
       {/* 본문: 영화별 상영표 */}
       <section>
         {moviesLoading ? (
-          <div className="text-gray-500">영화 목록을 불러오는 중...</div>
+          <div className="text-gray-500 animate-pulse">영화 목록을 불러오는 중...</div>
         ) : moviesError ? (
-          <div className="text-red-600">{moviesError}</div>
+          <div className="text-rose-600">{moviesError}</div>
         ) : screeningsLoading ? (
-          <div className="text-gray-500 py-14 text-center">상영 시간을 불러오는 중...</div>
+          <div className="text-gray-500 py-14 text-center animate-pulse">상영 시간을 불러오는 중...</div>
         ) : screeningsError ? (
-          <div className="text-red-600 py-14 text-center">{screeningsError}</div>
+          <div className="text-rose-600 py-14 text-center">{screeningsError}</div>
         ) : !groups.length ? (
           <div className="text-gray-500 py-14 text-center">표시할 상영 정보가 없습니다.</div>
         ) : (

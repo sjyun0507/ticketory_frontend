@@ -331,21 +331,24 @@ const Bookings = () => {
   }, []);
 
   return (
-    <main className="max-w-[1200px] mx-auto px-4 py-6 min-h-[75vh]">
-      {/* 상단: 날짜 선택 */}
-        <div className="flex items-center justify-between gap-4 mb-4">
-            <h2 className="text-2xl font-semibold">예매</h2>
-        <label className="inline-flex items-center gap-3">
-          <span className="text-sm text-gray-600">날짜 선택</span>
-          <input
-            type="date"
-            value={dateInputValue}
-            onChange={handleDateChange}
-            className="border rounded-md px-3 py-2"
-            min={todayValue}
-          />
-        </label>
-      </div>
+      <main className="max-w-[1200px] mx-auto px-4 py-10 min-h-[75vh] bg-gradient-to-b from-white via-indigo-50/40 to-white rounded-2xl">
+          {/* 헤더 & 날짜 선택*/}
+          <header className="mb-8 flex items-end justify-between">
+              <div>
+                  <h1 className="text-2xl font-semibold">예매</h1>
+                  <p className="mt-1 text-gray-500 text-sm"> 영화별 상영시간을 한눈에 확인하세요. 상영 시간 시작 30분 전까지 예매 또는 취소가 가능합니다.</p>
+              </div>
+              <label className="inline-flex items-center gap-3">
+                  <span className="text-sm text-gray-600">날짜 선택</span>
+                  <input
+                      type="date"
+                      value={dateInputValue}
+                      onChange={handleDateChange}
+                      className="border rounded-md px-3 py-2"
+                      min={toYmdLocal(new Date())}
+                  />
+              </label>
+          </header>
 
       {/* 본문 레이아웃 */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">

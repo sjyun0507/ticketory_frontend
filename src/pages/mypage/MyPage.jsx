@@ -18,7 +18,6 @@ export default function MyPage() {
 
     const [recentBookings, setRecentBookings] = useState([]);
 
-    // ▼ 수정: memberId 계산을 useEffect 내부에서 “한 번만” 수행
     useEffect(() => {
         let mounted = true;
 
@@ -114,118 +113,172 @@ export default function MyPage() {
     // ▲ 여기까지
 
     const notifications = [
-        { id: 'NT-01', text: '9월 신작 예매 오픈! (듄 파트2, 위키드)', link: '/events' },
-        { id: 'NT-02', text: 'VIP 승급까지 12,000P 남았어요', link: '/mypage/points' },
+        { id: 'NT-01', type: 'event', text: '특별 상영 & 굿즈 증정 이벤트', link: '/events' },
+        { id: 'NT-02', type: 'notice',  text: 'VIP 승급까지 12,000P 남았어요', link: '/mypage/points' },
     ];
 
     return (
-        <main className="max-w-[1200px] min-h-[85vh] mx-auto px-4 py-6">
-            {/* 상단: 프로필 카드 */}
-            <section className="bg-white border rounded-lg p-4 sm:p-5 mb-6">
-                <div className="flex items-center gap-4">
-                    {/* 아바타 */}
-                    <div className="h-14 w-14 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
-                        <img
-                            src={user.avatarUrl ? user.avatarUrl : defaultAvatar}
-                            alt="User avatar"
-                            className="h-full w-full object-cover"
-                        />
-                    </div>
-                    {/* 기본 정보 */}
-                    <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <h1 className="text-base sm:text-lg font-semibold truncate">{user.name || '회원'}</h1>
-                            {user.grade && <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">{user.grade}</span>}
+        <main className="max-w-[1200px] min-h-[85vh] mx-auto px-4 py-8">
+            {/* 헤더: 그라데이션 + 프로필 */}
+            <section className="relative overflow-hidden rounded-2xl border bg-white mb-6">
+                <div className="absolute inset-0 bg-gradient-to-r from-indigo-50 via-sky-50 to-teal-50" />
+                <div className="relative p-6 sm:p-8">
+                    <div className="flex items-start gap-5">
+                        {/* 아바타 */}
+                        <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-full ring-2 ring-white shadow-md overflow-hidden shrink-0">
+                            <img
+                                src={user.avatarUrl ? user.avatarUrl : defaultAvatar}
+                                alt="User avatar"
+                                className="h-full w-full object-cover"
+                            />
                         </div>
-                        <div className="mt-1 text-sm text-gray-600 flex flex-wrap items-center gap-3">
-                            <span>포인트 <b className="text-gray-900">{(user.points ?? 0).toLocaleString()}</b>P</span>
+
+                        {/* 기본 정보 + 스탯 */}
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h1 className="text-lg sm:text-xl font-bold tracking-tight text-gray-900">
+                                    {user.name || '회원'}
+                                </h1>
+                                {user.grade && (
+                                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-gray-900/5 text-gray-700 border border-gray-200">
+                                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                                        {user.grade}
+                                    </span>
+                                )}
+                            </div>
+                            <p className="mt-1 text-sm text-gray-600">반가워요! 오늘도 즐거운 관람 되세요 👋</p>
+
+                            {/* 스탯 */}
+                            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                <div className="rounded-xl border bg-white/70 backdrop-blur p-3">
+                                    <p className="text-xs text-gray-500">보유 포인트</p>
+                                    <p className="mt-1 text-lg font-semibold text-gray-900">{(user.points ?? 0).toLocaleString()}P</p>
+                                </div>
+                                <div className="rounded-xl border bg-white/70 backdrop-blur p-3">
+                                    <p className="text-xs text-gray-500">회원 등급</p>
+                                    <p className="mt-1 text-lg font-semibold text-gray-900">{user.grade || '일반'}</p>
+                                </div>
+                                <div className="rounded-xl border bg-white/70 backdrop-blur p-3 hidden sm:block">
+                                    <p className="text-xs text-gray-500">최근 예매</p>
+                                    <p className="mt-1 text-lg font-semibold text-gray-900">{recentBookings.length ? recentBookings[0].date : '-'}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    {/* 설정 바로가기 */}
-                    <div className="hidden sm:flex items-center gap-2">
-                        <Link to="/mypage/settings" className="text-sm underline underline-offset-2">설정</Link>
                     </div>
                 </div>
             </section>
 
             {/* 퀵 액션 */}
-            <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                <QuickAction to="/mypage/bookings" label="예매 내역" />
-                <QuickAction to="/mypage/points" label="포인트" />
-                <QuickAction to="/mypage/reviews" label="내 리뷰" />
-                <QuickAction to="/mypage/settings" label="설정" />
+            <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+                <QuickAction to="/mypage/bookings" label="예매 내역" icon="ticket" />
+                <QuickAction to="/mypage/points" label="포인트 내역" icon="coin" />
+                <QuickAction to="/mypage/reviews" label="내 리뷰" icon="review" />
+                <QuickAction to="/mypage/settings" label="회원정보수정" icon="settings" />
             </section>
 
-            {/* 최근 예매 내역 미리보기 */}
-            <section className="bg-white border rounded-lg mb-6">
-                <div className="px-4 sm:px-5 py-3 border-b flex items-center justify-between">
-                    <h2 className="text-sm sm:text-base font-semibold">최근 예매</h2>
-                    <Link to="/mypage/bookings" className="text-xs sm:text-sm text-gray-600 hover:text-gray-900">전체 보기</Link>
-                </div>
-                {recentBookings.length === 0 ? (
-                    <div className="px-4 sm:px-5 py-6 text-sm text-gray-500">최근 예매가 없습니다.</div>
-                ) : (
-                    <ul className="divide-y">
-                        {recentBookings.map(b => (
-                            <li key={b.id} className="px-4 sm:px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                <div>
-                                    <p className="text-sm sm:text-base font-medium">{b.title}</p>
-                                    <p className="mt-0.5 text-xs sm:text-sm text-gray-600">
-                                        {b.date} • {b.time} • {b.screen} • 좌석 {b.seats}
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => navigate(`/tickets/${b.id}`)}
-                                        className="text-xs sm:text-sm border px-3 py-1 rounded hover:bg-gray-50"
-                                    >티켓 보기</button>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* 최근 예매 */}
+                <section className="lg:col-span-1 bg-white border rounded-2xl overflow-hidden">
+                    <div className="px-5 py-4 border-b flex items-center justify-between bg-gray-50/60">
+                        <h2 className="text-base font-semibold">최근 예매</h2>
+                        <Link to="/mypage/bookings" className="text-sm text-gray-600 hover:text-gray-900">전체 보기</Link>
+                    </div>
+
+                    {recentBookings.length === 0 ? (
+                        <div className="px-5 py-10 text-center text-sm text-gray-500">
+                            아직 예매 내역이 없어요.
+                        </div>
+                    ) : (
+                        <ul className="divide-y">
+                            {recentBookings.map(b => (
+                                <li key={b.id} className="px-5 py-4 flex items-center justify-between gap-4">
+                                    <div className="min-w-0">
+                                        <p className="text-sm sm:text-base font-medium text-gray-900 truncate">{b.title}</p>
+                                        <p className="mt-0.5 text-xs sm:text-sm text-gray-600 truncate">
+                                            {b.date} • {b.time} • {b.screen} • 좌석 {b.seats}
+                                        </p>
+                                    </div>
                                     {b.cancellable && (
-                                        <button
-                                            type="button"
-                                            onClick={() => navigate(`/mypage/bookings/${b.id}/cancel`)}
-                                            className="text-xs sm:text-sm border px-3 py-1 rounded hover:bg-gray-50"
-                                        >예매 취소</button>
+                                        <span className="text-[11px] sm:text-xs px-2 py-1 rounded-full border bg-white">취소 가능</span>
                                     )}
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </section>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </section>
 
-            {/* 알림 / 이벤트 */}
-            <section className="bg-white border rounded-lg">
-                <div className="px-4 sm:px-5 py-3 border-b flex items-center justify-between">
-                    <h2 className="text-sm sm:text-base font-semibold">알림 & 이벤트</h2>
-                    <Link to="/events" className="text-xs sm:text-sm text-gray-600 hover:text-gray-900">더 보기</Link>
-                </div>
-                {notifications.length === 0 ? (
-                    <div className="px-4 sm:px-5 py-6 text-sm text-gray-500">표시할 알림이 없습니다.</div>
-                ) : (
-                    <ul className="divide-y">
-                        {notifications.map(n => (
-                            <li key={n.id} className="px-4 sm:px-5 py-3 text-sm flex items-center justify-between">
-                                <span className="truncate pr-4">{n.text}</span>
-                                <Link to={n.link} className="text-xs border px-3 py-1 rounded hover:bg-gray-50">바로가기</Link>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </section>
+                {/* 알림 / 이벤트 */}
+                <section className="bg-white border rounded-2xl overflow-hidden">
+                    <div className="px-5 py-4 border-b flex items-center justify-between bg-gray-50/60">
+                        <h2 className="text-base font-semibold">알림 & 이벤트</h2>
+                        <Link to="/events" className="text-sm text-gray-600 hover:text-gray-900">더 보기</Link>
+                    </div>
+                    {notifications.length === 0 ? (
+                        <div className="px-5 py-10 text-center text-sm text-gray-500">표시할 알림이 없습니다.</div>
+                    ) : (
+                        <ul className="divide-y">
+                            {notifications.map(n => (
+                                <li key={n.id} className="px-5 py-3 text-sm flex items-center justify-between">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <span
+                                            className={`text-[11px] px-2 py-0.5 rounded-full border ${
+                                                n.type === 'notice'
+                                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                                    : 'bg-green-50 text-green-700 border-green-200'
+                                            }`}
+                                        >
+                                            {n.type === 'notice' ? '공지' : '이벤트'}
+                                        </span>
+                                        <span className="truncate">{n.text}</span>
+                                    </div>
+                                    <Link to={n.link} className="text-xs border px-3 py-1.5 rounded-lg hover:bg-gray-50">바로가기</Link>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </section>
+            </div>
+
             <Outlet />
         </main>
     );
 }
 
-function QuickAction({ to, label }) {
+function QuickAction({ to, label, icon }) {
+    const Icon = () => {
+        switch (icon) {
+            case 'ticket':
+                return (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-6 h-6"><path strokeWidth="1.5" d="M5 7h14a1 1 0 0 1 1 1v2a2 2 0 1 0 0 4v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a2 2 0 1 0 0-4V8a1 1 0 0 1 1-1z"/></svg>
+                );
+            case 'coin':
+                return (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-6 h-6"><circle cx="12" cy="12" r="8" strokeWidth="1.5"/><path d="M8 12h8" strokeWidth="1.5"/><path d="M10 9h4" strokeWidth="1.5"/></svg>
+                );
+            case 'review':
+                return (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-6 h-6"><path d="M4 6h16M4 12h10M4 18h7" strokeWidth="1.5"/></svg>
+                );
+            case 'settings':
+                return (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-6 h-6"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" strokeWidth="1.5"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V22a2 2 0 1 1-4 0v-.07a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06A2 2 0 1 1 3.2 17.9l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H2a2 2 0 1 1 0-4h.07a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06A2 2 0 1 1 6.1 3.2l.06.06a1.65 1.65 0 0 0 1.82.33H8a1.65 1.65 0 0 0 1-1.51V2a2 2 0 1 1 4 0v.07a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06A2 2 0 1 1 20.8 6.1l-.06.06a1.65 1.65 0 0 0-.33 1.82V8c0 .69.28 1.32.73 1.77.45.45 1.08.73 1.77.73H22a2 2 0 1 1 0 4h-.07a1.65 1.65 0 0 0-1.51 1z" strokeWidth="1.2"/></svg>
+                );
+            default:
+                return null;
+        }
+    };
+
     return (
         <Link
             to={to}
-            className="bg-white border rounded-lg h-20 sm:h-24 flex items-center justify-center text-sm sm:text-base font-medium hover:bg-gray-50"
+            className="group border rounded-2xl h-24 sm:h-28 flex flex-col items-center justify-center gap-2 bg-white hover:bg-gray-50 transition-colors"
             aria-label={label}
         >
-            {label}
+            <span className="inline-flex items-center justify-center rounded-xl border bg-white w-10 h-10 group-hover:shadow-sm">
+                <Icon />
+            </span>
+            <span className="text-sm sm:text-base font-medium text-gray-900">{label}</span>
         </Link>
     );
 }

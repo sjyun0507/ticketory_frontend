@@ -22,6 +22,7 @@ import AdminScreenings from "../pages/admin/AdminScreenings.jsx";
 import PaymentSuccess from "../pages/payment/PaymentSuccess.jsx";
 import PaymentFail from "../pages/payment/PaymentFail.jsx";
 import AdminMovieDetail from "../pages/admin/AdminMovieDetail.jsx";
+import PointsHistory from "../pages/mypage/PointHistory.jsx";
 
 const routes = [
     {path: "/", element: <Home/>},
@@ -51,6 +52,7 @@ const routes = [
             { index: true, element: <MyPage /> },
             { path: "bookings", element: <MyBookings /> },
             { path: "settings", element: <Settings /> },
+            { path: "points", element: <PointsHistory /> },
         ],
     },
     {

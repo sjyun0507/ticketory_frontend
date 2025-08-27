@@ -8,6 +8,13 @@ export async function getAdminMovies(params = {}) {
   return res.data;
 }
 
+// 상영관 목록 (Admin) GET /admin/screens
+export async function getAdminScreens(params = {}) {
+  const { page = 0, size = 50, ...rest } = params;
+  const res = await api.get("/admin/screens", { params: { page, size, ...rest } });
+  return res.data;
+}
+
 // 영화 생성 POST /admin/movies
 export async function createMovie(payload) {
   // payload 예: { title, originalTitle, overview, releaseDate, runtime, status, genres:[], rating, ... }

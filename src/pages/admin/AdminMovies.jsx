@@ -244,7 +244,7 @@ const AdminMovies = () => {
           <button
             type="button"
             onClick={() => setAddOpen(true)}
-            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 active:bg-indigo-800"
           >
             + 새 영화 추가
           </button>
@@ -294,10 +294,10 @@ const AdminMovies = () => {
         {!loading && !err && movies.length > 0 && (
           <div className="overflow-x-auto rounded-lg border bg-white">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-center text-xs uppercase tracking-wider text-gray-500">
+              <thead className="bg-gray-50 text-gray-600 text-center uppercase tracking-wider">
                 <tr>
                   <th className="px-4 py-3 w-16">ID</th>
-                  <th className="px-4 py-3">제목</th>
+                  <th className="px-4 py-3">영화제목</th>
                   <th className="px-4 py-3">장르</th>
                   <th className="px-4 py-3 w-30">개봉일</th>
                   <th className="px-4 py-3 w-24">러닝타임</th>

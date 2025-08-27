@@ -59,44 +59,42 @@ export default function MyPage() {
 
                 // 최근 예매 1건 불러오기 (목록 API → 최신 1건 선별)
                 try {
-                    const res = await getMemberBookings(memberId, { status: 'CONFIRMED' });
-                    const data = res?.data ?? res;
-                    const list = Array.isArray(data) ? data : data ? [data] : [];
+                    const page = await getMemberBookings(memberId, { status: 'CONFIRMED' });
+                    const list = Array.isArray(page?.content) ? page.content : [];
 
-                    const parseWhen = (b) => {
-                        const raw =
-                            b.screeningStartAt ||
-                            b.screening?.startAt ||
-                            b.bookedAt ||
-                            b.createdAt ||
-                            b.bookingDate ||
-                            b.showTime ||
-                            null;
-                        const dt = raw ? new Date(raw) : null;
-                        return dt && !isNaN(dt.getTime()) ? dt : null;
-                    };
-
-                    const sorted = list
-                        .map((b) => ({ b, when: parseWhen(b) }))
-                        .filter((x) => x.when)
+                    const normalized = list
+                        .map(b => {
+                            const when = b.screeningStartAt ? new Date(b.screeningStartAt) : null;
+                            return {
+                                id: b.bookingId,
+                                title: b.movieTitle ?? '제목 없음',
+                                screen: b.screenName ?? '',
+                                seats: Array.isArray(b.seats) ? b.seats.join(', ') : '',
+                                when,
+                                paymentStatus: b.paymentStatus,
+                            };
+                        })
+                        .filter(x => x.when && !isNaN(x.when.getTime()))
                         .sort((a, b) => b.when - a.when);
 
-                    if (sorted.length && mounted) {
-                        const top = sorted[0].b;
-                        const when = sorted[0].when;
-                        const title = top.movieTitle || top.movie?.title || top.title || '제목 없음';
-                        const screen = top.theaterName || top.screenName || top.screen?.name || top.theater || '';
-                        const seatsStr = Array.isArray(top.seats)
-                            ? top.seats.map((s) => s.label || s.name || s).join(', ')
-                            : (top.seatInfo || top.seatLabels || top.seatNames || '');
-                        const id = top.bookingId || top.id;
-                        const yyyy = when.getFullYear();
-                        const mm = String(when.getMonth() + 1).padStart(2, '0');
-                        const dd = String(when.getDate()).padStart(2, '0');
-                        const hh = String(when.getHours()).padStart(2, '0');
-                        const mi = String(when.getMinutes()).padStart(2, '0');
-                        const future = when.getTime() > Date.now();
-                        setRecentBookings([{ id, title, date: `${yyyy}-${mm}-${dd}`, time: `${hh}:${mi}`, screen, seats: seatsStr, cancellable: future }]);
+                    if (normalized.length && mounted) {
+                        const top = normalized[0];
+                        const yyyy = top.when.getFullYear();
+                        const mm = String(top.when.getMonth() + 1).padStart(2, '0');
+                        const dd = String(top.when.getDate()).padStart(2, '0');
+                        const hh = String(top.when.getHours()).padStart(2, '0');
+                        const mi = String(top.when.getMinutes()).padStart(2, '0');
+                        const future = top.when.getTime() > Date.now();
+
+                        setRecentBookings([{
+                            id: top.id,
+                            title: top.title,
+                            date: `${yyyy}-${mm}-${dd}`,
+                            time: `${hh}:${mi}`,
+                            screen: top.screen,
+                            seats: top.seats,
+                            cancellable: future && top.paymentStatus !== 'CANCELLED',
+                        }]);
                     } else if (mounted) {
                         setRecentBookings([]);
                     }

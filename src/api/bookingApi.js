@@ -22,8 +22,8 @@ export async function initBooking({ screeningId, seatIds, counts, holdSeconds = 
 
 //예약 HOLD를 해제(취소)
 export async function releaseBookingHold(bookingId) {
-  if (!bookingId) return;
-  return api.delete(`/bookings/${bookingId}/cancel`);
+    if (!bookingId) return;
+    return api.delete(`/bookings/${bookingId}/cancel`);
 }
 
 // 특정 회원의 예매 목록(상태/기간 필터 가능)
@@ -41,7 +41,9 @@ export const getMemberBookings = async (memberId, { status, from, to } = {}) => 
 
     const path = `/${n}/booking`;
     console.log('[bookingApi] GET', path, { params, baseURL: api?.defaults?.baseURL });
-    return await api.get(path, { params });
+
+    const res = await api.get(path, {params});
+    return res.data;
 };
 
 // 특정 예매 ID 하나에 대한 모든 상세(결제/상영/좌석/포스터 등)

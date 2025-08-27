@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
  *  - 모달 열릴 때 body 스크롤 잠금
  *  - 접근성 속성(aria-modal, role) 포함
  */
-const Modal = ({ isOpen, onClose, children }) => {
+const Modal = ({ isOpen, onClose, children, contentStyle, contentClassName }) => {
     const containerRef = useRef(null);
 
     // body 스크롤 잠금/해제
@@ -67,6 +67,7 @@ const Modal = ({ isOpen, onClose, children }) => {
             <div
                 ref={containerRef}
                 tabIndex={-1}
+                className={contentClassName}
                 style={{
                     background: "#fff",
                     borderRadius: "10px",
@@ -77,6 +78,7 @@ const Modal = ({ isOpen, onClose, children }) => {
                     boxShadow:
                         "0 10px 15px rgba(0,0,0,0.1), 0 4px 6px rgba(0,0,0,0.05)",
                     position: "relative",
+                    ...(contentStyle || {}),
                 }}
                 onClick={(e) => e.stopPropagation()} // 컨텐츠 클릭 시 닫기 방지
             >

@@ -6,6 +6,7 @@ import { createPaymentOrder } from '../../api/paymentApi.js';
 import {useAuthStore} from "../../store/useAuthStore.js";
 import { releaseBookingHold } from '../../api/bookingApi.js';
 import { getMovieDetail } from '../../api/movieApi.js';
+import { getMyInfo} from "../../api/memberApi.js";
 
 const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY || "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
 const customerKey = "lIUt5JCR8vA3XOlDluVSz";
@@ -39,9 +40,27 @@ export default function Payment() {
       return sum;
     })();
 
-    const user = useAuthStore((s) => s.user);
-    const memberId = user?.id ?? user?.memberId ?? null;
+    // const user = useAuthStore((s) => s.user);
+    // const memberId = user?.id ?? user?.memberId ?? null;
 
+    const storeSnap = typeof useAuthStore?.getState === 'function' ? useAuthStore.getState() : {};
+    const user = storeSnap.user;
+    const memberIdFromStore = user?.id ?? user?.memberId ?? storeSnap.member?.id ?? storeSnap.userId ?? null;
+    const tokenFromStorage =
+        (typeof window !== 'undefined' && (localStorage.getItem('accessToken') || localStorage.getItem('token') || sessionStorage.getItem('token'))) || null;
+    const memberIdFromToken = (() => {
+        if (!tokenFromStorage) return null;
+        try {
+            const payload = JSON.parse(atob(tokenFromStorage.split('.')[1]));
+            const raw = payload?.sub ?? payload?.memberId ?? payload?.id ?? null;
+            if (raw == null) return null;
+            return /^\d+$/.test(String(raw)) ? Number(raw) : null;
+        } catch {
+            return null;
+        }
+    })();
+
+    const memberId = memberIdFromStore ?? memberIdFromToken ?? null;
     const [usedPoints, setUsedPoints] = useState(0);
     const [paymentStatus, setPaymentStatus] = useState(null);
     const [orderId, setOrderId] = useState(null);
@@ -57,7 +76,21 @@ export default function Payment() {
     // 중복 뒤로가기 방지
     const [releasing, setReleasing] = useState(false);
 
-    // Helper to normalize various age group field values to canonical keys
+    useEffect(() => {
+        if (!memberId) return;
+        (async () => {
+            try {
+                const data = await getMyInfo(memberId);
+                // DTO: { ..., points: number }
+                const bal = (data && (data.points ?? data.pointBalance)) || 0;
+                setAvailablePoints(bal);
+            } catch (e) {
+                console.error('[points] getMyInfo failed', e?.response?.status, e?.response?.data || e);
+                setAvailablePoints(0);
+            }
+        })();
+    }, [memberId]);
+
     const normalizeAge = (raw) => {
       if (!raw) return 'ETC';
       const s = String(raw).toUpperCase();
@@ -184,20 +217,6 @@ export default function Payment() {
       const newValue = Math.max(0, base - usedPoints);
       setAmount({ currency: 'KRW', value: newValue });
     }, [usedPoints, totalPrice, initialAmountValue]);
-
-    // useEffect(() => {
-    //     if (!memberId) return;
-    //     (async () => {
-    //         try {
-    //             const { data } = await getMemberPoints(memberId);
-    //             const bal = (data && (data.balance ?? data.pointBalance ?? data.points)) || 0;
-    //             setAvailablePoints(bal);
-    //         } catch (e) {
-    //             console.error('내 포인트 잔액 조회 실패:', e);
-    //             setAvailablePoints(0);
-    //         }
-    //     })();
-    // }, [memberId]);
 
     const handleBack = async () => {
       if (releasing) return;

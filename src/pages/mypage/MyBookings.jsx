@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { getBookingDetail, getMemberBookings } from "../../api/bookingApi.js";
+import { getBookingDetail, getMemberBookings, releaseBookingHold } from "../../api/bookingApi.js";
 import Modal from "../../components/Modal.jsx";
 import {useAuthStore} from "../../store/useAuthStore.js";
 import axiosInstance from "../../api/axiosInstance.js";
@@ -63,6 +63,44 @@ const MyBookings = () => {
     // 상세보기 모달 상태
     const [detailOpen, setDetailOpen] = useState(false);
     const [detailData, setDetailData] = useState(null);
+
+    // 취소 진행 상태
+    const [cancelingId, setCancelingId] = useState(null);
+
+    // 상영 시작 30분 전까지만 취소 가능
+    const canCancel = (startAt) => {
+        if (!startAt) return false;
+        const start = new Date(startAt).getTime();
+        if (Number.isNaN(start)) return false;
+        const now = Date.now();
+        const THIRTY_MIN = 30 * 60 * 1000;
+        return now < (start - THIRTY_MIN);
+    };
+
+    const handleCancel = async (bk) => {
+        try {
+            if (!bk?.bookingId) {
+                alert("예약 정보가 올바르지 않습니다.");
+                return;
+            }
+            if (!canCancel(bk.screeningStartAt)) {
+                alert("상영시간 30분 전까지만 취소할 수 있어요.");
+                return;
+            }
+            const ok = window.confirm("정말 이 예매를 취소할까요?\n(취소 후 좌석은 해제됩니다)");
+            if (!ok) return;
+            setCancelingId(bk.bookingId);
+            await releaseBookingHold(bk.bookingId);
+            // 성공 시 목록에서 제거 (서버 재조회 전 UX 반영)
+            setBookings(prev => prev.filter(item => item.bookingId !== bk.bookingId));
+        } catch (e) {
+            console.error("[MyBookings] 예매 취소 실패:", e);
+            const msg = e?.response?.data?.message || e?.message || "취소 처리 중 오류가 발생했습니다.";
+            alert(msg);
+        } finally {
+            setCancelingId(null);
+        }
+    };
 
     // 포스터 URL이 보호 자원(/api/...)이거나 상대경로인 경우, 토큰을 사용해 Blob으로 가져와서 ObjectURL로 변환
     const loadPosterBlobUrl = async (posterUrl) => {
@@ -232,6 +270,7 @@ const MyBookings = () => {
                         const eh = endWhen ? String(endWhen.getHours()).padStart(2, "0") : "";
                         const emi = endWhen ? String(endWhen.getMinutes()).padStart(2, "0") : "";
                         const seatsText = Array.isArray(bk.seats) ? bk.seats.join(", ") : "";
+                        const cancellable = canCancel(bk.screeningStartAt);
                         return (
                             <div
                                 key={bk.bookingId}
@@ -255,17 +294,34 @@ const MyBookings = () => {
                                 )}
 
                                 <div>
-                                    <h3 style={{ margin: "4px 0" }}><strong>영화제목:</strong>{bk.movieTitle}</h3>
-                                    <p style={{ margin: "4px 0" }}><strong>상영관:</strong> {bk.screenName || "-"}</p>
-                                    <p style={{ margin: "4px 0" }}><strong>좌석:</strong> {seatsText || "-"}</p>
-                                    <p style={{ margin: "4px 0" }}><strong>상영시간:</strong> {when ? `${y}-${m}-${d} ${hh}:${mi}` : "-"}{endWhen ? ` ~ ${eh}:${emi}` : ""}</p>
+                                    <h3 style={{ margin: "4px 0" }}><strong>영화제목 :</strong> {bk.movieTitle}</h3>
+                                    <p style={{ margin: "4px 0" }}><strong>상영관 :</strong> {bk.screenName || "-"}</p>
+                                    <p style={{ margin: "4px 0" }}><strong>좌석 :</strong> {seatsText || "-"}</p>
+                                    <p style={{ margin: "4px 0" }}><strong>상영시간 :</strong> {when ? `${y}-${m}-${d} ${hh}:${mi}` : "-"}{endWhen ? ` ~ ${eh}:${emi}` : ""}</p>
                                     <div style={{ marginTop: "8px" }}>
                                         <button
                                             type="button"
                                             onClick={() => openDetail(bk)}
                                             style={{ fontSize: 12, padding: "6px 10px", border: "1px solid #ddd", borderRadius: 6, background: "#f8f8f8" }}
                                         >
-                                            상세보기
+                                            티켓보기
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleCancel(bk)}
+                                            disabled={!cancellable || cancelingId === bk.bookingId}
+                                            title={!cancellable ? "상영 30분 전 이후에는 취소할 수 없습니다" : ""}
+                                            style={{
+                                                fontSize: 12,
+                                                padding: "6px 10px",
+                                                border: "1px solid #ddd",
+                                                borderRadius: 6,
+                                                background: (!cancellable || cancelingId === bk.bookingId) ? "#eee" : "#f8f8f8",
+                                                color: (!cancellable || cancelingId === bk.bookingId) ? "#999" : "inherit",
+                                                cursor: (!cancellable || cancelingId === bk.bookingId) ? "not-allowed" : "pointer"
+                                            }}
+                                        >
+                                            {cancelingId === bk.bookingId ? "취소 중..." : "예매취소"}
                                         </button>
                                     </div>
                                 </div>
@@ -274,35 +330,37 @@ const MyBookings = () => {
                     })}
                 </div>
             )}
-            <Modal isOpen={detailOpen} onClose={() => setDetailOpen(false)}>
+            <Modal isOpen={detailOpen} onClose={() => setDetailOpen(false)}
+                   contentStyle={{ width: "min(92vw, 720px)", padding: 20, borderRadius: 10, backgroundColor: "#fff" }}
+            >
                 {detailData ? (
                     <div style={{ maxWidth: 520 }}>
                         <p style={{ margin: "4px 0" }}>
-                            <strong>제목:</strong>{" "}
+                            <strong>제목 :</strong>{" "}
                             {detailData.movieTitle}
                         </p>
                         <p style={{ margin: "4px 0" }}>
-                            <strong>상영관:</strong>{" "}
+                            <strong>상영관 :</strong>{" "}
                             {detailData.screenName || "-"}
                         </p>
                         <p style={{ margin: "4px 0" }}>
-                            <strong>좌석:</strong>{" "}
+                            <strong>좌석 :</strong>{" "}
                             {Array.isArray(detailData.seats) && detailData.seats.length > 0 ? detailData.seats.join(", ") : "-"}
                         </p>
                         <p style={{ margin: "4px 0" }}>
-                            <strong>상영시간:</strong>{" "}
+                            <strong>상영시간 :</strong>{" "}
                             {detailData.screeningStartAt ? new Date(detailData.screeningStartAt).toLocaleString() : "-"}
                         </p>
                         <p style={{ margin: "4px 0" }}>
-                            <strong>종료시간:</strong>{" "}
+                            <strong>종료시간 :</strong>{" "}
                             {detailData.screeningEndAt ? new Date(detailData.screeningEndAt).toLocaleString() : "-"}
                         </p>
                         <p style={{ margin: "4px 0" }}>
-                            <strong>예매일시:</strong>{" "}
+                            <strong>예매일시 :</strong>{" "}
                             {detailData.bookingTime ? new Date(detailData.bookingTime).toLocaleString() : "-"}
                         </p>
                         <p style={{ margin: "4px 0" }}>
-                            <strong>총액:</strong>{" "}{Number(detailData.totalPrice).toLocaleString()}원
+                            <strong>총액 :</strong>{" "}{Number(detailData.totalPrice).toLocaleString()}원
                         </p>
 
                         <div style={{ marginTop: 12 }}>

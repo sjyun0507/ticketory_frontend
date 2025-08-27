@@ -26,6 +26,7 @@ const AdminMovieDetail = () => {
     // 폼 상태
     const [form, setForm] = useState({
       title: "",
+      subTitle: "",
       genre: "",
       runningMinutes: "",
       status: true,
@@ -44,10 +45,12 @@ const AdminMovieDetail = () => {
                 setLoading(true);
                 setErr(null);
                 const data = await getAdminMovieById(id);
+                console.log("[AdminMovieDetail] fetched movie keys:", data && typeof data === "object" ? Object.keys(data) : data);
                 if (!mounted) return;
 
                 setForm({
                   title: data.title ?? data.name ?? "",
+                  subTitle: data.subTitle ?? data.subtitle ?? data.originalTitle ?? data.original_title ?? data.sub_title ?? "",
                   genre: data.genre ?? (Array.isArray(data.genres) ? data.genres.join(", ") : ""),
                   runningMinutes: (typeof data.runningMinutes === "number" || typeof data.runningMinutes === "string")
                     ? String(data.runningMinutes)
@@ -81,6 +84,8 @@ const AdminMovieDetail = () => {
 
         const payload = {
           title: form.title.trim(),
+          subTitle: form.subTitle.trim(),
+          originalTitle: form.subTitle.trim(),
           genre: form.genre.trim(),
           runningMinutes: form.runningMinutes !== "" ? Number(form.runningMinutes) : null,
           status: !!form.status,
@@ -149,6 +154,19 @@ const AdminMovieDetail = () => {
                                 onChange={onChange("title")}
                                 className="w-full rounded border px-3 py-2"
                                 placeholder="영화 제목"
+                                required
+                            />
+                        </div>
+
+                        {/* 부제목 */}
+                        <div>
+                            <label className="block text-sm font-medium mb-1">부제목</label>
+                            <input
+                                type="text"
+                                value={form.subTitle}
+                                onChange={onChange("subTitle")}
+                                className="w-full rounded border px-3 py-2"
+                                placeholder="영화 부제목"
                                 required
                             />
                         </div>

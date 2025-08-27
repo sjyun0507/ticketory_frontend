@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams} from 'react-router-dom';
 import { useMovieDetail } from '../../hooks/useMovies.js';
+import { computeMovieStatus } from '../../utils/movieStatus.js';
 
 // ===== UI Components =====
 const SectionTitle = ({ children }) => (
@@ -241,6 +242,12 @@ export default function MovieDetail() {
         [posterList, stills, mediaImages]
     );
 
+    // 영화 상영 상태 계산 (공통 유틸 사용)
+    const movieStatus = useMemo(() => computeMovieStatus(movie), [movie]);
+    const isNowShowing = movieStatus === 'NOW_SHOWING';
+    const isComingSoon = movieStatus === 'COMING_SOON';
+    const isFinished   = movieStatus === 'FINISHED';
+
 
     // 예고편: trailerUrl 우선
     const rawTrailers = useMemo(() => {
@@ -333,7 +340,7 @@ export default function MovieDetail() {
     if (!movie) return <div className="p-6 text-gray-700">영화 데이터를 찾을 수 없습니다. (id: {movieId})</div>;
 
     return (
-        <div className="mx-auto max-w-[1200px] p-4">
+        <div className="mx-auto max-w-[1200px] px-4 py-10 ">
             <div className="grid gap-6 md:grid-cols-3">
                 {/* 좌: 대표 포스터*/}
                 <div className="md:col-span-1 md:sticky md:top-6 self-start">
@@ -419,14 +426,46 @@ export default function MovieDetail() {
                     )}
 
                     <div className="p-3 pt-2">
-                        <button
-                            type="button"
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/booking?movieId=${movieId}`); }}
-                            className="w-1/3 bg-sky-600  text-white py-2 rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-                            aria-label={`${title} 예매하기`}
-                        >
-                            예매하기
-                        </button>
+                        {isNowShowing ? (
+                            <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/booking?movieId=${movieId}`); }}
+                                className="w-1/3 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
+                                aria-label={`${title} 예매하기`}
+                            >
+                                예매하기
+                            </button>
+                        ) : isComingSoon ? (
+                            <button
+                                type="button"
+                                disabled
+                                aria-disabled="true"
+                                className="w-1/3 py-2 rounded bg-gray-300 text-gray-600 cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-300"
+                                title="개봉 예정 작품은 예매할 수 없습니다"
+                            >
+                                개봉예정
+                            </button>
+                        ) : isFinished ? (
+                            <button
+                                type="button"
+                                disabled
+                                aria-disabled="true"
+                                className="w-1/3 py-2 rounded bg-gray-300 text-gray-600 cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-300"
+                                title="상영이 종료된 작품입니다"
+                            >
+                                상영종료
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                disabled
+                                aria-disabled="true"
+                                className="w-1/3 py-2 rounded bg-gray-300 text-gray-600 cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-300"
+                                title="예매 정보를 불러올 수 없습니다"
+                            >
+                                예매불가
+                            </button>
+                        )}
                     </div>
 
                     {/* 예고편: 중앙 정렬 + 너비 통일 */}

@@ -380,12 +380,12 @@ const Bookings = () => {
         </aside>
 
         {/* 우측: 시간표 */}
-        <section className="md:col-span-7 lg:col-span-8">
+        <section className="md:col-span-7 lg:col-span-8 ">
           <div className="rounded-xl border bg-white/70 backdrop-blur flex flex-col h-full">
             <div className="px-4 py-3 border-b bg-white/60 sticky top-0 z-10">
               <h3 className="text-base font-semibold">시간</h3>
             </div>
-            <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto">
+            <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto ">
               {screeningsLoading ? (
                 <div className="text-center text-gray-500 py-14">상영 시간을 불러오는 중...</div>
               ) : screeningsError ? (

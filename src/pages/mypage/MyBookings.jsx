@@ -299,30 +299,32 @@ const MyBookings = () => {
                                     <p style={{ margin: "4px 0" }}><strong>좌석 :</strong> {seatsText || "-"}</p>
                                     <p style={{ margin: "4px 0" }}><strong>상영시간 :</strong> {when ? `${y}-${m}-${d} ${hh}:${mi}` : "-"}{endWhen ? ` ~ ${eh}:${emi}` : ""}</p>
                                     <div style={{ marginTop: "8px" }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => openDetail(bk)}
-                                            style={{ fontSize: 12, padding: "6px 10px", border: "1px solid #ddd", borderRadius: 6, background: "#f8f8f8" }}
-                                        >
-                                            티켓보기
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleCancel(bk)}
-                                            disabled={!cancellable || cancelingId === bk.bookingId}
-                                            title={!cancellable ? "상영 30분 전 이후에는 취소할 수 없습니다" : ""}
-                                            style={{
-                                                fontSize: 12,
-                                                padding: "6px 10px",
-                                                border: "1px solid #ddd",
-                                                borderRadius: 6,
-                                                background: (!cancellable || cancelingId === bk.bookingId) ? "#eee" : "#f8f8f8",
-                                                color: (!cancellable || cancelingId === bk.bookingId) ? "#999" : "inherit",
-                                                cursor: (!cancellable || cancelingId === bk.bookingId) ? "not-allowed" : "pointer"
-                                            }}
-                                        >
-                                            {cancelingId === bk.bookingId ? "취소 중..." : "예매취소"}
-                                        </button>
+                                        <div className={"gap-2 flex"}>
+                                            <button
+                                                type="button"
+                                                onClick={() => openDetail(bk)}
+                                                style={{ fontSize: 12, padding: "6px 10px", border: "1px solid #ddd", borderRadius: 6, background: "#f8f8f8" }}
+                                            >
+                                                티켓보기
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleCancel(bk)}
+                                                disabled={!cancellable || cancelingId === bk.bookingId}
+                                                title={!cancellable ? "상영 30분 전 이후에는 취소할 수 없습니다" : ""}
+                                                style={{
+                                                    fontSize: 12,
+                                                    padding: "6px 10px",
+                                                    border: "1px solid #ddd",
+                                                    borderRadius: 6,
+                                                    background: (!cancellable || cancelingId === bk.bookingId) ? "#eee" : "#f8f8f8",
+                                                    color: (!cancellable || cancelingId === bk.bookingId) ? "#999" : "inherit",
+                                                    cursor: (!cancellable || cancelingId === bk.bookingId) ? "not-allowed" : "pointer"
+                                                }}
+                                            >
+                                                {cancelingId === bk.bookingId ? "취소 중..." : "예매취소"}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

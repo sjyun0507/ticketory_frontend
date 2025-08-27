@@ -42,7 +42,7 @@ export default function MovieCard({ movie, computeMovieStatus }) {
                     className={`w-full py-2 px-4 rounded focus:outline-none focus:ring-2 focus:ring-opacity-50 
                         ${isFinished
                             ? "bg-gray-400 text-white cursor-not-allowed"
-                            : "bg-sky-600 text-white hover:bg-indigo-600 focus:ring-violet-500"}
+                            : "bg-indigo-600 text-white hover:bg-indigo-700"}
                     `}
                     aria-label={isFinished ? `${title} 예매불가 (상영종료)` : `${title} 예매하기`}
                     data-status={derivedStatus}

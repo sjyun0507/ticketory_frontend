@@ -49,7 +49,7 @@ const Header = () => {
     const roleStr = (getRoleFromToken() || '').trim().toUpperCase();
     const isAdmin = roleStr.includes('ADMIN');
 
-    const NAV_LINK_CLS = "relative py-2 hover:text-gray-900 after:content-[''] after:absolute after:left-0 after:-bottom-2 after:h-0.5 after:w-0 after:bg-blue-600 after:transition-all after:duration-200 hover:after:w-full";
+    const NAV_LINK_CLS = "relative py-2 hover:text-gray-900 after:content-[''] after:absolute after:left-0 after:-bottom-2 after:h-0.5 after:w-0 after:bg-indigo-600 after:transition-all after:duration-200 hover:after:w-full";
 
     const MenuLink = ({ to, children }) => (
       <Link

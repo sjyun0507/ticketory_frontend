@@ -270,7 +270,7 @@ const AdminMovies = () => {
           </select>
           <button
             type="submit"
-            className="h-10 rounded-md border px-4 text-sm text-gray-700 hover:bg-gray-100"
+            className="h-10 rounded-md border px-4 text-sm text-gray-700 hover:bg-gray-200"
           >
             검색
           </button>

@@ -426,7 +426,7 @@ export default function Payment() {
                             <span>-{usedPoints.toLocaleString()}원</span>
                         </div>
                     )}
-                    <div className="flex justify-between font-semibold text-lg border-t border-gray-700 pt-2">
+                    <div className="flex justify-between font-semibold text-lg border-t border-gray-500 pt-2">
                         <span>최종결제금액</span>
                         <span>{amount.value.toLocaleString()}원</span>
                     </div>
@@ -435,14 +435,14 @@ export default function Payment() {
                         <button
                             onClick={handleBack}
                             disabled={releasing}
-                            className="w-1/2 bg-gray-500 hover:bg-gray-600 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-1/2 bg-white text-gray-700 hover:bg-gray-200 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             이전
                         </button>
                         <button
                             onClick={handlePayment}
                             disabled={!ready}
-                            className="w-1/2 bg-teal-600 hover:bg-teal-700 py-2 rounded-lg"
+                            className="w-1/2 bg-indigo-600 text-white hover:bg-indigo-700 py-2 rounded-lg"
                         >
                             결제
                         </button>

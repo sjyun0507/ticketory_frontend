@@ -401,9 +401,9 @@ const Seat = () => {
                                     </svg>
                                   );
                                 } else if (status === "SOLD") {
-                                  clsParts.splice(0, clsParts.length, "cursor-pointer", "bg-zinc-700", "border-gray-300");
+                                  clsParts.splice(0, clsParts.length, "cursor-pointer", "bg-stone-500", "border-gray-300");
                                   overlay = (
-                                    <svg viewBox="0 0 20 20" className="absolute inset-0 m-auto w-3.5 h-3.5 text-white opacity-70 pointer-events-none">
+                                    <svg viewBox="0 0 20 20" className="absolute inset-0 m-auto w-3.5 h-3.5 text-white opacity-100 pointer-events-none">
                                       <line x1="4" y1="4" x2="16" y2="16" stroke="currentColor" strokeWidth="2" />
                                       <line x1="16" y1="4" x2="4" y2="16" stroke="currentColor" strokeWidth="2" />
                                     </svg>
@@ -482,7 +482,7 @@ const Seat = () => {
                   <ul className="text-xs text-gray-600 space-y-2">
                     <li className="flex items-center gap-2"><span className="inline-block w-3.5 h-3.5 rounded-sm bg-blue-600"></span>선택 좌석</li>
                     <li className="flex items-center gap-2"><span className="inline-block w-3.5 h-3.5 rounded-sm border border-gray-300"></span>선택 가능</li>
-                    <li className="flex items-center gap-2"><span className="relative inline-block w-3.5 h-3.5 rounded-sm bg-zinc-700"><svg viewBox="0 0 20 20" className="absolute inset-0 m-auto w-3 h-3 text-white opacity-70"><line x1="4" y1="4" x2="16" y2="16" stroke="currentColor" strokeWidth="2" /><line x1="16" y1="4" x2="4" y2="16" stroke="currentColor" strokeWidth="2" /></svg></span>예매완료</li>
+                    <li className="flex items-center gap-2"><span className="relative inline-block w-3.5 h-3.5 rounded-sm bg-stone-500"><svg viewBox="0 0 20 20" className="absolute inset-0 m-auto w-3 h-3 text-white opacity-70"><line x1="4" y1="4" x2="16" y2="16" stroke="currentColor" strokeWidth="2" /><line x1="16" y1="4" x2="4" y2="16" stroke="currentColor" strokeWidth="2" /></svg></span>예매완료</li>
                     <li className="flex items-center gap-2"><span className="relative inline-block w-3.5 h-3.5 rounded-sm bg-amber-100 border border-amber-300"><svg viewBox="0 0 20 20" className="absolute inset-0 m-auto w-3 h-3 text-amber-700 opacity-80"><line x1="3" y1="17" x2="17" y2="3" stroke="currentColor" strokeWidth="2" /></svg></span>임시선점</li>
                     <li className="flex items-center gap-2"><span className="relative inline-block w-3.5 h-3.5 rounded-sm bg-gray-600 border"><svg viewBox="0 0 20 20" className="absolute inset-0 m-auto w-3 h-3 text-white opacity-80"><line x1="3" y1="17" x2="17" y2="3" stroke="currentColor" strokeWidth="2" /></svg></span>미운영/통로</li>
                   </ul>
@@ -499,7 +499,7 @@ const Seat = () => {
                 <div className="mt-auto flex items-center justify-between">
                   <button
                     type="button"
-                    className="px-4 py-2 rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => {
                         if (submitting) return;
                         if (cameFromPayment) {
@@ -520,9 +520,9 @@ const Seat = () => {
                     type="button"
                     onClick={handleNext}
                     disabled={submitting || totalPeople === 0 || selected.length === 0 || (totalPeople > 0 && selected.length !== totalPeople)}
-                    className="px-5 py-2 rounded-lg text-white disabled:opacity-50 disabled:cursor-not-allowed bg-black"
+                    className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 active:bg-indigo-800"
                   >
-                    다음
+                    예매
                   </button>
                 </div>
               </aside>

@@ -43,10 +43,10 @@ const Icon = {
 const navItems = [
   { to: "/admin", label: "대시보드", icon: Icon.dashboard, end: true },
   { to: "/admin/movies", label: "영화관리", icon: Icon.movies, end: true },
-  { to: "/admin/screenings", label: "상영관리", icon: Icon.screenings, end: true },
-  { to: "/admin/pricing", label: "요금관리", icon: Icon.pricing, end: true },
-  { to: "/admin/bookings", label: "예매관리", icon: Icon.bookings },
-  { to: "/admin/event", label: "이벤트관리", icon: Icon.events, end: true },
+  { to: "/admin/screenings", label: "상영시간관리", icon: Icon.screenings, end: true },
+  { to: "/admin/pricing", label: "요금정책관리", icon: Icon.pricing, end: true },
+  { to: "/admin/bookings", label: "예매취소내역", icon: Icon.bookings },
+  { to: "/admin/event", label: "공지/이벤트게시판", icon: Icon.events, end: true },
   { to: "/admin/stats", label: "매출통계", icon: Icon.stats }
 ];
 

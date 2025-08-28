@@ -144,6 +144,7 @@ export default function PaymentSuccess() {
   // status === 'ok'
   const total = receipt?.totalAmount ?? amount;
   const approvedAt = receipt?.approvedAt || receipt?.approved_at;
+  const paymentStatus = receipt?.paymentStatus || preview?.paymentStatus;
 
   return (
     <div className="max-w-3xl mx-auto mt-16 space-y-8">
@@ -206,8 +207,13 @@ export default function PaymentSuccess() {
       {/* 이동 버튼 */}
       <div className="flex gap-2 justify-center pb-8">
         <button
+          disabled={paymentStatus === 'CANCELLED'}
           onClick={() => navigate('/mypage/bookings')}
-          className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800"
+          className={`px-4 py-2 rounded-lg 
+      ${paymentStatus === 'CANCELLED'
+        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+        : 'bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800'}
+    `}
         >
           예매내역 보기
         </button>

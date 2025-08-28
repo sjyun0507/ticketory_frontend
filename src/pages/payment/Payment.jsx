@@ -376,7 +376,7 @@ export default function Payment() {
                     {/* 할인 적용 - 포인트만 */}
                     <div>
                         <h3 className="text-lg font-semibold mb-2">할인 적용</h3>
-                        <div className="bg-gray-50 border rounded-lg p-4">
+                        <div className="bg-white border rounded-lg p-4">
                             <div className="flex justify-between items-center mb-2">
                                 <span className="text-sm font-medium">보유 포인트</span>
                                 <span className="text-amber-700 font-semibold">{availablePoints.toLocaleString()}점</span>
@@ -407,7 +407,7 @@ export default function Payment() {
                 </div>
 
                     {/* 취소/환불 정책 동의 */}
-                    <div className="mt-3 bg-zinc-300/40 rounded-lg p-3">
+                    <div className="mt-3 bg-zinc-200/40 rounded-lg p-3">
                         <label className="flex items-start gap-3 cursor-pointer">
                             <input
                                 type="checkbox"

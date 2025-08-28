@@ -82,7 +82,7 @@ const AdminBookings = () => {
         <section className="w-full">
           <div className="mb-6 flex flex-col sm:items-start sm:justify-between gap-4">
             <div>
-              <h2 className="text-2xl sm:text-3xl font-semibold">취소 로그</h2>
+              <h2 className="text-2xl sm:text-3xl font-semibold">예매 취소 내역 </h2>
             </div>
 
             <div className="flex gap-2">

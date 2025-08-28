@@ -481,7 +481,13 @@ const MyBookings = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => openDetail(bk)}
-                                                className="text-[12px] px-2.5 py-1.5 border border-gray-200 rounded bg-gray-50 hover:bg-gray-100"
+                                                disabled={bk.uiStatus === 'CANCELED'}
+                                                aria-disabled={bk.uiStatus === 'CANCELED'}
+                                                title={bk.uiStatus === 'CANCELED' ? '결제 취소된 예매는 티켓을 볼 수 없습니다' : ''}
+                                                className={`text-[12px] px-2.5 py-1.5 border border-gray-200 rounded 
+                                                    ${bk.uiStatus === 'CANCELED' 
+                                                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                                                        : 'bg-gray-50 hover:bg-gray-100'}`}
                                             >
                                                 티켓보기
                                             </button>

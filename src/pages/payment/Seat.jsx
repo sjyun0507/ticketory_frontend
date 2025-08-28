@@ -24,12 +24,172 @@ const normalizeStatus = (s) => {
   return String(s).toUpperCase();
 };
 
+
 // 가격 정책 (기본값)
 const DEFAULT_PRICE = { adult: 14000, teen: 11000 };
+
+// ----- Pricing helpers (pricing_rule: op, amount, priority, valid window, enabled) -----
+const toDate = (v) => {
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  if (typeof v === 'number') return new Date(v);
+  const s = String(v).trim();
+  // Accept both "YYYY-MM-DDTHH:mm:ss" and "YYYY-MM-DD HH:mm:ss"
+  const isoLike = s.includes('T') ? s : s.replace(' ', 'T');
+  let d = new Date(isoLike);
+  if (!isNaN(d.getTime())) return d;
+  // Fallback manual parse
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (m) {
+    const [, y, mo, da, h, mi, sec] = m;
+    d = new Date(Number(y), Number(mo) - 1, Number(da), Number(h), Number(mi), Number(sec || '0'));
+    if (!isNaN(d.getTime())) return d;
+  }
+  return null;
+};
+
+const nowIsBetween = (from, to) => {
+  const now = new Date();
+  const f = toDate(from);
+  const t = toDate(to);
+  const fromOk = !f || f <= now;
+  const toOk = !t || now <= t;
+  return fromOk && toOk;
+};
+
+const normalizeKind = (k) => (k ?? "").toString().toUpperCase();
+const normalizeOp = (op) => (op ?? "").toString().toUpperCase();
+
+/**
+ * Apply a list of pricing rules to a base price.
+ * Supports ops: SET, PLUS, MINUS, PCT_PLUS, PCT_MINUS
+ * Percent ops treat amount as percentage number (e.g., 10 => 10%).
+ * Rules are applied in ascending priority (smaller number first), then by created_at ascending if present.
+ */
+const applyPricingRules = (basePrice, rules) => {
+  if (!Array.isArray(rules) || rules.length === 0) return basePrice;
+
+  const ordered = [...rules]
+    .map(r => ({
+      ...r,
+      priority: Number(r.priority ?? r.PRIORITY ?? 9999),
+      amount: Number(r.amount ?? r.AMOUNT ?? 0),
+      valid_from: r.valid_from ?? r.validFrom ?? r.VALID_FROM,
+      valid_to: r.valid_to ?? r.validTo ?? r.VALID_TO,
+      enabled: (r.enabled ?? r.ENABLED ?? 1) ? 1 : 0,
+      created_at: r.created_at ?? r.createdAt ?? r.CREATED_AT ?? 0,
+      id: r.id ?? r.ID,
+      ID: r.ID ?? r.id,
+    }))
+    .filter(r => r.enabled === 1 && nowIsBetween(r.valid_from, r.valid_to))
+    .sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      const ia = (a.id ?? a.ID) ?? 0;
+      const ib = (b.id ?? b.ID) ?? 0;
+      if (ia !== ib) return ia - ib;
+      const da = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const db = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return da - db;
+    });
+
+  let price = Number(basePrice);
+  for (const r of ordered) {
+    const op = normalizeOp(r.op ?? r.OP);
+    const amt = Number(r.amount);
+    switch (op) {
+      case 'SET':
+        price = amt;
+        break;
+      case 'PLUS':
+        price += amt;
+        break;
+      case 'MINUS':
+        price -= amt;
+        break;
+      case 'PCT_PLUS':
+        price += price * (amt / 100);
+        break;
+      case 'PCT_MINUS':
+        price -= price * (amt / 100);
+        break;
+      default:
+        // Unknown op: ignore
+        break;
+    }
+  }
+  // Guardrails: no negative price
+  return Math.max(0, Math.round(price));
+};
+
+// Traced variant: returns { price, trace[] }
+const applyPricingRulesWithTrace = (basePrice, rules) => {
+  if (!Array.isArray(rules) || rules.length === 0) return { price: Math.max(0, Math.round(basePrice)), trace: [] };
+
+  const ordered = [...rules]
+    .map(r => ({
+      ...r,
+      priority: Number(r.priority ?? r.PRIORITY ?? 9999),
+      amount: Number(r.amount ?? r.AMOUNT ?? 0),
+      valid_from: r.valid_from ?? r.validFrom ?? r.VALID_FROM,
+      valid_to: r.valid_to ?? r.validTo ?? r.VALID_TO,
+      enabled: (r.enabled ?? r.ENABLED ?? 1) ? 1 : 0,
+      created_at: r.created_at ?? r.createdAt ?? r.CREATED_AT ?? 0,
+      id: r.id ?? r.ID,
+      ID: r.ID ?? r.id,
+    }))
+    .filter(r => r.enabled === 1 && nowIsBetween(r.valid_from, r.valid_to))
+    .sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      const ia = (a.id ?? a.ID) ?? 0;
+      const ib = (b.id ?? b.ID) ?? 0;
+      if (ia !== ib) return ia - ib;
+      const da = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const db = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return da - db;
+    });
+
+  let price = Number(basePrice);
+  const trace = [];
+  for (const r of ordered) {
+    const op = normalizeOp(r.op ?? r.OP);
+    const amt = Number(r.amount);
+    const before = price;
+    switch (op) {
+      case 'SET':
+        price = amt; break;
+      case 'PLUS':
+        price += amt; break;
+      case 'MINUS':
+        price -= amt; break;
+      case 'PCT_PLUS':
+        price += price * (amt / 100); break;
+      case 'PCT_MINUS':
+        price -= price * (amt / 100); break;
+      default:
+        // ignore unknown op
+        break;
+    }
+    trace.push({ id: r.id, op, amount: amt, priority: r.priority, before, after: price });
+  }
+  price = Math.max(0, Math.round(price));
+  return { price, trace };
+};
+
+const formatOpLabel = (op, amount) => {
+  switch (normalizeOp(op)) {
+    case 'SET': return `정가 ${Number(amount).toLocaleString()}원`;
+    case 'PLUS': return `가산 ${Number(amount).toLocaleString()}원`;
+    case 'MINUS': return `프로모션 할인 ${Number(amount).toLocaleString()}원`;
+    case 'PCT_PLUS': return `가산 ${Number(amount)}%`;
+    case 'PCT_MINUS': return `프로모션 할인 ${Number(amount)}%`;
+    default: return `${op} ${amount}`;
+  }
+};
 
 const Seat = () => {
   // 동적 가격: screen_id + kind(ADULT/TEEN) 기반
   const [price, setPrice] = useState(DEFAULT_PRICE);
+  const [promo, setPromo] = useState({ adult: [], teen: [] });
 
   // seat-map 응답에서 screen_id 추출 시도
   const resolveScreenId = React.useCallback((payload) => {
@@ -106,25 +266,51 @@ const Seat = () => {
           const sid = resolveScreenId(data);
           if (!sid) return; // 좌석 데이터에 screen_id가 없으면 기본가 유지
 
-            const list = await getPricingRules(Number(sid));
+          const list = await getPricingRules(Number(sid));
+          try {
+            console.groupCollapsed('[pricing] rules raw');
+            console.table(list.map(r => ({ id: r.id ?? r.ID, kind: r.kind ?? r.KIND, op: r.op ?? r.OP, amount: r.amount, priority: r.priority, valid_from: r.valid_from ?? r.validFrom, valid_to: r.valid_to ?? r.validTo, enabled: r.enabled })));
+            console.groupEnd();
+          } catch (_) {}
 
-          // kind(TEEN, ADULT)별로 priority가 가장 높은(숫자 작을수록 우선) 규칙을 선택
-          const pickByKind = (kind) => {
-            const candidates = list
-              .filter(r => (r.kind ?? r.KIND ?? "").toString().toUpperCase() === kind)
-              .map(r => ({
-                amount: Number(r.amount ?? r.AMOUNT ?? 0),
-                priority: Number(r.priority ?? r.PRIORITY ?? 9999)
-              }))
-              .sort((a, b) => a.priority - b.priority);
-            return candidates.length ? candidates[0].amount : undefined;
-          };
+          // Group rules by kind and apply ops in priority order
+          const byKind = list.reduce((acc, r) => {
+            const k = normalizeKind(r.kind ?? r.KIND);
+            (acc[k] ||= []).push(r);
+            return acc;
+          }, {});
 
-          const next = {
-            adult: pickByKind("ADULT") ?? DEFAULT_PRICE.adult,
-            teen: pickByKind("TEEN") ?? DEFAULT_PRICE.teen,
-          };
-          if (!cancel) setPrice(next);
+          const adultBase = DEFAULT_PRICE.adult;
+          const teenBase = DEFAULT_PRICE.teen;
+
+          // Backend: null/ALL/CHILD/UNKNOWN are treated as global rules
+          const common = [
+            ...(byKind[''] || []),
+            ...(byKind['ALL'] || []),
+            ...(byKind['CHILD'] || []),
+            ...(byKind['UNKNOWN'] || []),
+          ];
+
+          const adultRes = applyPricingRulesWithTrace(adultBase, [...common, ...(byKind['ADULT'] || [])]);
+          const teenRes  = applyPricingRulesWithTrace(teenBase,  [...common, ...(byKind['TEEN']  || [])]);
+
+          const next = { adult: adultRes.price, teen: teenRes.price };
+          if (!cancel) {
+            setPrice(next);
+            setPromo({ adult: adultRes.trace, teen: teenRes.trace });
+          }
+
+          // Console diagnostics
+          try {
+            console.groupCollapsed('[pricing] 계산 결과 (screen_id=' + sid + ')');
+            console.log('기본가(adult):', adultBase.toLocaleString(), '원');
+            adultRes.trace.forEach((t, i) => console.log(`ADULT #${i+1}`, t.op, t.amount, '→', Math.round(t.after).toLocaleString()));
+            console.log('최종(adult):', adultRes.price.toLocaleString(), '원');
+            console.log('기본가(teen):', teenBase.toLocaleString(), '원');
+            teenRes.trace.forEach((t, i) => console.log(`TEEN  #${i+1}`, t.op, t.amount, '→', Math.round(t.after).toLocaleString()));
+            console.log('최종(teen):', teenRes.price.toLocaleString(), '원');
+            console.groupEnd();
+          } catch (_) {}
         } catch (e) {
           console.warn("[pricing] load failed, fallback to default", e?.response?.status, e?.response?.data || e);
           if (!cancel) setPrice(DEFAULT_PRICE);
@@ -490,10 +676,28 @@ const Seat = () => {
 
                 {/* 가격 요약 (하단 고정) */}
                 <div className="text-sm border rounded p-3 mb-4 mt-auto  bg-gray-100">
-                    <div className="flex justify-between mb-1"><span>성인 × {people.adult}</span><span>{(people.adult * price.adult).toLocaleString()}원</span></div>
-                    <div className="flex justify-between mb-2"><span>청소년 × {people.teen}</span><span>{(people.teen * price.teen).toLocaleString()}원</span></div>
-                    <div className="h-px bg-gray-200 my-2" />
-                    <div className="flex justify-between font-semibold text-base"><span>합계</span><span>{totalAmount.toLocaleString()}원</span></div>
+                  <div className="flex justify-between mb-1"><span>성인 × {people.adult}</span><span>{(people.adult * price.adult).toLocaleString()}원</span></div>
+                  {promo.adult?.length > 0 && (
+                    <div className="text-xs text-gray-600 mb-2 pl-1">
+                      <div className="flex items-start gap-1">
+                        <span className="inline-block mt-0.5">•</span>
+                        <span>금액 : {promo.adult.map(p => formatOpLabel(p.op, p.amount)).join(', ')}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between mb-2"><span>청소년 × {people.teen}</span><span>{(people.teen * price.teen).toLocaleString()}원</span></div>
+                  {promo.teen?.length > 0 && (
+                    <div className="text-xs text-gray-600 mb-2 pl-1">
+                      <div className="flex items-start gap-1">
+                        <span className="inline-block mt-0.5">•</span>
+                        <span>금액 : {promo.teen.map(p => formatOpLabel(p.op, p.amount)).join(', ')}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="h-px bg-gray-200 my-2" />
+                  <div className="flex justify-between font-semibold text-base"><span>합계</span><span>{totalAmount.toLocaleString()}원</span></div>
                 </div>
 
                 <div className="mt-auto flex items-center justify-between">

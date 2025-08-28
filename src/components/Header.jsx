@@ -125,14 +125,6 @@ const Header = () => {
                             </button>
                         </>
                     )}
-                    {isAdmin && (
-                        <button
-                            onClick={() => navigate('/admin')}
-                            className="text-xs text-rose-700 font-semibold px-1 rounded hover:bg-rose-50"
-                        >
-                            관리자
-                        </button>
-                    )}
                 </div>
             </div>
 
@@ -149,10 +141,11 @@ const Header = () => {
                     {/* 메뉴 */}
                     <nav className="flex items-center space-x-9 text-gray-700 text-base md:text-xl font-medium">
                         <MenuLink to="/">영화</MenuLink>
-                        <MenuLink to="/booking">예매</MenuLink>
-                        <MenuLink to="/screenings">상영시간표</MenuLink>
-                        <MenuLink to="/story">스토리</MenuLink>
-                        <MenuLink to="/events">이벤트</MenuLink>
+                        <MenuLink to="/booking">빠른 예매</MenuLink>
+                        <MenuLink to="/screenings">상영 시간표</MenuLink>
+                        <MenuLink to="/story">티켓스토리</MenuLink>
+                        <MenuLink to="/events">이벤트/공지</MenuLink>
+                        {isAdmin && <MenuLink to="/admin">관리자 페이지</MenuLink>}
                     </nav>
 
                     {/* 오른쪽 아이콘 */}

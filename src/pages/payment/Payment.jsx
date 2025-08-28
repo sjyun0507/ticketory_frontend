@@ -68,6 +68,7 @@ export default function Payment() {
     const [widgets, setWidgets] = useState(null);
     const [amount, setAmount] = useState({ currency: 'KRW', value: initialAmountValue });
     const [ready, setReady] = useState(false);
+    const [policyAgreed, setPolicyAgreed] = useState(false);
 
     const [availablePoints, setAvailablePoints] = useState(0);
 
@@ -249,6 +250,9 @@ export default function Payment() {
     };
 
     const handlePayment = async () => {
+        if (!policyAgreed) {
+          return alert('취소/환불 정책에 동의해 주세요.');
+        }
         if (!ready) return alert('결제 수단 준비 중입니다.');
         try {
             const finalAmount = amount.value;
@@ -401,6 +405,25 @@ export default function Payment() {
                   {/* 약관 영역도 동일 폭 유지 */}
                   <div id="agreement" className="mt-4 w-full" />
                 </div>
+
+                    {/* 취소/환불 정책 동의 */}
+                    <div className="mt-3 bg-zinc-300/40 rounded-lg p-3">
+                        <label className="flex items-start gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="mt-1"
+                                checked={policyAgreed}
+                                onChange={(e) => setPolicyAgreed(e.target.checked)}
+                            />
+                            <div>
+                                <p className="font-medium">취소/환불 정책에 대한 동의</p>
+                                <ul className="text-xs text-zinc-700 list-disc pl-5 space-y-1 pt-2">
+                                    <li>온라인 예매는 영화 상영시간 30분전까지 취소 가능하며, 30분 이후 현장 취소만 가능합니다.</li>
+                                    <li>현장 취소 시 영화 상영시간 이전까지만 가능합니다.</li>
+                                </ul>
+                            </div>
+                        </label>
+                    </div>
                 </div>
 
                 {/* 결제 금액 박스 */}
@@ -430,7 +453,7 @@ export default function Payment() {
                         <span>최종결제금액</span>
                         <span>{amount.value.toLocaleString()}원</span>
                     </div>
-                    {/* Toss 결제 위젯 영역이 좌측으로 이동됨 */}
+
                     <div className="flex gap-3 mt-4">
                         <button
                             onClick={handleBack}
@@ -441,8 +464,9 @@ export default function Payment() {
                         </button>
                         <button
                             onClick={handlePayment}
-                            disabled={!ready}
-                            className="w-1/2 bg-indigo-600 text-white hover:bg-indigo-700 py-2 rounded-lg"
+                            disabled={!ready || !policyAgreed}
+                            className="w-1/2 bg-indigo-600 text-white hover:bg-indigo-700 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={!policyAgreed ? '취소/환불 정책에 동의해 주세요.' : undefined}
                         >
                             결제
                         </button>

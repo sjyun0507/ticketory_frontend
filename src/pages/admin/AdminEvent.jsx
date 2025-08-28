@@ -1,5 +1,6 @@
 // NoticeBoard.jsx
 import React, { useState } from "react";
+import {AdminLayout} from "../../components/AdminSidebar.jsx";
 
 const AdminEvent = () => {
     // 초기 공지사항 데이터
@@ -69,6 +70,7 @@ const AdminEvent = () => {
     };
 
     return (
+        <AdminLayout>
         <div className="max-w-4xl mx-auto px-6 py-10">
             <h1 className="text-3xl font-bold mb-6">공지사항 게시판</h1>
 
@@ -164,6 +166,7 @@ const AdminEvent = () => {
                 )}
             </div>
         </div>
+        </AdminLayout>
     );
 };
 

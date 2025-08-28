@@ -18,8 +18,14 @@ export function AdminSidebar() {
                 <NavLink to="/admin/screenings" end className={({isActive}) => (isActive ? `${item} ${active}` : item)}>
                     상영관리
                 </NavLink>
+                <NavLink to="/admin/pricing" end className={({isActive}) => (isActive ? `${item} ${active}` : item)}>
+                    요금관리
+                </NavLink>
                 <NavLink to="/admin/bookings" className={({isActive}) => (isActive ? `${item} ${active}` : item)}>
-                    회원관리
+                    예매관리
+                </NavLink>
+                <NavLink to="/admin/event" end className={({isActive}) => (isActive ? `${item} ${active}` : item)}>
+                    이벤트관리
                 </NavLink>
                 <NavLink to="/admin/stats" className={({isActive}) => (isActive ? `${item} ${active}` : item)}>
                     매출통계

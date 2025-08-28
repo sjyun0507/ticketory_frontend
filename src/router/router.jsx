@@ -23,6 +23,8 @@ import PaymentSuccess from "../pages/payment/PaymentSuccess.jsx";
 import PaymentFail from "../pages/payment/PaymentFail.jsx";
 import AdminMovieDetail from "../pages/admin/AdminMovieDetail.jsx";
 import PointsHistory from "../pages/mypage/PointHistory.jsx";
+import AdminEvent from "../pages/admin/AdminEvent.jsx";
+import AdminPricing from "../pages/admin/AdminPricing.jsx";
 
 const routes = [
     {path: "/", element: <Home/>},
@@ -63,6 +65,8 @@ const routes = [
             { path: "bookings", element: <AdminBookings /> },
             { path: "screenings", element: <AdminScreenings /> },
             { path: "movies", element: <AdminMovies /> },
+            { path: "pricing", element: <AdminPricing /> },
+            { path: "event", element: <AdminEvent /> },
             { path: "stats", element: <AdminStats /> },
             { path: "movies/:id", element: <AdminMovieDetail /> },
         ],

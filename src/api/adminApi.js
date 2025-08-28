@@ -11,7 +11,7 @@ export async function getAdminMovies(params = {}) {
 // 상영관 목록 (Admin) GET /admin/screens
 export async function getAdminScreens(params = {}) {
   const { page = 0, size = 50, ...rest } = params;
-  const res = await api.get("/admin/screens", { params: { page, size, ...rest } });
+  const res = await api.get("/admin/screen", { params: { page, size, ...rest } });
   return res.data;
 }
 

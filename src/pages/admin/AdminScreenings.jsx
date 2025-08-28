@@ -57,7 +57,7 @@ const AdminScreenings = () => {
       d.getFullYear() +
       "-" + pad(d.getMonth() + 1) +
       "-" + pad(d.getDate()) +
-      " " + pad(d.getHours()) +
+      "T" + pad(d.getHours()) +
       ":" + pad(d.getMinutes()) +
       ":" + pad(d.getSeconds())
     );
@@ -318,6 +318,7 @@ const AdminScreenings = () => {
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-gray-600r">
                 <tr>
+                  <th className="px-4 py-3 text-left">ID</th>
                   <th className="px-4 py-3 text-left">영화제목</th>
                   <th className="px-4 py-3 text-left">상영관</th>
                   <th className="px-4 py-3 text-left">시작시간</th>
@@ -333,8 +334,10 @@ const AdminScreenings = () => {
                   const screen = s.screenName ?? s.screen?.name ?? s.screenId ?? s.screen_id ?? "-";
                   const status = s.status ?? s.enabled ?? s.active ?? "";
                   const rowKey = id ? String(id) : `row-${idx}`;
+                  const movieIdCol = s.movieId ?? s.movie?.id ?? s.movie?.movieId ?? s.movie_id ?? s.movie?.movie_id ?? "";
                   return (
                     <tr key={rowKey}>
+                      <td className="px-4 py-3">{String(movieIdCol)}</td>
                       <td className="px-4 py-3">{movie}</td>
                       <td className="px-4 py-3">{screen}</td>
                       <td className="px-4 py-3">{fmt(s.startAt ?? s.start_at ?? s.start)}</td>

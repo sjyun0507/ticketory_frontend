@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAdminMovies, getAdminScreens } from "../../api/adminApi.js";
-import {AdminLayout} from "../../components/AdminSidebar.jsx";
+import { AdminLayout } from "../../components/AdminSidebar.jsx";
 import ReactDOM from "react-dom";
 import { createScreening, fetchScreenings, updateScreening, deleteScreening } from "../../api/adminScreeningApi.js";
+import { computeMovieStatus } from "../../utils/movieStatus.js";
 
 
 const AdminScreenings = () => {
@@ -44,6 +45,71 @@ const AdminScreenings = () => {
       m.runningTime ?? m.runningMinutes ?? m.runtime ?? m.durationMinutes ?? m.duration ?? m.lengthMinutes ?? 0
     );
   };
+  // Sorting controls (must be top-level hooks)
+  const [sortKey, setSortKey] = useState("start");
+  const [sortAsc, setSortAsc] = useState(true);
+  // --- Filter controls ---
+  const [filterTitle, setFilterTitle] = useState("");
+  const [filterScreen, setFilterScreen] = useState("");
+  // --- Sorting helpers (top-level, not inside render condition) ---
+  const keyExtractors = {
+    movieId: (s) => s.movieId ?? s.movie?.id ?? s.movie?.movieId ?? s.movie_id ?? s.movie?.movie_id ?? "",
+    title: (s) => s.movieTitle ?? s.movie?.title ?? s.title ?? "",
+    screen: (s) => s.screenName ?? s.screen?.name ?? s.screenId ?? s.screen_id ?? "",
+    start: (s) => {
+      const t = (new Date(s.startAt ?? s.start_at ?? s.start)).getTime();
+      return isNaN(t) ? 0 : t;
+    },
+    end: (s) => {
+      const t = (new Date(s.endAt ?? s.end_at ?? s.end)).getTime();
+      return isNaN(t) ? 0 : t;
+    },
+    // status removed for sorting
+  };
+
+  // --- Filtered items ---
+  const filteredItems = React.useMemo(() => {
+    const titleKeyword = filterTitle.trim().toLowerCase();
+    const screenKeyword = filterScreen.trim().toLowerCase();
+    return (Array.isArray(items) ? items : []).filter((s) => {
+      const title = (s.movieTitle ?? s.movie?.title ?? s.title ?? "").toString().toLowerCase();
+      const screen = (s.screenName ?? s.screen?.name ?? s.screenId ?? s.screen_id ?? "").toString().toLowerCase();
+      const titleOk = titleKeyword ? title.includes(titleKeyword) : true;
+      const screenOk = screenKeyword ? screen.includes(screenKeyword) : true;
+      return titleOk && screenOk;
+    });
+  }, [items, filterTitle, filterScreen]);
+
+  const sortedItems = React.useMemo(() => {
+    const arr = Array.isArray(filteredItems) ? [...filteredItems] : [];
+    const extractor = keyExtractors[sortKey] ?? (() => "");
+    arr.sort((a, b) => {
+      const av = extractor(a);
+      const bv = extractor(b);
+      if (av < bv) return sortAsc ? -1 : 1;
+      if (av > bv) return sortAsc ? 1 : -1;
+      return 0;
+    });
+    return arr;
+  }, [filteredItems, sortKey, sortAsc]);
+
+  const toggleSort = React.useCallback((key) => {
+    setSortKey((prev) => (prev === key ? prev : key));
+    setSortAsc((prev) => (sortKey === key ? !prev : true));
+  }, [sortKey]);
+
+  const sortArrow = React.useCallback((key) => (sortKey === key ? (sortAsc ? "▲" : "▼") : ""), [sortKey, sortAsc]);
+
+    const renderArrowPair = React.useCallback((key) => {
+        const upActive = sortKey === key && sortAsc === true;
+        const downActive = sortKey === key && sortAsc === false;
+        return (
+            <span className="ml-1 inline-flex flex-col leading-none align-middle select-none">
+      <span className={upActive ? "opacity-100 font-semibold" : "opacity-40"}>▲</span>
+      <span className={downActive ? "opacity-100 font-semibold" : "opacity-40"}>▼</span>
+    </span>
+        );
+    }, [sortKey, sortAsc]);
 
   const addMinutes = (dt, minutes) => {
     const d = new Date(dt);
@@ -97,6 +163,34 @@ const AdminScreenings = () => {
     return d;
   };
 
+  // --- Helper utilities for status checks, overlap detection, and error extraction ---
+
+  const parseDate = (v) => {
+    if (!v) return null;
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) return d;
+    const s = String(v).replace(" ", "T");
+    const d2 = new Date(s);
+    return isNaN(d2.getTime()) ? null : d2;
+  };
+
+  const intervalsOverlap = (aStart, aEnd, bStart, bEnd) => {
+    return aStart < bEnd && bStart < aEnd;
+  };
+
+  const getErrorMessage = (e) => {
+    const status = e?.response?.status;
+    const serverMsg = e?.response?.data?.message ?? e?.response?.data?.error ?? e?.response?.data?.detail;
+    if (status) {
+      return `[${status}] ${serverMsg || e.message || "요청 처리 중 오류가 발생했습니다."}`;
+    }
+    if (e?.request && !e?.response) {
+      // Network layer (CORS / 네트워크 / 서버 다운 등)
+      return `네트워크 오류로 요청이 실패했어요. (서버 응답 없음) 상세: ${e.message || "알 수 없음"}`;
+    }
+    return e?.message || "알 수 없는 오류가 발생했습니다.";
+  };
+
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -133,10 +227,17 @@ const AdminScreenings = () => {
         };
         const mList = toList(mData);
         const sList = toList(sData);
+        const playableMovies = mList.filter((m) => {
+          const st = (computeMovieStatus(m) || "").toString().toUpperCase();
+          return !(st.includes("FINISHED"));
+        });
         if (alive) {
-          setMovies(mList);
+          setMovies(playableMovies);
           setScreens(sList);
-          if (mList.length === 0) console.warn("[AdminScreenings] 영화 목록이 비어있습니다. 응답:", mData);
+          if (mList.length !== playableMovies.length) {
+            console.warn(`[AdminScreenings] 종료된 영화 ${mList.length - playableMovies.length}건이 제외되었습니다.`);
+          }
+          if (playableMovies.length === 0) console.warn("[AdminScreenings] 표시 가능한 영화가 없습니다. 응답:", mData);
           if (sList.length === 0) console.warn("[AdminScreenings] 상영관 목록이 비어있습니다. 응답:", sData);
         }
       } catch (e) {
@@ -194,14 +295,38 @@ const AdminScreenings = () => {
   const handleCreate = async () => {
     const schedule = buildSchedule();
     if (!schedule.length) return;
+    // Overlap check with existing screenings on the same screen
+    const screenId = Number(form.screenId);
+    const existingOnScreen = items.filter((x) => {
+      const scId = Number(x.screenId ?? x.screen?.id ?? x.screen?.screenId ?? x.screen_id);
+      return scId === screenId;
+    });
+    const overlaps = [];
+    for (const slot of schedule) {
+      for (const ex of existingOnScreen) {
+        const exStart = parseDate(ex.startAt ?? ex.start_at ?? ex.start);
+        const exEnd = parseDate(ex.endAt ?? ex.end_at ?? ex.end);
+        if (!exStart || !exEnd) continue;
+        if (intervalsOverlap(slot.start, slot.end, exStart, exEnd)) {
+          overlaps.push({ slot, ex });
+        }
+      }
+    }
+    if (overlaps.length > 0) {
+      const msg = overlaps.slice(0, 5).map((o, i) => {
+        return `#${i + 1}) ${toLocalIso(o.slot.start)} ~ ${toLocalIso(o.slot.end)} 가 기존 상영(${fmt(o.ex.startAt ?? o.ex.start_at ?? o.ex.start)} ~ ${fmt(o.ex.endAt ?? o.ex.end_at ?? o.ex.end)})과 겹칩니다.`;
+      }).join("\n");
+      alert("선택한 상영관의 기존 상영시간과 겹치므로 생성할 수 없습니다.\n\n" + msg + (overlaps.length > 5 ? `\n...외 ${overlaps.length - 5}건` : ""));
+      return;
+    }
     setSubmitting(true);
     try {
       const movie = movies.find((m) => String(m.id ?? m.movieId) === String(form.movieId));
-      const screenId = form.screenId;
+      const screenIdStr = form.screenId;
       for (const slot of schedule) {
         const payload = {
           movieId: Number(form.movieId),
-          screenId: Number(screenId),
+          screenId: Number(screenIdStr),
           startAt: toLocalIso(slot.start),
           endAt: toLocalIso(slot.end)
         };
@@ -218,9 +343,10 @@ const AdminScreenings = () => {
       setItems(list);
     } catch (e) {
       console.error(e);
-      alert(e?.response?.data?.message || e.message || "상영 생성에 실패했습니다.");
+      alert(getErrorMessage(e));
     } finally {
-      setSubmitting(false);
+        setSubmitting(false);
+        setLoading(false);
     }
   };
 
@@ -260,7 +386,7 @@ const AdminScreenings = () => {
       setIsEditOpen(false);
     } catch (e) {
       console.error(e);
-      alert(e?.response?.data?.message || e.message || "수정에 실패했습니다.");
+      alert(getErrorMessage(e));
     } finally {
       setSubmitting(false);
     }
@@ -278,7 +404,7 @@ const AdminScreenings = () => {
       setIsEditOpen(false);
     } catch (e) {
       console.error(e);
-      alert(e?.response?.data?.message || e.message || "삭제에 실패했습니다.");
+      alert(getErrorMessage(e));
     } finally {
       setSubmitting(false);
     }
@@ -313,26 +439,68 @@ const AdminScreenings = () => {
           </div>
         )}
 
+        {/* Filters */}
+        <div className="mb-3 flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-gray-600">영화 제목</span>
+            <input
+              type="text"
+              className="h-10 w-52 rounded border px-3 text-sm"
+              placeholder="제목 검색"
+              value={filterTitle}
+              onChange={(e) => setFilterTitle(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+              <span className="text-xs text-gray-600">상영관</span>
+            <input
+              type="text"
+              className="h-10 w-52 rounded border px-3 text-sm"
+              placeholder="상영관명/ID 검색"
+              value={filterScreen}
+              onChange={(e) => setFilterScreen(e.target.value)}
+            />
+          </label>
+        </div>
+
         {!loading && !err && items.length > 0 && (
           <div className="overflow-x-auto rounded-lg border bg-white">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-gray-600r">
                 <tr>
-                  <th className="px-4 py-3 text-left">ID</th>
-                  <th className="px-4 py-3 text-left">영화제목</th>
-                  <th className="px-4 py-3 text-left">상영관</th>
-                  <th className="px-4 py-3 text-left">시작시간</th>
-                  <th className="px-4 py-3 text-left">종료시간</th>
-                  <th className="px-4 py-3 text-left">상태</th>
+                    <th className="px-4 py-3 text-left">
+                        <button type="button" onClick={() => toggleSort("movieId")} className="inline-flex items-center">
+                            ID {renderArrowPair("movieId")}
+                        </button>
+                    </th>
+                    <th className="px-4 py-3 text-left">
+                        <button type="button" onClick={() => toggleSort("title")} className="inline-flex items-center">
+                            영화제목 {renderArrowPair("title")}
+                        </button>
+                    </th>
+                    <th className="px-4 py-3 text-left">
+                        <button type="button" onClick={() => toggleSort("screen")} className="inline-flex items-center">
+                            상영관 {renderArrowPair("screen")}
+                        </button>
+                    </th>
+                    <th className="px-4 py-3 text-left">
+                        <button type="button" onClick={() => toggleSort("start")} className="inline-flex items-center">
+                            시작시간 {renderArrowPair("start")}
+                        </button>
+                    </th>
+                    <th className="px-4 py-3 text-left">
+                        <button type="button" onClick={() => toggleSort("end")} className="inline-flex items-center">
+                            종료시간 {renderArrowPair("end")}
+                        </button>
+                    </th>
                   <th className="px-4 py-3 text-right">작업</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {items.map((s, idx) => {
+                {sortedItems.map((s, idx) => {
                   const id = s.id ?? s.screeningId ?? s.screen_id ?? s.screening_id;
                   const movie = s.movieTitle ?? s.movie?.title ?? s.title ?? "(제목 없음)";
                   const screen = s.screenName ?? s.screen?.name ?? s.screenId ?? s.screen_id ?? "-";
-                  const status = s.status ?? s.enabled ?? s.active ?? "";
                   const rowKey = id ? String(id) : `row-${idx}`;
                   const movieIdCol = s.movieId ?? s.movie?.id ?? s.movie?.movieId ?? s.movie_id ?? s.movie?.movie_id ?? "";
                   return (
@@ -342,7 +510,6 @@ const AdminScreenings = () => {
                       <td className="px-4 py-3">{screen}</td>
                       <td className="px-4 py-3">{fmt(s.startAt ?? s.start_at ?? s.start)}</td>
                       <td className="px-4 py-3">{fmt(s.endAt ?? s.end_at ?? s.end)}</td>
-                      <td className="px-4 py-3">{String(status)}</td>
                       <td className="px-4 py-3 text-right">
                         <button
                           type="button"

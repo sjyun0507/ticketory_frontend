@@ -12,14 +12,20 @@ const AdminMovies = () => {
   const [err, setErr] = useState(null);
 
   // 검색/필터 상태
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState(""); // '', true, false
+  // 로컬 상태 필터
+  const [filterStatus, setFilterStatus] = useState(""); // '', 'running', 'ended'
   const [page, setPage] = useState(0);
   const size = PAGE_SIZE;
 
   // 총 페이지/개수(백엔드가 주면 사용, 없으면 프론트에서 대충 계산)
   const [totalElements, setTotalElements] = useState(null);
   const [totalPages, setTotalPages] = useState(null);
+
+  // 클라이언트 측 필터 (ID, 제목, 개봉일)
+  const [filterId, setFilterId] = useState("");
+  const [filterTitle, setFilterTitle] = useState("");
+  const [filterReleaseFrom, setFilterReleaseFrom] = useState("");
+  const [filterReleaseTo, setFilterReleaseTo] = useState("");
 
   // 미디어 모달 상태
   const [mediaOpen, setMediaOpen] = useState(false);
@@ -98,7 +104,7 @@ const AdminMovies = () => {
         overview: "",
       });
       setAddPosterFile(null);
-      await load({ ...params, page: 0 });
+      await load({ page: 0, size });
       setPage(0);
       alert("새 영화를 추가했어요.");
     } catch (e) {
@@ -109,10 +115,7 @@ const AdminMovies = () => {
   const params = useMemo(() => ({
     page,
     size,
-    q: q || undefined,
-    // 백엔드 boolean(status)과 맞추기: ''는 undefined, 그 외는 true/false로 전달
-    status: status === "" ? undefined : (status === "true")
-  }), [page, size, q, status]);
+  }), [page, size]);
 
   // 목록 로드
   const load = async (p = params) => {
@@ -136,13 +139,8 @@ const AdminMovies = () => {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, status]); // 검색어는 submit으로만 반영
+  }, [page]);
 
-  const onSearchSubmit = (e) => {
-    e.preventDefault();
-    setPage(0);
-    load({ ...params, page: 0, q: q || undefined });
-  };
 
   // 상태 토글
   const onToggle = async (m) => {
@@ -236,6 +234,29 @@ const AdminMovies = () => {
     }
   };
 
+  // 클라이언트 필터링: ID/제목/개봉일/상태
+  const filteredMovies = useMemo(() => {
+    const idKw = filterId.trim().toLowerCase();
+    const titleKw = filterTitle.trim().toLowerCase();
+    const from = filterReleaseFrom ? new Date(filterReleaseFrom) : null;
+    const to = filterReleaseTo ? new Date(filterReleaseTo) : null;
+    return (Array.isArray(movies) ? movies : []).filter((m) => {
+      const id = (m.id ?? m.movieId ?? "").toString().toLowerCase();
+      const title = (m.title ?? m.name ?? "").toString().toLowerCase();
+      const rdStr = m.releaseDate ? String(m.releaseDate) : "";
+      const rd = rdStr ? new Date(rdStr) : null;
+      const idOk = idKw ? id.includes(idKw) : true;
+      const titleOk = titleKw ? title.includes(titleKw) : true;
+      let dateOk = true;
+      if (from && rd) dateOk = dateOk && rd >= from;
+      if (to && rd) dateOk = dateOk && rd <= to;
+      let statusOk = true;
+      if (filterStatus === "running") statusOk = m.status === true;
+      if (filterStatus === "ended") statusOk = !(m.status === true);
+      return idOk && titleOk && dateOk && statusOk;
+    });
+  }, [movies, filterId, filterTitle, filterReleaseFrom, filterReleaseTo, filterStatus]);
+
   return (
     <AdminLayout>
       <main className="max-w-[1200px] mx-auto px-4 py-10 min-h-[75vh]">
@@ -250,31 +271,71 @@ const AdminMovies = () => {
           </button>
         </header>
 
-        {/* 검색/필터 */}
-        <form onSubmit={onSearchSubmit} className="mb-4 flex flex-wrap items-center gap-2">
-          <input
-            type="text"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="제목 검색"
-            className="h-10 w-52 rounded border px-3 text-sm"
-          />
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="h-10 rounded border px-3 text-sm"
-          >
-            <option value="">전체 상태</option>
-            <option value="true">상영중</option>
-            <option value="false">상영종료</option>
-          </select>
-          <button
-            type="submit"
-            className="h-10 rounded-md border px-4 text-sm text-gray-700 hover:bg-gray-200"
-          >
-            검색
-          </button>
-        </form>
+        {/* 검색/필터 - (서버 검색/필터 폼 제거됨) */}
+
+        {/* 로컬 필터(ID/제목/개봉일/상태) */}
+        <div className="mb-3 grid grid-cols-1 sm:grid-cols-5 gap-2">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-gray-600">Movie ID</span>
+            <input
+              type="text"
+              value={filterId}
+              onChange={(e) => setFilterId(e.target.value)}
+              placeholder="예: 12"
+              className="h-9 rounded border px-3 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-gray-600">영화 제목</span>
+            <input
+              type="text"
+              value={filterTitle}
+              onChange={(e) => setFilterTitle(e.target.value)}
+              placeholder="부분 일치 검색"
+              className="h-9 rounded border px-3 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-gray-600">개봉일(부터)</span>
+            <input
+              type="date"
+              value={filterReleaseFrom}
+              onChange={(e) => setFilterReleaseFrom(e.target.value)}
+              className="h-9 rounded border px-3 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-gray-600">개봉일(까지)</span>
+            <input
+              type="date"
+              value={filterReleaseTo}
+              onChange={(e) => setFilterReleaseTo(e.target.value)}
+              className="h-9 rounded border px-3 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-gray-600">상태</span>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="h-9 rounded border px-3 text-sm"
+            >
+              <option value="">전체 상태</option>
+              <option value="running">상영중</option>
+              <option value="ended">상영종료</option>
+            </select>
+          </label>
+            <div className="mb-4">
+                <button
+                    type="button"
+                    onClick={() => { setFilterId(""); setFilterTitle(""); setFilterReleaseFrom(""); setFilterReleaseTo(""); setFilterStatus(""); }}
+                    className="rounded border px-3 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                >
+                    필터 초기화
+                </button>
+            </div>
+        </div>
+
 
         {loading && <div className="py-16 text-center text-gray-500">불러오는 중…</div>}
 
@@ -284,14 +345,14 @@ const AdminMovies = () => {
           </div>
         )}
 
-        {!loading && !err && movies.length === 0 && (
+        {!loading && !err && filteredMovies.length === 0 && (
           <div className="rounded-lg bg-white/80 backdrop-blur p-10 text-center shadow-sm">
             <div className="text-4xl mb-3">🎬</div>
-            <p className="text-gray-600">등록된 영화가 없습니다.</p>
+            <p className="text-gray-600">조건에 맞는 결과가 없습니다.</p>
           </div>
         )}
 
-        {!loading && !err && movies.length > 0 && (
+        {!loading && !err && filteredMovies.length > 0 && (
           <div className="overflow-x-auto rounded-lg border bg-white">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-gray-600 text-center uppercase tracking-wider">
@@ -306,7 +367,7 @@ const AdminMovies = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-center">
-                {movies.map((m) => {
+                {filteredMovies.map((m) => {
                   const id = m.id ?? m.movieId;
                   const isRunning = m.status === true; // true=상영중, false=상영종료
                   const minutes = m.runningMinutes ?? m.runtime; // 호환 처리

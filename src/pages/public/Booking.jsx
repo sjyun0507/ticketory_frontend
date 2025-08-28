@@ -58,12 +58,13 @@ const Badge = ({ text }) => {
 };
 
 //영화목록
-const MovieItem = ({ movie, active, onClick }) => (
+const MovieItem = ({ movie, active, onClick, dimmed = false }) => (
   <button
     onClick={onClick}
     className={
       `w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition ` +
-      (active ? "font-semibold text-white bg-zinc-700" : "text-gray-700 hover:bg-zinc-100")
+      (active ? "font-semibold text-white bg-zinc-700" : "text-gray-700 hover:bg-zinc-100") +
+      ( !active && dimmed ? " opacity-40 grayscale" : "" )
     }
   >
     <Badge text={movie.rating || 'ALL'} />
@@ -126,6 +127,7 @@ const Bookings = () => {
   const [screeningsLoading, setScreeningsLoading] = useState(false);
   const [screeningsError, setScreeningsError] = useState(null);
   const [fallbackNotice, setFallbackNotice] = useState("");
+  const [hasFutureByMovieId, setHasFutureByMovieId] = useState({});
 
   useEffect(() => {
     if (preselectedMovieId !== null && preselectedMovieId !== undefined) {
@@ -233,6 +235,26 @@ const Bookings = () => {
         // 2) 로컬 날짜(KST) 필터
         const localFiltered = normalized.filter((cur) => cur._ymd === dateOnly);
 
+        // Build availability map for movies on the selected date (future showtimes only)
+        const nowMs = Date.now();
+        const futureByMovie = {};
+        for (const item of localFiltered) {
+          const mid = item._movieId;
+          if (mid == null) continue;
+          if (typeof item._startMs === 'number' && item._startMs > nowMs) {
+            futureByMovie[mid] = true;
+          } else if (!(mid in futureByMovie)) {
+            // initialize as false; will flip to true when a future showtime is found
+            futureByMovie[mid] = false;
+          }
+        }
+        // ensure all listed movies have an entry (default false)
+        for (const m of movies) {
+          const key = m._id ?? m.id ?? m.movieId;
+          if (key != null && !(key in futureByMovie)) futureByMovie[key] = false;
+        }
+        setHasFutureByMovieId(futureByMovie);
+
         // 3) 선택 영화 필터 (선택이 없는 경우 모두 통과)
         const wantMovieId = Number(selectedMovieId);
         const movieFiltered = Number.isNaN(wantMovieId)
@@ -336,7 +358,7 @@ const Bookings = () => {
           <header className="mb-8 flex items-end justify-between">
               <div>
                   <h1 className="text-2xl font-semibold">예매</h1>
-                  <p className="mt-1 text-gray-500 text-sm"> 영화별 상영시간을 한눈에 확인하세요. 상영 시간 시작 30분 전까지 예매 또는 취소가 가능합니다.</p>
+                  <p className="mt-1 text-gray-500 text-sm"> 영화별 상영시간을 한눈에 확인하세요. 온라인 티켓 예매의 경우 상영 시간 시작 30분 전까지 예매 또는 취소가 가능합니다.</p>
               </div>
               <label className="inline-flex items-center gap-3">
                   <span className="text-sm text-gray-600">날짜 선택</span>
@@ -373,6 +395,7 @@ const Bookings = () => {
                       key={keyId}
                       movie={m}
                       active={String(keyId) === String(selectedMovieId)}
+                      dimmed={!hasFutureByMovieId[String(keyId)]}
                       onClick={() => setSelectedMovieId(Number(keyId))}
                     />
                   );

@@ -282,7 +282,7 @@ const Screenings = () => {
           <header className="mb-8 flex items-end justify-between">
               <div>
                   <h1 className="text-2xl font-semibold">상영시간표</h1>
-                  <p className="mt-1 text-gray-500 text-sm">상영중인 영화 시간표를 한눈에 확인하세요. 상영 시간 시작 30분 전까지 예매 또는 취소가 가능합니다.</p>
+                  <p className="mt-1 text-gray-500 text-sm"> 영화별 상영시간을 한눈에 확인하세요. 온라인 티켓 예매의 경우 상영 시간 시작 30분 전까지 예매 또는 취소가 가능합니다.</p>
               </div>
               <label className="inline-flex items-center gap-3">
                   <span className="text-sm text-gray-600">날짜 선택</span>

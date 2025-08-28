@@ -192,7 +192,7 @@ export default function AdminPricing() {
         <section className="bg-white border rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 text-gray-700">
                 <tr className="text-left">
                   <th className="px-3 py-2">ID</th>
                   <th className="px-3 py-2">Screen</th>

@@ -466,7 +466,7 @@ const AdminScreenings = () => {
         {!loading && !err && items.length > 0 && (
           <div className="overflow-x-auto rounded-lg border bg-white">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-gray-600r">
+              <thead className="bg-gray-50 text-gray-700">
                 <tr>
                     <th className="px-4 py-3 text-left">
                         <button type="button" onClick={() => toggleSort("movieId")} className="inline-flex items-center">

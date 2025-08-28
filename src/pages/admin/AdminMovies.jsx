@@ -355,7 +355,7 @@ const AdminMovies = () => {
         {!loading && !err && filteredMovies.length > 0 && (
           <div className="overflow-x-auto rounded-lg border bg-white">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-gray-600 text-center uppercase tracking-wider">
+              <thead className="bg-gray-50 text-gray-700 text-center uppercase tracking-wider">
                 <tr>
                   <th className="px-4 py-3 w-16">ID</th>
                   <th className="px-4 py-3">영화제목</th>

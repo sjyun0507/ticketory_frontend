@@ -1,5 +1,12 @@
 import api from "./axiosInstance";
 
+// Remove empty/NaN params so the server never receives invalid values
+const cleanParams = (obj = {}) => Object.fromEntries(
+  Object.entries(obj).filter(([_, v]) => (
+    v !== undefined && v !== null && v !== '' && !(typeof v === 'number' && Number.isNaN(v))
+  ))
+);
+
 //영화 목록 (Admin) GET /admin/movies
 export async function getAdminMovies(params = {}) {
   // params: { page=0, size=20, q, status, sort }
@@ -135,16 +142,40 @@ export async function toggleMovieStatus(movieId, status) {
     const { data } = await api.patch(`/admin/movies/${movieId}`, { status });
     return data;
 }
+// 관리자: 상영관 요금 규칙 목록 (필터 파라미터 선택적)
+export async function getAdminPricing(params = {}) {
+  const res = await api.get('/admin/pricing', { params: cleanParams(params) });
+  return res.data;
+}
 // pricing_rule 목록(또는 페이지네이션 content)을 통일된 배열로 리턴
 export async function getPricingRules(screenId) {
-    try {
-        const res = await api.get('/admin/pricing', { params: { screenId: Number(screenId) } });
-        const raw = res?.data;
-        if (Array.isArray(raw)) return raw;
-        if (raw && Array.isArray(raw.content)) return raw.content;
-        return [];
-    } catch (e) {
-        console.warn('[adminApi] getPricingRules failed', e?.response?.status, e?.response?.data || e);
-        return []; // 프론트는 기본가로 폴백
+  try {
+    const sid = Number(screenId);
+    if (!Number.isFinite(sid)) {
+      console.warn('[adminApi] getPricingRules skipped: invalid screenId ->', screenId);
+      return []; // do not call backend with NaN
     }
+    const res = await api.get('/admin/pricing', { params: { screenId: sid } });
+    const raw = res?.data;
+    if (Array.isArray(raw)) return raw;
+    if (raw && Array.isArray(raw.content)) return raw.content;
+    return [];
+  } catch (e) {
+    console.warn('[adminApi] getPricingRules failed', e?.response?.status, e?.response?.data || e);
+    return []; // 프론트는 기본가로 폴백
+  }
 }
+
+// pricing_rule 등록, 갱신
+export const upsertAdminPricing = async (payload) => {
+    const { data } = await api.put('/admin/pricing', payload);
+    return data;
+};
+
+// pricing_rule 삭제
+export const deleteAdminPricing = async (id) => {
+  const rid = Number(id);
+  if (!Number.isFinite(rid)) throw new Error('deleteAdminPricing: invalid id');
+  const { data } = await api.delete('/admin/pricing', { params: { id: rid } });
+  return data;
+};

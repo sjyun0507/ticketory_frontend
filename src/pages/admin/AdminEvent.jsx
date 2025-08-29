@@ -1,6 +1,6 @@
 // NoticeBoard & AdminBoard in one file
 import React, { useEffect, useState } from "react";
-import api from "../../api/axiosInstance.js";
+import { getBoards, createBoard, updateBoard, deleteBoard } from "../../api/adminApi.js";
 import { AdminLayout } from "../../components/AdminSidebar.jsx";
 
 // ---- public read-only board (users see this) ----
@@ -10,7 +10,7 @@ export const PublicEventBoard = () => {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await api.get("/board");
+        const { data } = await getBoards();
         // data can be array or page object {content: [...]} depending on backend
         setPosts(Array.isArray(data) ? data : (data?.content ?? []));
       } catch (e) {
@@ -79,7 +79,6 @@ export const PublicEventBoard = () => {
   );
 };
 
-// ---- Admin board (create/edit/delete) ----
 const AdminEvent = () => {
   const [posts, setPosts] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
@@ -96,7 +95,7 @@ const AdminEvent = () => {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await api.get("/board");
+        const { data } = await getBoards();
         setPosts(Array.isArray(data) ? data : (data?.content ?? []));
       } catch (e) {
         console.error("[AdminEvent] list load failed", e);
@@ -125,7 +124,7 @@ const AdminEvent = () => {
   const handleAdd = async () => {
     if (!form.title || !form.content) return alert("제목과 내용을 입력하세요!");
     try {
-      const { data } = await api.post("/admin/board", toPayload(form));
+      const { data } = await createBoard(toPayload(form));
       setPosts((prev) => [data, ...prev]);
       resetForm();
     } catch (e) {
@@ -150,7 +149,7 @@ const AdminEvent = () => {
 
   const handleSave = async () => {
     try {
-      const { data } = await api.put(`/admin/board/${editingId}`, toPayload(form));
+      const { data } = await updateBoard(editingId, toPayload(form));
       setPosts((prev) => prev.map((p) => (p.id === editingId ? data : p)));
       resetForm();
       setEditingId(null);
@@ -163,7 +162,7 @@ const AdminEvent = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("정말 삭제하시겠습니까?")) return;
     try {
-      await api.delete(`/admin/board/${id}`);
+      await deleteBoard(id);
       setPosts((prev) => prev.filter((n) => n.id !== id));
     } catch (e) {
       console.error("[AdminEvent] delete failed", e);

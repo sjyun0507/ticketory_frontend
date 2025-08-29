@@ -179,3 +179,9 @@ export const deleteAdminPricing = async (id) => {
   const { data } = await api.delete('/admin/pricing', { params: { id: rid } });
   return data;
 };
+
+//Board (공지/이벤트)
+export const getBoards = () => api.get("/board");
+export const createBoard = (payload) => api.post("/admin/board", payload);
+export const updateBoard = (id, payload) => api.put(`/admin/board/${id}`, payload);
+export const deleteBoard = (id) => api.delete(`/admin/board/${id}`);

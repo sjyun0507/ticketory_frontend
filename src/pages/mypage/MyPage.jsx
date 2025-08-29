@@ -224,8 +224,8 @@ export default function MyPage() {
                                         <span
                                             className={`text-[11px] px-2 py-0.5 rounded-full border ${
                                                 n.type === 'notice'
-                                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                                    : 'bg-green-50 text-green-700 border-green-200'
+                                                    ? 'bg-blue-100 text-blue-700'
+                                                    : 'bg-purple-100 text-purple-700'
                                             }`}
                                         >
                                             {n.type === 'notice' ? '공지' : '이벤트'}

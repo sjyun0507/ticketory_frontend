@@ -9,10 +9,10 @@ const Badge = ({ type }) => {
   const isEvent = type !== "NOTICE"; // default 이벤트
   const label = type === "NOTICE" ? "공지" : "이벤트";
   const base =
-    "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border";
+    "inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold border";
   const color = isEvent
     ? "bg-purple-50 border-purple-200 text-purple-700"
-    : "bg-sky-50 border-sky-200 text-sky-700";
+    : "bg-blue-50 border-blue-200 text-blue-700";
   return <span className={`${base} ${color}`}>{label}</span>;
 };
 
@@ -143,9 +143,9 @@ const Events = () => {
             className="absolute inset-0 bg-black/50"
             onClick={close}
           />
-          <div className="relative z-10 w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-xl">
+          <div className="relative z-10 w-full max-w-4xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
             {/* Header */}
-            <div className="flex items-center justify-between border-b px-5 py-4">
+            <div className="flex items-center justify-between border-b pb-4">
               <div className="flex items-center gap-2">
                 <Badge type={active.type} />
                 <h3 className="text-lg font-semibold text-gray-900">{active.title}</h3>
@@ -164,10 +164,10 @@ const Events = () => {
               <img
                 src={active.bannerUrl}
                 alt={active.title}
-                className="h-64 w-full object-cover"
+                className="max-h-[60vh] w-full object-contain"
               />
             )}
-            <div className="space-y-3 px-5 py-5">
+            <div className="space-y-3 py-5">
               {(active.startDate || active.endDate) && (
                 <p className="text-sm text-gray-500">
                   기간: {fmt(active.startDate)} ~ {fmt(active.endDate)}
@@ -181,7 +181,7 @@ const Events = () => {
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end gap-2 border-t bg-gray-50 px-5 py-3">
+            <div className="flex justify-end gap-2 border-t bg-gray-50 pt-3">
               <button
                 onClick={close}
                 className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-100"

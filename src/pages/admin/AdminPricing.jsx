@@ -226,8 +226,8 @@ export default function AdminPricing() {
                       <td className="px-3 py-2">{r.enabled ? 'Y' : 'N'}</td>
                       <td className="px-3 py-2">{r.currency || 'KRW'}</td>
                       <td className="px-3 py-2 text-right">
-                        <button onClick={()=>onEdit(r)} className="px-2 py-1 text-xs border rounded mr-1">수정</button>
-                        <button onClick={()=>onDelete(r.id)} className="px-2 py-1 text-xs border rounded text-red-600">삭제</button>
+                        <button onClick={()=>onEdit(r)} className="px-2 py-1 text-xs border rounded mr-1 hover:bg-gray-50">수정</button>
+                        <button onClick={()=>onDelete(r.id)} className="px-2 py-1 text-xs border rounded text-red-600 hover:bg-red-50">삭제</button>
                       </td>
                     </tr>
                   ))

@@ -187,94 +187,129 @@ const AdminEvent = () => {
         <h1 className="text-3xl font-bold mb-6">공지/이벤트 게시판 관리</h1>
 
         {/* 작성/수정 폼 */}
-        <div className="bg-white p-4 rounded-xl shadow mb-8">
-          <h2 className="text-xl font-semibold mb-3">
+        <div className="bg-white p-6 rounded-2xl shadow mb-8 border border-gray-100">
+          <h2 className="text-xl font-semibold mb-4">
             {editingId ? "게시글 수정" : "새 게시글 작성"}
           </h2>
-          <div className="grid md:grid-cols-2 gap-3">
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-medium">유형</label>
-              <label className="text-sm flex items-center gap-1">
-                <input
-                  type="radio"
-                  name="type"
-                  value="EVENT"
-                  checked={form.type === "EVENT"}
-                  onChange={handleChange}
-                />
-                이벤트
-              </label>
-              <label className="text-sm flex items-center gap-1">
-                <input
-                  type="radio"
-                  name="type"
-                  value="NOTICE"
-                  checked={form.type === "NOTICE"}
-                  onChange={handleChange}
-                />
-                공지
-              </label>
-            </div>
+
+          {/* 유형 */}
+          <div className="flex items-center gap-6 mb-4">
+            <span className="text-sm font-medium text-gray-700 shrink-0">유형</span>
+            <label className="text-sm flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="type"
+                value="EVENT"
+                checked={form.type === "EVENT"}
+                onChange={handleChange}
+                className="accent-indigo-600"
+              />
+              이벤트
+            </label>
+            <label className="text-sm flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="type"
+                value="NOTICE"
+                checked={form.type === "NOTICE"}
+                onChange={handleChange}
+                className="accent-indigo-600"
+              />
+              공지
+            </label>
+          </div>
+
+          {/* 제목 */}
+          <label className="flex flex-col gap-1 mb-4">
+            <span className="text-xs text-gray-600">게시판 제목</span>
             <input
               type="text"
               name="title"
               value={form.title}
               onChange={handleChange}
               placeholder="제목을 입력하세요"
-              className="w-full border p-2 rounded"
+              className="w-full border border-gray-200 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
             />
+          </label>
+
+          {/* 배너 이미지 */}
+          <label className="flex flex-col gap-1 mb-4">
+            <span className="text-xs text-gray-600">배너 이미지</span>
             <input
               type="url"
               name="bannerUrl"
               value={form.bannerUrl}
               onChange={handleChange}
               placeholder="배너 이미지 URL (선택)"
-              className="w-full border p-2 rounded"
+              className="w-full border border-gray-200 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
             />
-            <div className="flex gap-2">
+          </label>
+
+          {/* 날짜 */}
+          <div className="grid md:grid-cols-2 gap-3 mb-4">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-gray-600">시작일</span>
               <input
                 type="date"
                 name="startDate"
                 value={form.startDate}
                 onChange={handleChange}
-                className="border p-2 rounded w-full"
+                className="border border-gray-200 p-3 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
               />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-gray-600">종료일</span>
               <input
                 type="date"
                 name="endDate"
                 value={form.endDate}
                 onChange={handleChange}
-                className="border p-2 rounded w-full"
+                className="border border-gray-200 p-3 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
               />
-            </div>
+            </label>
+          </div>
+
+          {/* 내용 */}
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-gray-600">내용</span>
             <textarea
               name="content"
               value={form.content}
               onChange={handleChange}
               placeholder="내용을 입력하세요"
-              className="md:col-span-2 w-full border p-2 rounded h-28"
+              className="w-full border border-gray-200 p-3 rounded-lg h-48 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
             />
-          </div>
-          {editingId ? (
-            <>
-              <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded mr-2">
-                수정 완료
-              </button>
+          </label>
+
+          {/* 액션 버튼 - 오른쪽 정렬 */}
+          <div className="mt-5 flex justify-end gap-2">
+            {editingId ? (
+              <>
+                <button
+                  onClick={handleSave}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm"
+                >
+                  수정 완료
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingId(null);
+                    resetForm();
+                  }}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg border border-gray-200"
+                >
+                  취소
+                </button>
+              </>
+            ) : (
               <button
-                onClick={() => {
-                  setEditingId(null);
-                  resetForm();
-                }}
-                className="px-4 py-2 bg-gray-400 text-white rounded"
+                onClick={handleAdd}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm"
               >
-                취소
+                등록
               </button>
-            </>
-          ) : (
-            <button onClick={handleAdd} className="px-4 py-2 bg-indigo-600 text-white rounded">
-              등록
-            </button>
-          )}
+            )}
+          </div>
         </div>
 
         {/* 목록 */}
@@ -308,16 +343,16 @@ const AdminEvent = () => {
                       className="w-full h-32 object-cover rounded"
                     />
                   )}
-                  <div className="md:col-span-4 flex gap-2 mt-2">
+                  <div className="md:col-span-4 flex gap-2 mt-2 justify-end">
                     <button
                       onClick={() => handleEdit(post.id)}
-                      className="px-3 py-1 bg-blue-500 text-white text-sm rounded"
+                      className="px-3 py-2 text-xs border rounded-lg hover:bg-gray-50"
                     >
                       수정
                     </button>
                     <button
                       onClick={() => handleDelete(post.id)}
-                      className="px-3 py-1 bg-red-500 text-white text-sm rounded"
+                      className="px-3 py-2 text-xs border rounded-lg text-red-600 hover:bg-red-50"
                     >
                       삭제
                     </button>

@@ -407,17 +407,17 @@ export default function Payment() {
                 </div>
 
                     {/* 취소/환불 정책 동의 */}
-                    <div className="mt-3 bg-zinc-200/40 rounded-lg p-3">
-                        <label className="flex items-start gap-3 cursor-pointer">
+                    <div className="mt-4 bg-zinc-100/40 text-zinc-500 rounded-lg p-3">
+                        <label className="flex items-start gap-1 cursor-pointer">
                             <input
                                 type="checkbox"
-                                className="mt-1"
+                                className="ml-5 mt-1 w-6 h-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                                 checked={policyAgreed}
                                 onChange={(e) => setPolicyAgreed(e.target.checked)}
                             />
                             <div>
-                                <p className="font-medium">취소/환불 정책에 대한 동의</p>
-                                <ul className="text-xs text-zinc-700 list-disc pl-5 space-y-1 pt-2">
+                                <p className="font-xs"> [필수] 취소/환불 정책에 대한 동의</p>
+                                <ul className="font-xs text-zinc-400 list-disc pl-5 space-y-1 pt-2">
                                     <li>온라인 예매는 영화 상영시간 30분전까지 취소 가능하며, 30분 이후 현장 취소만 가능합니다.</li>
                                     <li>현장 취소 시 영화 상영시간 이전까지만 가능합니다.</li>
                                 </ul>
@@ -466,7 +466,7 @@ export default function Payment() {
                             onClick={handlePayment}
                             disabled={!ready || !policyAgreed}
                             className="w-1/2 bg-indigo-600 text-white hover:bg-indigo-700 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                            title={!policyAgreed ? '취소/환불 정책에 동의해 주세요.' : undefined}
+                            title={!policyAgreed ? '취소/환불 정책에 동의해 주세요.': undefined}
                         >
                             결제
                         </button>

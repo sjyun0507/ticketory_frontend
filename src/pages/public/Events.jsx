@@ -5,6 +5,19 @@ import {getBoards} from "../../api/adminApi.js";
 // 간단한 날짜 포맷터 (YYYY.MM.DD)
 const fmt = (d) => new Date(d).toISOString().slice(0, 10).replaceAll("-", ".");
 
+// YYYY-MM-DD from Date or string
+const ymd = (d) => {
+  if (!d) return "";
+  const dt = (d instanceof Date) ? d : new Date(d);
+  if (Number.isNaN(dt.getTime())) return "";
+  return dt.toISOString().slice(0, 10);
+};
+const isEnded = (endDate) => {
+  if (!endDate) return false; // 종료일 없으면 진행 중으로 간주
+  const today = ymd(new Date());
+  return ymd(endDate) < today;
+};
+
 const Badge = ({ type }) => {
   const isEvent = type !== "NOTICE"; // default 이벤트
   const label = type === "NOTICE" ? "공지" : "이벤트";
@@ -55,6 +68,7 @@ const Events = () => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState(null);
+  const [tab, setTab] = useState("active"); // active | ended
   const close = () => setActive(null);
 
   useEffect(() => {
@@ -81,7 +95,21 @@ const Events = () => {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const featured = posts.find((p) => p.bannerUrl) || null;
+  // 1) 공개글만 노출
+  const publishedPosts = posts.filter(p => p.published === true);
+
+  // 2) 종료 여부 분리
+  const activePosts = publishedPosts.filter(p => !isEnded(p.endDate));
+  const endedPosts  = publishedPosts.filter(p => isEnded(p.endDate));
+
+  // 3) 정렬: 시작일 또는 생성일 desc (기존 기준 유지)
+  const sortByDateDesc = (list) => list.slice().sort(
+    (a, b) => new Date(b.startDate || b.createdDate || 0) - new Date(a.startDate || a.createdDate || 0)
+  );
+  const activeSorted = sortByDateDesc(activePosts);
+  const endedSorted  = sortByDateDesc(endedPosts);
+
+  const featured = activeSorted.find((p) => p.bannerUrl) || activeSorted[0] || null;
 
   return (
     <main className="max-w-[1200px] mx-auto px-4 py-10 min-h-[75vh]">
@@ -90,11 +118,25 @@ const Events = () => {
         <div>
           <h1 className="text-2xl font-semibold">이벤트</h1>
           <p className="mt-1 text-gray-500 text-sm">공지와 이벤트를 한눈에 확인하세요.</p>
+          <div className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gray-100 p-1">
+            <button
+              onClick={() => setTab("active")}
+              className={`px-3 py-1.5 text-sm rounded-md ${tab === "active" ? "bg-white shadow text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
+            >
+              진행/예정 이벤트
+            </button>
+            <button
+              onClick={() => setTab("ended")}
+              className={`px-3 py-1.5 text-sm rounded-md ${tab === "ended" ? "bg-white shadow text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
+            >
+              종료된 이벤트
+            </button>
+          </div>
         </div>
       </header>
 
       {/* 메인 포스터 (1장) */}
-      {featured && (
+      {tab === "active" && featured && (
         <section className="mb-10">
           <div
             className="relative overflow-hidden rounded-2xl border bg-white shadow-sm cursor-pointer"
@@ -118,19 +160,32 @@ const Events = () => {
         </section>
       )}
 
-      {/* 로딩/빈 상태 */}
       {loading ? (
         <p className="text-center text-gray-500">불러오는 중...</p>
-      ) : posts.length === 0 ? (
-        <p className="text-center text-gray-500">등록된 공지/이벤트가 없습니다.</p>
       ) : (
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {posts
-            .filter((p) => !featured || p.id !== featured.id)
-            .map((e) => (
-              <EventCard key={e.id} item={e} onOpen={setActive} />
-            ))}
-        </section>
+        tab === "active" ? (
+          activeSorted.length === 0 ? (
+            <p className="text-center text-gray-500">진행 중/예정인 공개 이벤트가 없습니다.</p>
+          ) : (
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {activeSorted
+                .filter((p) => !featured || p.id !== featured.id)
+                .map((e) => (
+                  <EventCard key={e.id} item={e} onOpen={setActive} />
+                ))}
+            </section>
+          )
+        ) : (
+          endedSorted.length === 0 ? (
+            <p className="text-center text-gray-500">완료된 공개 이벤트가 없습니다.</p>
+          ) : (
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {endedSorted.map((e) => (
+                <EventCard key={e.id} item={e} onOpen={setActive} />
+              ))}
+            </section>
+          )
+        )
       )}
 
       {active && (

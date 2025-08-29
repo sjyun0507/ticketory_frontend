@@ -38,7 +38,6 @@ const AdminScreenings = () => {
   });
 
   const onChange = (k, v) => setForm((p) => ({ ...p, [k]: v }));
-
   const getRuntimeMin = (m) => {
     if (!m) return 0;
     return (
@@ -49,8 +48,52 @@ const AdminScreenings = () => {
   const [sortKey, setSortKey] = useState("start");
   const [sortAsc, setSortAsc] = useState(true);
   // --- Filter controls ---
+
+  function toDateKey(v) {
+    if (!v) return '';
+    let d = new Date(v);
+    if (isNaN(d.getTime())) {
+      const s = String(v).replace(' ', 'T');
+      d = new Date(s);
+    }
+    if (isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+
+  // --- Date helpers for week strip ---
+  const keyToDate = (key) => {
+    if (!key) return null;
+    const [y,m,d] = String(key).split('-').map(Number);
+    if (!y || !m || !d) return null;
+    return new Date(y, m - 1, d, 0, 0, 0, 0);
+  };
+
+  const addDaysKey = (key, days) => {
+    const base = keyToDate(key);
+    if (!base) return '';
+    const d = new Date(base);
+    d.setDate(d.getDate() + Number(days || 0));
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  };
+
+  const WEEKDAY_KO = ['일','월','화','수','목','금','토'];
+  const dateLabel = (key, todayKey) => {
+    const d = keyToDate(key);
+    if (!d) return key;
+    const day = d.getDate();
+    if (key === todayKey) return `${day}·오늘`;
+    const tomorrow = addDaysKey(todayKey, 1);
+    if (key === tomorrow) return `${day}·내일`;
+    return `${day}·${WEEKDAY_KO[d.getDay()]}`;
+  };
   const [filterTitle, setFilterTitle] = useState("");
   const [filterScreen, setFilterScreen] = useState("");
+  // 날짜 탭 선택 상태: 'ALL' 또는 'YYYY-MM-DD'
+  const [activeDate, setActiveDate] = useState('ALL');
+  // 주간 스트립 시작일(YYYY-MM-DD). 기본은 오늘.
+  const [weekStartKey, setWeekStartKey] = useState(null);
   // --- Sorting helpers (top-level, not inside render condition) ---
   const keyExtractors = {
     movieId: (s) => s.movieId ?? s.movie?.id ?? s.movie?.movieId ?? s.movie_id ?? s.movie?.movie_id ?? "",
@@ -76,9 +119,12 @@ const AdminScreenings = () => {
       const screen = (s.screenName ?? s.screen?.name ?? s.screenId ?? s.screen_id ?? "").toString().toLowerCase();
       const titleOk = titleKeyword ? title.includes(titleKeyword) : true;
       const screenOk = screenKeyword ? screen.includes(screenKeyword) : true;
-      return titleOk && screenOk;
+        const dateKey = toDateKey(s.startAt ?? s.start_at ?? s.start);
+        const dateOk = activeDate === 'ALL' ? true : dateKey === activeDate;
+        if (!dateOk) return false;
+        return titleOk && screenOk && dateOk;
     });
-  }, [items, filterTitle, filterScreen]);
+  }, [items, filterTitle, filterScreen, activeDate]);
 
   const sortedItems = React.useMemo(() => {
     const arr = Array.isArray(filteredItems) ? [...filteredItems] : [];
@@ -93,6 +139,34 @@ const AdminScreenings = () => {
     return arr;
   }, [filteredItems, sortKey, sortAsc]);
 
+  // 아이템이 존재하는 날짜 집합
+  const dateHasItems = React.useMemo(() => {
+    const set = new Set();
+    (Array.isArray(items) ? items : []).forEach((s) => {
+      const key = toDateKey(s.startAt ?? s.start_at ?? s.start);
+      if (key) set.add(key);
+    });
+    return set;
+  }, [items]);
+
+  // 오늘 키
+  const todayKey = React.useMemo(() => toDateKey(new Date()), []);
+
+  // 주간 시작일 초기화 (처음 로드 시)
+  useEffect(() => {
+    if (!weekStartKey) setWeekStartKey(todayKey);
+    // activeDate 기본값: 오늘에 상영이 있으면 오늘, 아니면 ALL 유지
+    if (activeDate === 'ALL' && dateHasItems.has(todayKey)) {
+      setActiveDate(todayKey);
+    }
+  }, [todayKey, weekStartKey, activeDate, dateHasItems]);
+
+  // 표시할 7일 키 배열
+  const weekKeys = React.useMemo(() => {
+    const start = weekStartKey || todayKey;
+    return Array.from({ length: 7 }, (_, i) => addDaysKey(start, i));
+  }, [weekStartKey, todayKey]);
+
   const toggleSort = React.useCallback((key) => {
     setSortKey((prev) => (prev === key ? prev : key));
     setSortAsc((prev) => (sortKey === key ? !prev : true));
@@ -100,7 +174,7 @@ const AdminScreenings = () => {
 
   const sortArrow = React.useCallback((key) => (sortKey === key ? (sortAsc ? "▲" : "▼") : ""), [sortKey, sortAsc]);
 
-    const renderArrowPair = React.useCallback((key) => {
+  const renderArrowPair = React.useCallback((key) => {
         const upActive = sortKey === key && sortAsc === true;
         const downActive = sortKey === key && sortAsc === false;
         return (
@@ -163,7 +237,7 @@ const AdminScreenings = () => {
     return d;
   };
 
-  // --- Helper utilities for status checks, overlap detection, and error extraction ---
+
 
   const parseDate = (v) => {
     if (!v) return null;
@@ -423,6 +497,62 @@ const AdminScreenings = () => {
             + 새 상영 추가
           </button>
         </header>
+
+          {/* Date Week Strip (7 days) */}
+          <div className="mb-3 -mt-2 overflow-x-auto">
+            <div className="inline-flex items-center gap-2 whitespace-nowrap">
+              {/* Prev 7 days */}
+              <button
+                type="button"
+                onClick={() => setWeekStartKey((k) => addDaysKey(k || todayKey, -7))}
+                className="px-2 py-1 rounded border bg-white text-gray-700 hover:bg-gray-50"
+                title="이전 7일"
+              >◀</button>
+
+              {/* 전체 버튼 */}
+              <button
+                type="button"
+                onClick={() => setActiveDate('ALL')}
+                className={
+                  'px-3 py-1.5 rounded-full border text-sm ' +
+                  (activeDate === 'ALL'
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white text-gray-700 hover:bg-gray-50')
+                }
+              >전체</button>
+
+              {/* 7-day buttons */}
+              {weekKeys.map((d) => {
+                const isActive = activeDate === d;
+                const has = dateHasItems.has(d);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => has && setActiveDate(d)}
+                    className={
+                      'px-3 py-1.5 rounded-full border text-sm ' +
+                      (isActive
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : has
+                          ? 'bg-white text-gray-700 hover:bg-gray-50'
+                          : 'bg-gray-100 text-gray-400 cursor-not-allowed')
+                    }
+                    title={d}
+                    disabled={!has}
+                  >{dateLabel(d, todayKey)}</button>
+                );
+              })}
+
+              {/* Next 7 days */}
+              <button
+                type="button"
+                onClick={() => setWeekStartKey((k) => addDaysKey(k || todayKey, 7))}
+                className="px-2 py-1 rounded border bg-white text-gray-700 hover:bg-gray-50"
+                title="다음 7일"
+              >▶</button>
+            </div>
+          </div>
 
         {loading && <div className="py-16 text-center text-gray-500">불러오는 중…</div>}
 

@@ -30,24 +30,32 @@ export const PublicEventBoard = () => {
     </span>
   );
 
+  const normalizeDateStr = (d) => (typeof d === "string" ? d : "");
+  const pickCreatedAt = (p) => p.createdAt || p.created_at || p.createdDate || p.created_date || "";
+
+  const today = new Date().toISOString().slice(0,10);
+  const visiblePosts = (posts || [])
+    .filter(p => p.published === true && (!p.endDate || normalizeDateStr(p.endDate) >= today))
+    .sort((a,b) => (pickCreatedAt(b) || "").localeCompare(pickCreatedAt(a) || ""));
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
       <h1 className="text-3xl font-bold mb-6">이벤트</h1>
       {/* hero (first card wide) */}
-      {posts[0] && (
+      {visiblePosts[0] && (
         <article className="mb-6 overflow-hidden rounded-2xl shadow bg-white">
           <div className="relative">
             <img
-              src={posts[0].bannerUrl}
-              alt={posts[0].title}
+              src={visiblePosts[0].bannerUrl}
+              alt={visiblePosts[0].title}
               className="w-full h-72 object-cover"
             />
-            <div className="absolute left-4 top-4"><Badge type={posts[0].type} /></div>
+            <div className="absolute left-4 top-4"><Badge type={visiblePosts[0].type} /></div>
             <div className="absolute left-0 right-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-6">
-              <h3 className="text-white text-xl font-semibold">{posts[0].title}</h3>
-              <p className="text-white/90 text-sm mt-1 truncate">{posts[0].content}</p>
+              <h3 className="text-white text-xl font-semibold">{visiblePosts[0].title}</h3>
+              <p className="text-white/90 text-sm mt-1 truncate">{visiblePosts[0].content}</p>
               <p className="text-white/70 text-xs mt-2">
-                기간: {posts[0].startDate} ~ {posts[0].endDate}
+                기간: {visiblePosts[0].startDate} ~ {visiblePosts[0].endDate}
               </p>
             </div>
           </div>
@@ -56,7 +64,7 @@ export const PublicEventBoard = () => {
 
       {/* grid */}
       <div className="grid md:grid-cols-3 gap-6">
-        {posts.slice(1).map((p) => (
+        {visiblePosts.slice(1).map((p) => (
           <article key={p.id} className="overflow-hidden rounded-2xl shadow bg-white">
             <div className="relative">
               <img src={p.bannerUrl} alt={p.title} className="w-full h-48 object-cover" />
@@ -89,6 +97,8 @@ const AdminEvent = () => {
     bannerUrl: "",
     startDate: "",
     endDate: "",
+    published: false,
+    publishAt: "",
   });
 
   useEffect(() => {
@@ -110,6 +120,8 @@ const AdminEvent = () => {
     bannerUrl: f.bannerUrl?.trim() || null,
     startDate: f.startDate || null,
     endDate: f.endDate || null,
+    published: !!f.published,
+    publishAt: f.publishAt || null,
   });
 
   const handleChange = (e) => {
@@ -118,7 +130,7 @@ const AdminEvent = () => {
   };
 
   const resetForm = () =>
-    setForm({ type: "EVENT", title: "", content: "", bannerUrl: "", startDate: "", endDate: "" });
+    setForm({ type: "EVENT", title: "", content: "", bannerUrl: "", startDate: "", endDate: "", published: false, publishAt: "" });
 
   const handleAdd = async () => {
     if (!form.title || !form.content) return alert("제목과 내용을 입력하세요!");
@@ -142,6 +154,8 @@ const AdminEvent = () => {
       bannerUrl: target.bannerUrl ?? "",
       startDate: target.startDate ?? "",
       endDate: target.endDate ?? "",
+      published: !!target.published,
+      publishAt: target.publishAt ?? "",
     });
     setEditingId(id);
   };
@@ -217,6 +231,20 @@ const AdminEvent = () => {
             </label>
           </div>
 
+
+          {/* 예약 게시일 (선택) */}
+          <label className="flex flex-col gap-1 mb-4">
+            <span className="text-xs text-gray-600">예약 게시일 (선택)</span>
+            <input
+              type="datetime-local"
+              name="publishAt"
+              value={form.publishAt}
+              onChange={(e) => setForm(f => ({ ...f, publishAt: e.target.value }))}
+              className="w-full border border-gray-200 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+            />
+            <span className="text-[11px] text-gray-500">미래 시각으로 설정 후 "예약 발행"을 누르면 예약 상태로 저장됩니다.</span>
+          </label>
+
           {/* 제목 */}
           <label className="flex flex-col gap-1 mb-4">
             <span className="text-xs text-gray-600">게시판 제목</span>
@@ -262,6 +290,7 @@ const AdminEvent = () => {
                 name="endDate"
                 value={form.endDate}
                 onChange={handleChange}
+                min={form.startDate || undefined}
                 className="border border-gray-200 p-3 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
               />
             </label>
@@ -283,29 +312,132 @@ const AdminEvent = () => {
           <div className="mt-5 flex justify-end gap-2">
             {editingId ? (
               <>
+                {/* 임시저장: published=false */}
                 <button
-                  onClick={handleSave}
+                  onClick={async () => {
+                    try {
+                      const { data } = await updateBoard(editingId, { ...toPayload(form), published: false, publishAt: null });
+                      setPosts(prev => prev.map(p => (p.id === editingId ? data : p)));
+                      resetForm();
+                      setEditingId(null);
+                    } catch (e) {
+                      console.error("[AdminEvent] update(draft) failed", e);
+                      alert("임시저장에 실패했습니다. 콘솔을 확인해주세요.");
+                    }
+                  }}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg border border-gray-200"
+                >
+                  임시저장(비공개)
+                </button>
+
+                {/* 예약 발행: published=false + publishAt 유효성 */}
+                <button
+                  onClick={async () => {
+                    if (!form.publishAt) return alert("예약 게시일을 선택하세요.");
+                    const dt = new Date(form.publishAt);
+                    if (Number.isNaN(dt.getTime()) || dt <= new Date()) return alert("예약 시각은 현재보다 이후여야 합니다.");
+                    try {
+                      const { data } = await updateBoard(editingId, { ...toPayload(form), published: false });
+                      setPosts(prev => prev.map(p => (p.id === editingId ? data : p)));
+                      resetForm();
+                      setEditingId(null);
+                    } catch (e) {
+                      console.error("[AdminEvent] update(schedule) failed", e);
+                      alert("예약 발행 저장에 실패했습니다. 콘솔을 확인해주세요.");
+                    }
+                  }}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg shadow-sm"
+                >
+                  예약 발행
+                </button>
+
+                {/* 지금 발행: published=true */}
+                <button
+                  onClick={async () => {
+                    try {
+                      const { data } = await updateBoard(editingId, { ...toPayload(form), published: true, publishAt: null });
+                      setPosts(prev => prev.map(p => (p.id === editingId ? data : p)));
+                      resetForm();
+                      setEditingId(null);
+                    } catch (e) {
+                      console.error("[AdminEvent] update(publish now) failed", e);
+                      alert("발행 저장에 실패했습니다. 콘솔을 확인해주세요.");
+                    }
+                  }}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm"
                 >
-                  수정 완료
+                  지금 발행
                 </button>
+
                 <button
                   onClick={() => {
                     setEditingId(null);
                     resetForm();
                   }}
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg border border-gray-200"
+                  className="px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 rounded-lg border border-gray-200"
                 >
                   취소
                 </button>
               </>
             ) : (
-              <button
-                onClick={handleAdd}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm"
-              >
-                등록
-              </button>
+              <>
+                {/* 임시저장: published=false */}
+                <button
+                  onClick={async () => {
+                    if (!form.title || !form.content) return alert("제목과 내용을 입력하세요!");
+                    try {
+                      const { data } = await createBoard({ ...toPayload(form), published: false, publishAt: null });
+                      setPosts(prev => [data, ...prev]);
+                      resetForm();
+                    } catch (e) {
+                      console.error("[AdminEvent] create(draft) failed", e);
+                      alert("임시저장에 실패했습니다. 콘솔을 확인해주세요.");
+                    }
+                  }}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg border border-gray-200"
+                >
+                  임시저장(비공개)
+                </button>
+
+                {/* 예약 발행: published=false + publishAt */}
+                <button
+                  onClick={async () => {
+                    if (!form.title || !form.content) return alert("제목과 내용을 입력하세요!");
+                    if (!form.publishAt) return alert("예약 게시일을 선택하세요.");
+                    const dt = new Date(form.publishAt);
+                    if (Number.isNaN(dt.getTime()) || dt <= new Date()) return alert("예약 시각은 현재보다 이후여야 합니다.");
+                    try {
+                      const { data } = await createBoard({ ...toPayload(form), published: false });
+                      setPosts(prev => [data, ...prev]);
+                      resetForm();
+                    } catch (e) {
+                      console.error("[AdminEvent] create(schedule) failed", e);
+                      alert("예약 발행 저장에 실패했습니다. 콘솔을 확인해주세요.");
+                    }
+                  }}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg shadow-sm"
+                >
+                  예약 발행
+                </button>
+
+                {/* 지금 발행: published=true */}
+                <button
+                  onClick={async () => {
+                    if (!form.title || !form.content) return alert("제목과 내용을 입력하세요!");
+                    try {
+                      const { data } = await createBoard({ ...toPayload(form), published: true, publishAt: null });
+                      setPosts(prev => [data, ...prev]);
+                      resetForm();
+                    } catch (e) {
+                      console.error("[AdminEvent] create(publish now) failed", e);
+                      alert("발행에 실패했습니다. 콘솔을 확인해주세요.");
+                    }
+                  }}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm"
+                >
+                  지금 발행
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -320,6 +452,15 @@ const AdminEvent = () => {
               >
                 <div className="flex items-center gap-2">
                   <Badge type={post.type} />
+                  {post.published ? (
+                    <span className="text-[11px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">공개</span>
+                  ) : (
+                    <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">비공개</span>
+                  )}
+                  {/* 예약 상태 표시 */}
+                  {post.publishAt && new Date(post.publishAt) > new Date() && (
+                    <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">예약</span>
+                  )}
                   <h3 className="font-semibold">{post.title}</h3>
                 </div>
                 <span className="text-sm text-gray-500">{post.createdDate || (post.createdAt?.slice ? post.createdAt.slice(0,10) : "")}</span>
@@ -344,7 +485,7 @@ const AdminEvent = () => {
                   <div className="md:col-span-4 flex gap-2 mt-2 justify-end">
                     <button
                       onClick={() => handleEdit(post.id)}
-                      className="px-3 py-2 text-xs border rounded-lg hover:bg-gray-50"
+                      className="px-3 py-2 text-xs border rounded-lg hover:bg-gray-100"
                     >
                       수정
                     </button>

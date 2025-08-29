@@ -28,6 +28,20 @@ const fromDateTimeLocalToMySQL = (v) => {
 
 const num = (v, def = 0) => (v === undefined || v === null || v === "" ? def : Number(v));
 
+const toBoolNum = (v) => {
+  if (v === undefined || v === null) return 1; // default enabled
+  // handle booleans and numbers directly
+  if (v === true || v === 1) return 1;
+  if (v === false || v === 0) return 0;
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase();
+    if (['1','true','y','yes','enable','enabled','active','on'].includes(s)) return 1;
+    if (['0','false','n','no','disable','disabled','inactive','off'].includes(s)) return 0;
+  }
+  return v ? 1 : 0;
+};
+const isEnabledFlag = (v) => toBoolNum(v) === 1;
+
 export default function AdminPricing() {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]);
@@ -55,7 +69,7 @@ export default function AdminPricing() {
       if (qScreen && String(r.screen_id ?? r.screenId) !== String(qScreen)) return false;
       if (qEnabled !== "ALL") {
         const want = qEnabled === "ENABLED" ? 1 : 0;
-        if (Number(r.enabled) !== want) return false;
+        if (toBoolNum(r.enabled) !== want) return false;
       }
       if (qKind !== "ALL") {
         const k = String(r.kind ?? r.KIND ?? "").toUpperCase();
@@ -78,12 +92,15 @@ export default function AdminPricing() {
         priority: Number(r.priority ?? r.PRIORITY ?? 1),
         valid_from: r.valid_from ?? r.validFrom ?? null,
         valid_to: r.valid_to ?? r.validTo ?? null,
-        enabled: (r.enabled ?? r.ENABLED ?? 1) ? 1 : 0,
+        enabled: toBoolNum(
+          r.enabled ?? r.ENABLED ?? r.is_enabled ?? r.isEnabled ?? r.active ?? r.ACTIVE ?? r.status ?? r.STATUS
+        ),
         currency: r.currency ?? r.CURRENCY ?? "KRW",
         created_at: r.created_at ?? r.createdAt,
         updated_at: r.updated_at ?? r.updatedAt,
       }));
       setItems(norm);
+      console.log('[AdminPricing] loaded', { count: norm.length, samples: norm.slice(0,5).map(x=>({id:x.id, enabled:x.enabled})) });
     } catch (e) {
       console.error(e);
       alert("가격 규칙 목록을 불러오지 못했습니다. 콘솔을 확인하세요.");
@@ -104,7 +121,7 @@ export default function AdminPricing() {
       priority: r?.priority ?? 1,
       valid_from: toDateTimeLocal(r?.valid_from),
       valid_to: toDateTimeLocal(r?.valid_to),
-      enabled: (r?.enabled ?? 1) ? true : false,
+      enabled: isEnabledFlag(r?.enabled),
       currency: r?.currency ?? "KRW",
     });
     setOpen(true);
@@ -135,7 +152,7 @@ export default function AdminPricing() {
       priority: num(form.priority, 1),
       valid_from: fromDateTimeLocalToMySQL(form.valid_from),
       valid_to: fromDateTimeLocalToMySQL(form.valid_to),
-      enabled: form.enabled ? 1 : 0,
+      enabled: toBoolNum(form.enabled),
       currency: form.currency || "KRW",
     };
 
@@ -160,7 +177,7 @@ export default function AdminPricing() {
         <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-2xl sm:text-3xl font-semibold">상영관 요금/프로모션 관리</h2>
           <div className="flex items-center gap-2">
-            <button onClick={onNew} className="px-3 py-2 rounded bg-black text-white text-sm">+ 새 규칙</button>
+            <button onClick={onNew} className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-sm">+ 새 규칙</button>
             <button onClick={load} className="px-3 py-2 rounded border text-sm">새로고침</button>
           </div>
         </header>
@@ -193,7 +210,7 @@ export default function AdminPricing() {
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-gray-700">
-                <tr className="text-left">
+                <tr className="text-center">
                   <th className="px-3 py-2">ID</th>
                   <th className="px-3 py-2">Screen</th>
                   <th className="px-3 py-2">Kind</th>
@@ -202,7 +219,7 @@ export default function AdminPricing() {
                   <th className="px-3 py-2">Priority</th>
                   <th className="px-3 py-2">Valid From</th>
                   <th className="px-3 py-2">Valid To</th>
-                  <th className="px-3 py-2">Enabled</th>
+                  <th className="px-3 py-2">상태</th>
                   <th className="px-3 py-2">Currency</th>
                   <th className="px-3 py-2 text-right">Action</th>
                 </tr>
@@ -223,7 +240,11 @@ export default function AdminPricing() {
                       <td className="px-3 py-2">{r.priority}</td>
                       <td className="px-3 py-2">{r.valid_from ? String(r.valid_from).replace('T',' ').slice(0,19) : '-'}</td>
                       <td className="px-3 py-2">{r.valid_to ? String(r.valid_to).replace('T',' ').slice(0,19) : '-'}</td>
-                      <td className="px-3 py-2">{r.enabled ? 'Y' : 'N'}</td>
+                      <td className="px-3 py-2">
+                        <span className={isEnabledFlag(r.enabled) ? 'inline-block px-2 py-0.5 text-xs rounded bg-green-100 text-green-700' : 'inline-block px-2 py-0.5 text-xs rounded bg-gray-200 text-gray-700'}>
+                          {isEnabledFlag(r.enabled) ? '사용' : '중지'}
+                        </span>
+                      </td>
                       <td className="px-3 py-2">{r.currency || 'KRW'}</td>
                       <td className="px-3 py-2 text-right">
                         <button onClick={()=>onEdit(r)} className="px-2 py-1 text-xs border rounded mr-1 hover:bg-gray-50">수정</button>

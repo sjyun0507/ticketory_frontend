@@ -36,13 +36,13 @@ const EventCard = ({ item, onOpen }) => {
       tabIndex={0}
       onClick={() => onOpen?.(item)}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onOpen?.(item)}
-      className="group overflow-hidden rounded-xl border bg-white shadow-sm transition hover:shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      className="group overflow-hidden rounded-xl border border-gray-100 bg-white/90 backdrop-blur ring-1 ring-black/5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
     >
       <div className="relative aspect-[4/3] w-full overflow-hidden">
         <img
           src={item.bannerUrl}
           alt={item.title}
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 group-hover:brightness-105"
           loading="lazy"
         />
         <div className="absolute left-3 top-3">
@@ -109,7 +109,10 @@ const Events = () => {
   const activeSorted = sortByDateDesc(activePosts);
   const endedSorted  = sortByDateDesc(endedPosts);
 
-  const featured = activeSorted.find((p) => p.bannerUrl) || activeSorted[0] || null;
+  const activeNotices = activeSorted.filter(p => p.type === "NOTICE");
+  const activeEvents  = activeSorted.filter(p => p.type !== "NOTICE");
+  const endedNotices = endedSorted.filter(p => p.type === "NOTICE");
+  const endedEvents  = endedSorted.filter(p => p.type !== "NOTICE");
 
   return (
     <main className="max-w-[1200px] mx-auto px-4 py-10 min-h-[75vh]">
@@ -135,54 +138,73 @@ const Events = () => {
         </div>
       </header>
 
-      {/* 메인 포스터 (1장) */}
-      {tab === "active" && featured && (
-        <section className="mb-10">
-          <div
-            className="relative overflow-hidden rounded-2xl border bg-white shadow-sm cursor-pointer"
-            onClick={() => setActive(featured)}
-          >
-            <img
-              src={featured.bannerUrl}
-              alt={featured.title}
-              className="w-full h-[280px] sm:h-[360px] object-cover"
-            />
-            <div className="absolute left-4 top-4">
-              <Badge type={featured.type} />
-            </div>
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4 sm:p-6">
-              <h2 className="text-white text-lg sm:text-2xl font-semibold">{featured.title}</h2>
-              <p className="mt-1 text-white/80 text-xs sm:text-sm">
-                기간: {fmt(featured.startDate)} ~ {fmt(featured.endDate)}
-              </p>
-            </div>
-          </div>
-        </section>
-      )}
-
       {loading ? (
         <p className="text-center text-gray-500">불러오는 중...</p>
       ) : (
         tab === "active" ? (
-          activeSorted.length === 0 ? (
+          (activeNotices.length === 0 && activeEvents.length === 0) ? (
             <p className="text-center text-gray-500">진행 중/예정인 공개 이벤트가 없습니다.</p>
           ) : (
-            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {activeSorted
-                .filter((p) => !featured || p.id !== featured.id)
-                .map((e) => (
-                  <EventCard key={e.id} item={e} onOpen={setActive} />
-                ))}
+            <section className="space-y-8">
+              {activeNotices.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-900">공지</h2>
+                    <div className="h-px flex-1 bg-gray-200" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {activeNotices.map(e => (
+                      <EventCard key={e.id} item={e} onOpen={setActive} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {activeEvents.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-900">이벤트</h2>
+                    <div className="h-px flex-1 bg-gray-200" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {activeEvents.map(e => (
+                      <EventCard key={e.id} item={e} onOpen={setActive} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </section>
           )
         ) : (
-          endedSorted.length === 0 ? (
+          (endedNotices.length === 0 && endedEvents.length === 0) ? (
             <p className="text-center text-gray-500">완료된 공개 이벤트가 없습니다.</p>
           ) : (
-            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {endedSorted.map((e) => (
-                <EventCard key={e.id} item={e} onOpen={setActive} />
-              ))}
+            <section className="space-y-8">
+              {endedNotices.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-900">공지</h2>
+                    <div className="h-px flex-1 bg-gray-200" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {endedNotices.map(e => (
+                      <EventCard key={e.id} item={e} onOpen={setActive} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {endedEvents.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-900">이벤트</h2>
+                    <div className="h-px flex-1 bg-gray-200" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {endedEvents.map(e => (
+                      <EventCard key={e.id} item={e} onOpen={setActive} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </section>
           )
         )
@@ -198,7 +220,7 @@ const Events = () => {
             className="absolute inset-0 bg-black/50"
             onClick={close}
           />
-          <div className="relative z-10 w-full max-w-4xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
+          <div className="relative z-10 w-full max-w-4xl max-h-[85vh] overflow-y-auto rounded-2xl border border-gray-100 bg-white/95 backdrop-blur ring-1 ring-black/5 shadow-2xl p-6">
             {/* Header */}
             <div className="flex items-center justify-between border-b pb-4">
               <div className="flex items-center gap-2">
@@ -219,7 +241,7 @@ const Events = () => {
               <img
                 src={active.bannerUrl}
                 alt={active.title}
-                className="max-h-[60vh] w-full object-contain"
+                className="w-full h-auto"
               />
             )}
             <div className="space-y-3 py-5">
@@ -239,7 +261,7 @@ const Events = () => {
             <div className="flex justify-end gap-2 border-t bg-gray-50 pt-3">
               <button
                 onClick={close}
-                className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-100"
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 active:scale-[.98] transition"
               >
                 닫기
               </button>

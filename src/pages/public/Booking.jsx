@@ -72,7 +72,7 @@ const MovieItem = ({ movie, active, onClick, dimmed = false }) => (
   </button>
 );
 
-//상영시간 목록
+//상영시간 목록 (스타일 개선 및 disabled 뚜렷하게)
 const TimeCard = ({ auditorium, start, end, title, disabled = false, onClick }) => {
     const label =
         typeof auditorium === "string" && !auditorium.trim().endsWith("관")
@@ -85,13 +85,13 @@ const TimeCard = ({ auditorium, start, end, title, disabled = false, onClick }) 
         disabled={disabled}
         aria-disabled={disabled}
         className={
-          "w-full flex items-center justify-between px-3 py-2 rounded-md border bg-white/80 backdrop-blur transition shadow-sm " +
-          (disabled ? "opacity-20 cursor-not-allowed" : "hover:bg-white")
+          "w-full group flex items-center justify-between px-4 py-3 rounded-lg border bg-gradient-to-r from-white to-zinc-50 backdrop-blur ring-1 ring-zinc-100 shadow-sm transition-shadow duration-200 " +
+          (disabled ? "opacity-50 grayscale cursor-not-allowed hover:shadow-none" : "hover:bg-white hover:shadow-md")
         }
       >
         {/* Left: start/end time */}
-        <div className="w-20 text-right">
-          <div className="text-lg font-bold leading-none">{start}</div>
+        <div className="w-24 text-right">
+          <div className="text-xl font-extrabold leading-none tabular-nums tracking-tight">{start}</div>
           <div className="text-xs text-gray-400 leading-none mt-1">~{end || ""}</div>
         </div>
 
@@ -102,7 +102,7 @@ const TimeCard = ({ auditorium, start, end, title, disabled = false, onClick }) 
         </div>
 
         {/* Right: auditorium */}
-        <div className="w-40 text-right">
+        <div className="w-44 text-right">
           <div className="text-sm font-medium">Ticketory(대구)</div>
           <div className="text-sm font-medium">{label}</div>
         </div>
@@ -309,9 +309,9 @@ const Bookings = () => {
       title: slot.title ?? ''
     });
 
-    // 지난 상영 시간 방지
-    if (slot?.startMs && slot.startMs <= Date.now()) {
-      alert("이미 지난 상영시간입니다. 다른 시간을 선택해주세요.");
+    // 지난 상영 시간 또는 30분 이내 방지
+    if (slot?.startMs && (slot.startMs - 30 * 60 * 1000) <= Date.now()) {
+      alert("상영 시작 30분 이내에는 예매할 수 없습니다. 다른 시간을 선택해주세요.");
       return;
     }
 
@@ -427,7 +427,7 @@ const Bookings = () => {
                       start={s.start}
                       end={s.end}
                       title={s.title}
-                      disabled={typeof s.startMs === 'number' ? s.startMs <= Date.now() : false}
+                      disabled={typeof s.startMs === 'number' ? (s.startMs - 30 * 60 * 1000) <= Date.now() : false}
                       onClick={() => openSeatPage(s)}
                     />
                   ))

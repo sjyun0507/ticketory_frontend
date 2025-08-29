@@ -62,14 +62,14 @@ const TimePill = ({ labelStart, labelEnd, auditorium, disabled = false, onClick 
     disabled={disabled}
     aria-disabled={disabled}
     className={
-      "inline-flex items-center gap-2 px-4 py-3 rounded-full border bg-white/60 backdrop-blur ring-1 ring-black/5 transition text-sm mr-2 shadow-sm " +
+      "inline-flex items-center gap-2 px-5 py-3 rounded-full border bg-gradient-to-r from-white to-zinc-50 backdrop-blur ring-1 ring-black/5 transition text-sm mr-2 shadow-sm " +
       (disabled
-        ? "opacity-30 cursor-not-allowed pointer-events-none"
+        ? "opacity-50 grayscale cursor-not-allowed pointer-events-none"
         : "hover:bg-white hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40")
     }
     title={auditorium ? `${auditorium} | ${labelStart}${labelEnd ? ` ~ ${labelEnd}` : ""}` : labelStart}
   >
-    <span className="font-semibold leading-none">{labelStart}</span>
+    <span className="font-semibold leading-none tabular-nums">{labelStart}</span>
     {labelEnd && <span className="text-gray-400 leading-none">~ {labelEnd}</span>}
     {auditorium && <span className="text-gray-900 leading-none">| {auditorium}</span>}
   </button>
@@ -89,7 +89,7 @@ const MovieBlock = ({ movie, slots, onClickTime }) => (
     {slots && slots.length ? (
       <div className="flex flex-wrap gap-y-3">
         {slots.map((s) => {
-          const isPast = typeof s.startMs === 'number' ? s.startMs <= Date.now() : false;
+          const isPast = typeof s.startMs === 'number' ? (s.startMs - 30 * 60 * 1000) <= Date.now() : false;
           return (
             <TimePill
               key={s.id}
@@ -244,8 +244,8 @@ const Screenings = () => {
 
   // 이동: 시간 클릭 → 좌석 예약 (로그인 가드)
   const goSeatForTime = (slot) => {
-    if (slot && typeof slot.startMs === 'number' && slot.startMs <= Date.now()) {
-      alert('이미 지난 상영시간입니다. 다른 시간을 선택해주세요.');
+    if (slot && typeof slot.startMs === 'number' && (slot.startMs - 30 * 60 * 1000) <= Date.now()) {
+      alert('상영 시작 30분 이내에는 예매할 수 없습니다. 다른 시간을 선택해주세요.');
       return;
     }
     // 최신 토큰을 즉시 조회(스토어 hydration 지연 대응) + 로컬스토리지 폴백

@@ -179,11 +179,7 @@ export const createWednesdayDiscount = ({ from, to, percent, kinds }) => {
         paramsSerializer: p => qs.stringify(p, { arrayFormat: 'repeat' }),
     });
 };
-// 백엔드가 계산해서 내려주는 견적
-export const getPriceQuote = async ({ screeningId, items }) => {
-    const { data } = await api.post('/pricing/quote', { screeningId, items });
-    return data;
-};
+
 
 //Board (공지/이벤트)
 export const getBoards = () => api.get("/board");

@@ -77,8 +77,13 @@ export default function AdminPricing() {
     if (!wedFrom || !wedTo) return alert('기간을 선택해 주세요.');
     if (!wedPercent || Number(wedPercent) <= 0) return alert('할인율(%)을 입력해 주세요.');
     try {
-      const params = { from: wedFrom, to: wedTo, percent: Number(wedPercent) };
-      if (wedKinds && wedKinds.length) params.kinds = wedKinds; // 빈 배열이면 전체 적용
+      const params = {
+        from: wedFrom,
+        to: wedTo,
+        percent: Number(wedPercent),
+        tz: 'Asia/Seoul',
+        kinds: (wedKinds && wedKinds.length) ? wedKinds : ['ADULT','TEEN','CHILD']
+      };
       const { data } = await createWednesdayDiscount(params);
       alert(`수요일 할인 규칙 적용 완료 (created=${data?.created ?? 0})`);
       await load(); // 목록 갱신 (전역 규칙이 보이도록)
@@ -90,7 +95,15 @@ export default function AdminPricing() {
 
   const filtered = useMemo(() => {
     return items.filter((r) => {
-      if (qScreen && String(r.screen_id ?? r.screenId) !== String(qScreen)) return false;
+      const scr = (r.screen_id ?? r.screenId ?? null);
+      if (qScreen) {
+        if (String(qScreen) === '0') {
+          // 0은 전역 규칙 조회: NULL/undefined/"0" 모두 포함
+          if (!(scr === null || scr === undefined || String(scr) === '0')) return false;
+        } else {
+          if (String(scr) !== String(qScreen)) return false;
+        }
+      }
       if (qEnabled !== "ALL") {
         const want = qEnabled === "ENABLED" ? 1 : 0;
         if (toBoolNum(r.enabled) !== want) return false;
@@ -167,9 +180,11 @@ export default function AdminPricing() {
 
   const onSave = async (e) => {
     e?.preventDefault?.();
+    const scId = num(form.screen_id, undefined);
     const payload = {
       id: form.id ?? undefined,
-      screen_id: num(form.screen_id, undefined),
+      // 0 또는 빈값이면 전역 규칙으로 취급 → null 전송 (백엔드에서 NULL=ALL)
+      screen_id: (scId === 0 ? null : scId),
       kind: form.kind,
       op: form.op,
       amount: num(form.amount, 0),
@@ -180,7 +195,6 @@ export default function AdminPricing() {
       currency: form.currency || "KRW",
     };
 
-    if (!payload.screen_id) return alert("screen_id는 필수입니다.");
     if (!payload.kind) return alert("kind는 필수입니다.");
     if (!payload.op) return alert("op는 필수입니다.");
 
@@ -206,7 +220,6 @@ export default function AdminPricing() {
           </div>
         </header>
 
-        {/* Global Wednesday Discount (Inline Tool) */}
         <section className="mb-6 p-4 border rounded-lg bg-white">
           <h3 className="text-base font-semibold mb-3">전역 수요일 할인 생성/갱신</h3>
           <form onSubmit={submitWedDiscount} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
@@ -243,7 +256,7 @@ export default function AdminPricing() {
         <section className="mb-4 grid grid-cols-1 sm:grid-cols-4 gap-2">
           <div>
             <label className="block text-xs text-gray-600 mb-1">Screen ID</label>
-            <input value={qScreen} onChange={(e)=>setQScreen(e.target.value)} placeholder="예: 1" className="w-full border rounded px-3 py-2" />
+            <input value={qScreen} onChange={(e)=>setQScreen(e.target.value)} placeholder="예: 1 / 0=ALL" className="w-full border rounded px-3 py-2" />
           </div>
           <div>
             <label className="block text-xs text-gray-600 mb-1">Kind</label>
@@ -290,7 +303,7 @@ export default function AdminPricing() {
                   filtered.sort((a,b)=> (a.priority-b.priority) || ((a.id??0)-(b.id??0))).map((r)=> (
                     <tr key={r.id} className="border-t">
                       <td className="px-3 py-2">{r.id}</td>
-                      <td className="px-3 py-2">{r.screen_id}</td>
+                      <td className="px-3 py-2">{(r.screen_id === null || r.screen_id === undefined || String(r.screen_id) === '0') ? 'ALL' : r.screen_id}</td>
                       <td className="px-3 py-2">{r.kind}</td>
                       <td className="px-3 py-2">{r.op}</td>
                       <td className="px-3 py-2">{Number(r.amount).toLocaleString()}</td>
@@ -323,9 +336,9 @@ export default function AdminPricing() {
               <h3 className="text-lg font-semibold mb-4">{form.id ? `규칙 수정 #${form.id}` : '새 규칙 추가'}</h3>
               <form onSubmit={onSave} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-gray-600 mb-1">Screen ID *</label>
+                  <label className="block text-xs text-gray-600 mb-1">Screen ID (빈값/0=ALL)</label>
                   <input type="number" className="w-full border rounded px-3 py-2" value={form.screen_id}
-                         onChange={(e)=>setForm(f=>({...f, screen_id:e.target.value}))} required/>
+                         onChange={(e)=>setForm(f=>({...f, screen_id:e.target.value}))} />
                 </div>
 
                 <div>

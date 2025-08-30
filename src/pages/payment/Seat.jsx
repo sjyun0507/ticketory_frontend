@@ -6,14 +6,12 @@ import { getMovieDetail } from "../../api/movieApi.js";
 import enter from '../../assets/styles/enter.png';
 import exit from '../../assets/styles/exit.png';
 import {initBooking} from "../../api/bookingApi.js";
-import api from "../../api/axiosInstance.js";
 import {getPricingRules} from "../../api/adminApi.js";
 
 /* 좌석 선택 & 페이
 screeningId를 param으로 불러와서 좌석배치 불러옴 {available, hold, booked} (백엔드) -> 프론트에서는 AVAILABLE/HELD/SOLD 로 변환하여 사용)
 */
 
-// 백엔드 상태(normalize): {available, hold, booked} -> {AVAILABLE, HELD, SOLD}
 const normalizeStatus = (s) => {
     if (!s) return "AVAILABLE";
     const v = String(s).toLowerCase();
@@ -24,17 +22,14 @@ const normalizeStatus = (s) => {
     return String(s).toUpperCase();
 };
 
-
 // 가격 정책 (기본값)
 const DEFAULT_PRICE = { adult: 14000, teen: 11000 };
 
-// ----- Pricing helpers (pricing_rule: op, amount, priority, valid window, enabled) -----
 const toDate = (v) => {
     if (!v) return null;
     if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
     if (typeof v === 'number') return new Date(v);
     const s = String(v).trim();
-    // Accept both "YYYY-MM-DDTHH:mm:ss" and "YYYY-MM-DD HH:mm:ss"
     const isoLike = s.includes('T') ? s : s.replace(' ', 'T');
     let d = new Date(isoLike);
     if (!isNaN(d.getTime())) return d;
@@ -48,81 +43,21 @@ const toDate = (v) => {
     return null;
 };
 
-const nowIsBetween = (from, to) => {
-    const now = new Date();
+
+const refIsBetween = (ref, from, to) => {
+    const refDate = toDate(ref);
     const f = toDate(from);
     const t = toDate(to);
-    const fromOk = !f || f <= now;
-    const toOk = !t || now <= t;
+    if (!refDate) return false;
+    const fromOk = !f || f <= refDate;
+    const toOk   = !t || refDate <= t;
     return fromOk && toOk;
 };
 
 const normalizeKind = (k) => (k ?? "").toString().toUpperCase();
 const normalizeOp = (op) => (op ?? "").toString().toUpperCase();
 
-/**
- * Apply a list of pricing rules to a base price.
- * Supports ops: SET, PLUS, MINUS, PCT_PLUS, PCT_MINUS
- * Percent ops treat amount as percentage number (e.g., 10 => 10%).
- * Rules are applied in ascending priority (smaller number first), then by created_at ascending if present.
- */
-const applyPricingRules = (basePrice, rules) => {
-    if (!Array.isArray(rules) || rules.length === 0) return basePrice;
-
-    const ordered = [...rules]
-        .map(r => ({
-            ...r,
-            priority: Number(r.priority ?? r.PRIORITY ?? 9999),
-            amount: Number(r.amount ?? r.AMOUNT ?? 0),
-            valid_from: r.valid_from ?? r.validFrom ?? r.VALID_FROM,
-            valid_to: r.valid_to ?? r.validTo ?? r.VALID_TO,
-            enabled: (r.enabled ?? r.ENABLED ?? 1) ? 1 : 0,
-            created_at: r.created_at ?? r.createdAt ?? r.CREATED_AT ?? 0,
-            id: r.id ?? r.ID,
-            ID: r.ID ?? r.id,
-        }))
-        .filter(r => r.enabled === 1 && nowIsBetween(r.valid_from, r.valid_to))
-        .sort((a, b) => {
-            if (a.priority !== b.priority) return a.priority - b.priority;
-            const ia = (a.id ?? a.ID) ?? 0;
-            const ib = (b.id ?? b.ID) ?? 0;
-            if (ia !== ib) return ia - ib;
-            const da = a.created_at ? new Date(a.created_at).getTime() : 0;
-            const db = b.created_at ? new Date(b.created_at).getTime() : 0;
-            return da - db;
-        });
-
-    let price = Number(basePrice);
-    for (const r of ordered) {
-        const op = normalizeOp(r.op ?? r.OP);
-        const amt = Number(r.amount);
-        switch (op) {
-            case 'SET':
-                price = amt;
-                break;
-            case 'PLUS':
-                price += amt;
-                break;
-            case 'MINUS':
-                price -= amt;
-                break;
-            case 'PCT_PLUS':
-                price += price * (amt / 100);
-                break;
-            case 'PCT_MINUS':
-                price -= price * (amt / 100);
-                break;
-            default:
-                // Unknown op: ignore
-                break;
-        }
-    }
-    // Guardrails: no negative price
-    return Math.max(0, Math.round(price));
-};
-
-// Traced variant: returns { price, trace[] }
-const applyPricingRulesWithTrace = (basePrice, rules) => {
+const applyPricingRulesWithTrace = (basePrice, rules, refDate) => {
     if (!Array.isArray(rules) || rules.length === 0) return { price: Math.max(0, Math.round(basePrice)), trace: [] };
 
     const ordered = [...rules]
@@ -137,7 +72,7 @@ const applyPricingRulesWithTrace = (basePrice, rules) => {
             id: r.id ?? r.ID,
             ID: r.ID ?? r.id,
         }))
-        .filter(r => r.enabled === 1 && nowIsBetween(r.valid_from, r.valid_to))
+        .filter(r => r.enabled === 1 && refIsBetween(refDate, r.valid_from, r.valid_to))
         .sort((a, b) => {
             if (a.priority !== b.priority) return a.priority - b.priority;
             const ia = (a.id ?? a.ID) ?? 0;
@@ -224,6 +159,13 @@ const Seat = () => {
     const resolvedAuditorium = auditorium ?? savedSummary.auditorium;
     const resolvedDate = date ?? savedSummary.date;
     const resolvedStart = start ?? savedSummary.start;
+    const showStartRef = useMemo(() => {
+        if (!resolvedDate || !resolvedStart) return null;
+        const hhmm = resolvedStart.length === 5 ? `${resolvedStart}:00` : resolvedStart; // 초 보정
+        const isoKst = `${resolvedDate}T${hhmm}+09:00`; // KST 고정
+        const d = new Date(isoKst);
+        return isNaN(d.getTime()) ? null : d;
+    }, [resolvedDate, resolvedStart]);
     const resolvedTitle = (title ?? savedSummary.title) || '';
     const navigate = useNavigate();
     const queryClient = useQueryClient();
@@ -258,7 +200,7 @@ const Seat = () => {
         enabled: !!screeningId,
     });
 
-    // 가격 정책 불러오기: screen_id 기준
+    // 가격 정책 불러오기: screen_id 기준 (로컬+글로벌 병합)
     useEffect(() => {
         let cancel = false;
         async function loadPricing() {
@@ -266,10 +208,38 @@ const Seat = () => {
                 const sid = resolveScreenId(data);
                 if (!sid) return; // 좌석 데이터에 screen_id가 없으면 기본가 유지
 
-                const list = await getPricingRules(Number(sid));
+                // 1) 해당 상영관 규칙
+                const resLocal = await getPricingRules(Number(sid));
+                const localRules = (resLocal?.data ?? resLocal ?? []);
+
+                // 2) 전역 규칙도 함께 시도 (서버가 0을 전역으로 처리하거나, null/undefined를 허용할 수 있음)
+                let globalRules = [];
                 try {
-                    console.groupCollapsed('[pricing] rules raw');
-                    console.table(list.map(r => ({ id: r.id ?? r.ID, kind: r.kind ?? r.KIND, op: r.op ?? r.OP, amount: r.amount, priority: r.priority, valid_from: r.valid_from ?? r.validFrom, valid_to: r.valid_to ?? r.validTo, enabled: r.enabled })));
+                    const resGlobal0 = await getPricingRules(0);
+                    globalRules = (resGlobal0?.data ?? resGlobal0 ?? []);
+                    if (!Array.isArray(globalRules) || globalRules.length === 0) {
+                        // 일부 서버는 null을 전역으로 사용
+                        const resGlobalNull = await getPricingRules(null);
+                        globalRules = (resGlobalNull?.data ?? resGlobalNull ?? []);
+                    }
+                } catch (_) {
+                    // 전역 엔드포인트 미지원일 수 있으므로 무시
+                }
+
+                // 3) 병합 + id 기준 중복 제거 (상영관 규칙 우선)
+                const seen = new Set();
+                const list = [...localRules, ...globalRules].filter(r => {
+                    const id = r.id ?? r.ID;
+                    if (id == null) return true; // id가 없으면 통과
+                    if (seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+
+                try {
+                    console.groupCollapsed('[pricing] rules merged');
+                    console.log('screen_id=', sid, 'local=', localRules?.length || 0, 'global=', globalRules?.length || 0, 'total=', list.length);
+                    console.table(list.map(r => ({ id: r.id ?? r.ID, screen_id: r.screen_id ?? r.screenId, kind: r.kind ?? r.KIND, op: r.op ?? r.OP, amount: r.amount, priority: r.priority, valid_from: r.valid_from ?? r.validFrom, valid_to: r.valid_to ?? r.validTo, enabled: r.enabled })));
                     console.groupEnd();
                 } catch (_) {}
 
@@ -283,26 +253,24 @@ const Seat = () => {
                 const adultBase = DEFAULT_PRICE.adult;
                 const teenBase = DEFAULT_PRICE.teen;
 
-                // Backend: null/ALL/CHILD/UNKNOWN are treated as global rules
                 const common = [
                     ...(byKind[''] || []),
                     ...(byKind['ALL'] || []),
-                    ...(byKind['CHILD'] || []),
                     ...(byKind['UNKNOWN'] || []),
                 ];
 
-                const adultRes = applyPricingRulesWithTrace(adultBase, [...common, ...(byKind['ADULT'] || [])]);
-                const teenRes  = applyPricingRulesWithTrace(teenBase,  [...common, ...(byKind['TEEN']  || [])]);
-
+                const ref = showStartRef || new Date();
+                const adultRes = applyPricingRulesWithTrace(adultBase, [...common, ...(byKind['ADULT'] || [])], ref);
+                const teenRes  = applyPricingRulesWithTrace(teenBase,  [...common, ...(byKind['TEEN']  || [])], ref);
                 const next = { adult: adultRes.price, teen: teenRes.price };
                 if (!cancel) {
                     setPrice(next);
                     setPromo({ adult: adultRes.trace, teen: teenRes.trace });
                 }
 
-                // Console diagnostics
                 try {
                     console.groupCollapsed('[pricing] 계산 결과 (screen_id=' + sid + ')');
+                    console.log('가격 기준 시각(ref):', (showStartRef || new Date()).toISOString());
                     console.log('기본가(adult):', adultBase.toLocaleString(), '원');
                     adultRes.trace.forEach((t, i) => console.log(`ADULT #${i+1}`, t.op, t.amount, '→', Math.round(t.after).toLocaleString()));
                     console.log('최종(adult):', adultRes.price.toLocaleString(), '원');
@@ -434,7 +402,7 @@ const Seat = () => {
             if (!bookingId) {
                 throw new Error('bookingId가 응답에 없습니다.');
             }
-            // --- Build cart items from selected seats (assign adult first, then teen)
+
             const cartItems = seatIds.map((sid, idx) => {
                 const isAdult = idx < people.adult;
                 const type = isAdult ? 'ADULT' : 'TEEN';

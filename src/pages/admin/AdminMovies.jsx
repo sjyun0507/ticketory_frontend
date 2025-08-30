@@ -10,23 +10,16 @@ const AdminMovies = () => {
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
-
-  // 검색/필터 상태
-  // 로컬 상태 필터
-  const [filterStatus, setFilterStatus] = useState(""); // '', 'running', 'ended'
   const [page, setPage] = useState(0);
   const size = PAGE_SIZE;
-
-  // 총 페이지/개수(백엔드가 주면 사용, 없으면 프론트에서 대충 계산)
   const [totalElements, setTotalElements] = useState(null);
   const [totalPages, setTotalPages] = useState(null);
-
   // 클라이언트 측 필터 (ID, 제목, 개봉일)
   const [filterId, setFilterId] = useState("");
   const [filterTitle, setFilterTitle] = useState("");
   const [filterReleaseFrom, setFilterReleaseFrom] = useState("");
   const [filterReleaseTo, setFilterReleaseTo] = useState("");
-
+  const [filterStatus, setFilterStatus] = useState("");
   // 미디어 모달 상태
   const [mediaOpen, setMediaOpen] = useState(false);
   const [mediaMovie, setMediaMovie] = useState({ id: null, title: "" });
@@ -35,7 +28,6 @@ const AdminMovies = () => {
   const [imageKind, setImageKind] = useState("POSTER");
   const [imageFile, setImageFile] = useState(null);
   const [trailerUrl, setTrailerUrl] = useState("");
-
   // 새 영화 추가 모달 상태/폼
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({
@@ -138,9 +130,7 @@ const AdminMovies = () => {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
-
 
   // 상태 토글
   const onToggle = async (m) => {
@@ -270,9 +260,6 @@ const AdminMovies = () => {
             + 새 영화 추가
           </button>
         </header>
-
-        {/* 검색/필터 - (서버 검색/필터 폼 제거됨) */}
-
         {/* 로컬 필터(ID/제목/개봉일/상태) */}
         <div className="mb-3 grid grid-cols-1 sm:grid-cols-5 gap-2">
           <label className="flex flex-col gap-1">

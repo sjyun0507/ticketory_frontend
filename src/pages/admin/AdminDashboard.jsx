@@ -1,7 +1,6 @@
 import React, { useMemo } from "react";
 import { AdminLayout } from "../../components/AdminSidebar";
 
-/* ---------- 작은 공통 카드 ---------- */
 function StatCard({ title, value, delta, positive, icon }) {
     return (
         <div className="bg-white rounded-xl shadow-sm p-5 flex items-start gap-4">

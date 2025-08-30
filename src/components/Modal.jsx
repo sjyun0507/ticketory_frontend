@@ -1,18 +1,12 @@
 import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
-/**
+/*
  * Modal
- * props:
- *  - isOpen: boolean (열림/닫힘)
- *  - onClose: () => void (닫기 핸들러)
- *  - children: ReactNode (모달 내용)
- *
- * 특징:
- *  - ESC 키로 닫기
- *  - 오버레이 클릭으로 닫기 (컨텐츠 클릭은 닫히지 않음)
- *  - 모달 열릴 때 body 스크롤 잠금
- *  - 접근성 속성(aria-modal, role) 포함
+  props:
+  - isOpen: boolean (열림/닫힘)
+  - onClose: () => void (닫기 핸들러)
+  - children: ReactNode (모달 내용)
  */
 const Modal = ({ isOpen, onClose, children, contentStyle, contentClassName }) => {
     const containerRef = useRef(null);

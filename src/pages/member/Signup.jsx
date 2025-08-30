@@ -3,7 +3,6 @@ import { checkLoginId, memberSignup } from "../../api/memberApi.js";
 import {useNavigate} from "react-router-dom";
 import "./Signup.css";
 
-
 export default function Signup() {
     const navigate = useNavigate();
     const [form, setForm] = useState({

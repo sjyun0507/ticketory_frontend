@@ -6,8 +6,6 @@ const AdminBookings = () => {
   const [logs, setLogs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // filters
   const [status, setStatus] = useState(""); // '', REQUESTED, DONE, FAILED
   const [q, setQ] = useState(""); // keyword (reason / pgRefundTid / paymentId)
 

@@ -6,13 +6,11 @@ import ReactDOM from "react-dom";
 import { createScreening, fetchScreenings, updateScreening, deleteScreening } from "../../api/adminScreeningApi.js";
 import { computeMovieStatus } from "../../utils/movieStatus.js";
 
-
 const AdminScreenings = () => {
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
-
   const [isNewOpen, setIsNewOpen] = useState(false);
   const [movies, setMovies] = useState([]);
   const [screens, setScreens] = useState([]);
@@ -44,10 +42,9 @@ const AdminScreenings = () => {
       m.runningTime ?? m.runningMinutes ?? m.runtime ?? m.durationMinutes ?? m.duration ?? m.lengthMinutes ?? 0
     );
   };
-  // Sorting controls (must be top-level hooks)
+
   const [sortKey, setSortKey] = useState("start");
   const [sortAsc, setSortAsc] = useState(true);
-  // --- Filter controls ---
 
   function toDateKey(v) {
     if (!v) return '';
@@ -61,7 +58,6 @@ const AdminScreenings = () => {
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   }
 
-  // --- Date helpers for week strip ---
   const keyToDate = (key) => {
     if (!key) return null;
     const [y,m,d] = String(key).split('-').map(Number);
@@ -94,7 +90,7 @@ const AdminScreenings = () => {
   const [activeDate, setActiveDate] = useState('ALL');
   // 주간 스트립 시작일(YYYY-MM-DD). 기본은 오늘.
   const [weekStartKey, setWeekStartKey] = useState(null);
-  // --- Sorting helpers (top-level, not inside render condition) ---
+
   const keyExtractors = {
     movieId: (s) => s.movieId ?? s.movie?.id ?? s.movie?.movieId ?? s.movie_id ?? s.movie?.movie_id ?? "",
     title: (s) => s.movieTitle ?? s.movie?.title ?? s.title ?? "",
@@ -107,10 +103,8 @@ const AdminScreenings = () => {
       const t = (new Date(s.endAt ?? s.end_at ?? s.end)).getTime();
       return isNaN(t) ? 0 : t;
     },
-    // status removed for sorting
   };
 
-  // --- Filtered items ---
   const filteredItems = React.useMemo(() => {
     const titleKeyword = filterTitle.trim().toLowerCase();
     const screenKeyword = filterScreen.trim().toLowerCase();
@@ -204,11 +198,9 @@ const AdminScreenings = () => {
   };
 
   const toInputValue = (v) => {
-    // convert ISO or "YYYY-MM-DD HH:mm:ss" to input[type=datetime-local] value
     if (!v) return "";
     let d = new Date(v);
     if (isNaN(d.getTime())) {
-      // try to parse "YYYY-MM-DD HH:mm:ss"
       const s = String(v).replace(" ", "T");
       d = new Date(s);
     }
@@ -224,7 +216,6 @@ const AdminScreenings = () => {
   };
 
   const fromInputValue = (s) => {
-    // input "YYYY-MM-DDTHH:mm" -> Date
     if (!s) return null;
     const d = new Date(s);
     return isNaN(d.getTime()) ? null : d;
@@ -236,8 +227,6 @@ const AdminScreenings = () => {
     const d = new Date(dateStr + "T" + hh.padStart(2, "0") + ":" + mm.padStart(2, "0") + ":00");
     return d;
   };
-
-
 
   const parseDate = (v) => {
     if (!v) return null;
@@ -324,7 +313,6 @@ const AdminScreenings = () => {
   const fmt = (v) => {
     if (!v) return "";
     try {
-      // v가 ISO 또는 'YYYY-MM-DD HH:mm:ss'일 때도 안전하게 표시
       const d = new Date(v);
       if (!isNaN(d.getTime())) return d.toLocaleString();
       return String(v);
@@ -497,11 +485,9 @@ const AdminScreenings = () => {
             + 새 상영 추가
           </button>
         </header>
-
-          {/* Date Week Strip (7 days) */}
+          {/* 날짜 탭 */}
           <div className="mb-3 -mt-2 overflow-x-auto">
             <div className="inline-flex items-center gap-2 whitespace-nowrap">
-              {/* Prev 7 days */}
               <button
                 type="button"
                 onClick={() => setWeekStartKey((k) => addDaysKey(k || todayKey, -7))}
@@ -521,7 +507,7 @@ const AdminScreenings = () => {
                 }
               >전체</button>
 
-              {/* 7-day buttons */}
+              {/* 7-day 버튼 */}
               {weekKeys.map((d) => {
                 const isActive = activeDate === d;
                 const has = dateHasItems.has(d);
@@ -544,7 +530,7 @@ const AdminScreenings = () => {
                 );
               })}
 
-              {/* Next 7 days */}
+              {/* 다음 7 days */}
               <button
                 type="button"
                 onClick={() => setWeekStartKey((k) => addDaysKey(k || todayKey, 7))}

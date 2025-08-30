@@ -144,7 +144,7 @@ const Header = () => {
                         <MenuLink to="/booking">빠른 예매</MenuLink>
                         <MenuLink to="/screenings">상영 시간표</MenuLink>
                         <MenuLink to="/story">티켓스토리</MenuLink>
-                        <MenuLink to="/events">이벤트/공지</MenuLink>
+                        <MenuLink to="/events">이벤트</MenuLink>
                         {isAdmin && <MenuLink to="/admin">관리자 페이지</MenuLink>}
                     </nav>
 

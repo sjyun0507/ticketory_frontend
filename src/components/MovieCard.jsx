@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 
 /* 영화목록 카드
-* 포스터/제목/예매하기 버튼
+ 포스터/제목/예매하기 버튼
 */
 export default function MovieCard({ movie, computeMovieStatus }) {
     const { movieId, title, posterUrl } = movie;

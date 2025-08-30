@@ -4,7 +4,6 @@ const Footer = () => {
   const year = new Date().getFullYear();
   return (
     <footer className="py-14 px-4 text-center bg-gray-100">
-      {/* Top links */}
       <nav className="flex justify-center gap-10 flex-wrap mb-6" aria-label="Footer">
         <a href="#" className="text-gray-600 text-sm font-medium hover:text-gray-900 transition-colors">About</a>
         <a href="#" className="text-gray-600 text-sm font-medium hover:text-gray-900 transition-colors">Blog</a>
@@ -14,7 +13,6 @@ const Footer = () => {
         <a href="#" className="text-gray-600 text-sm font-medium hover:text-gray-900 transition-colors">Partners</a>
       </nav>
 
-      {/* Social icons */}
       <div className="flex justify-center gap-7 my-4" aria-label="Social links">
         <a href="#" aria-label="Facebook" className="inline-flex w-10 h-10 items-center justify-center rounded-full text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition transform hover:-translate-y-0.5">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-[22px] h-[22px]" aria-hidden="true">
@@ -45,7 +43,6 @@ const Footer = () => {
         </a>
       </div>
 
-      {/* Copyright */}
       <p className="text-gray-500 text-sm mt-2">© {year} Ticketory. All rights reserved.</p>
     </footer>
   );

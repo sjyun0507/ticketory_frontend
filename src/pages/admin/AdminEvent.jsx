@@ -1,9 +1,7 @@
-// NoticeBoard & AdminBoard in one file
 import React, { useEffect, useState } from "react";
 import { getBoards, createBoard, updateBoard, deleteBoard } from "../../api/adminApi.js";
 import { AdminLayout } from "../../components/AdminSidebar.jsx";
 
-// ---- public read-only board (users see this) ----
 export const PublicEventBoard = () => {
   const [posts, setPosts] = useState([]);
 

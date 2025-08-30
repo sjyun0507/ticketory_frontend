@@ -3,10 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { AdminLayout } from "../../components/AdminSidebar.jsx";
 import { getAdminMovieById, patchMovie } from "../../api/adminApi.js";
 
-
 function toDateInputValue(isoOrDateStr) {
     if (!isoOrDateStr) return "";
-    // 가능한 다양한 포맷에 안전하게 대응
     const d = new Date(isoOrDateStr);
     if (isNaN(d.getTime())) return "";
     const yyyy = d.getFullYear();

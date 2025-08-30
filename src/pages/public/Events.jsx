@@ -19,7 +19,7 @@ const isEnded = (endDate) => {
 };
 
 const Badge = ({ type }) => {
-  const isEvent = type !== "NOTICE"; // default 이벤트
+  const isEvent = type !== "NOTICE"; //
   const label = type === "NOTICE" ? "공지" : "이벤트";
   const base =
     "inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold border";
@@ -115,29 +115,22 @@ const Events = () => {
   const endedEvents  = endedSorted.filter(p => p.type !== "NOTICE");
 
   return (
-    <main className="max-w-[1200px] mx-auto px-4 py-10 min-h-[75vh]">
+      <main className="mx-auto max-w-[1200px] px-4 py-6">
       {/* 헤더 */}
-      <header className="mb-8 flex items-end justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">이벤트</h1>
-          <p className="mt-1 text-gray-500 text-sm">공지와 이벤트를 한눈에 확인하세요.</p>
-          <div className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gray-100 p-1">
+          <div className="mb-4 inline-flex rounded-2xl bg-gray-100 p-1">
             <button
               onClick={() => setTab("active")}
-              className={`px-3 py-1.5 text-sm rounded-md ${tab === "active" ? "bg-white shadow text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
+              className={`px-4 py-2 text-sm rounded-2xl ${tab === "active" ? "bg-white shadow text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
             >
               진행/예정 이벤트
             </button>
             <button
               onClick={() => setTab("ended")}
-              className={`px-3 py-1.5 text-sm rounded-md ${tab === "ended" ? "bg-white shadow text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
+              className={`px-4 py-2 text-sm rounded-2xl ${tab === "ended" ? "bg-white shadow text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
             >
               종료된 이벤트
             </button>
           </div>
-        </div>
-      </header>
-
       {loading ? (
         <p className="text-center text-gray-500">불러오는 중...</p>
       ) : (

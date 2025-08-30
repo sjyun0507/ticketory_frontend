@@ -6,7 +6,6 @@ import { getMovieDetail } from "../../api/movieApi.js";
 import enter from '../../assets/styles/enter.png';
 import exit from '../../assets/styles/exit.png';
 import {initBooking} from "../../api/bookingApi.js";
-import api from "../../api/axiosInstance.js";
 import {getPricingRules} from "../../api/adminApi.js";
 
 /* 좌석 선택 & 페이
@@ -24,7 +23,6 @@ const normalizeStatus = (s) => {
   return String(s).toUpperCase();
 };
 
-
 // 가격 정책 (기본값)
 const DEFAULT_PRICE = { adult: 14000, teen: 11000 };
 
@@ -34,7 +32,7 @@ const toDate = (v) => {
   if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
   if (typeof v === 'number') return new Date(v);
   const s = String(v).trim();
-  // Accept both "YYYY-MM-DDTHH:mm:ss" and "YYYY-MM-DD HH:mm:ss"
+
   const isoLike = s.includes('T') ? s : s.replace(' ', 'T');
   let d = new Date(isoLike);
   if (!isNaN(d.getTime())) return d;
@@ -60,12 +58,6 @@ const nowIsBetween = (from, to) => {
 const normalizeKind = (k) => (k ?? "").toString().toUpperCase();
 const normalizeOp = (op) => (op ?? "").toString().toUpperCase();
 
-/**
- * Apply a list of pricing rules to a base price.
- * Supports ops: SET, PLUS, MINUS, PCT_PLUS, PCT_MINUS
- * Percent ops treat amount as percentage number (e.g., 10 => 10%).
- * Rules are applied in ascending priority (smaller number first), then by created_at ascending if present.
- */
 const applyPricingRules = (basePrice, rules) => {
   if (!Array.isArray(rules) || rules.length === 0) return basePrice;
 
@@ -113,15 +105,12 @@ const applyPricingRules = (basePrice, rules) => {
         price -= price * (amt / 100);
         break;
       default:
-        // Unknown op: ignore
         break;
     }
   }
-  // Guardrails: no negative price
   return Math.max(0, Math.round(price));
 };
 
-// Traced variant: returns { price, trace[] }
 const applyPricingRulesWithTrace = (basePrice, rules) => {
   if (!Array.isArray(rules) || rules.length === 0) return { price: Math.max(0, Math.round(basePrice)), trace: [] };
 
@@ -169,21 +158,29 @@ const applyPricingRulesWithTrace = (basePrice, rules) => {
         // ignore unknown op
         break;
     }
-    trace.push({ id: r.id, op, amount: amt, priority: r.priority, before, after: price });
+    trace.push({ id: r.id, op, amount: amt, priority: r.priority, before, after: price, label: (r.label ?? r.name ?? r.rule_name ?? r.title) });
   }
   price = Math.max(0, Math.round(price));
   return { price, trace };
 };
 
-const formatOpLabel = (op, amount) => {
-  switch (normalizeOp(op)) {
-    case 'SET': return `정가 ${Number(amount).toLocaleString()}원`;
-    case 'PLUS': return `가산 ${Number(amount).toLocaleString()}원`;
-    case 'MINUS': return `프로모션 할인 ${Number(amount).toLocaleString()}원`;
-    case 'PCT_PLUS': return `가산 ${Number(amount)}%`;
-    case 'PCT_MINUS': return `프로모션 할인 ${Number(amount)}%`;
-    default: return `${op} ${amount}`;
+const formatRuleName = (t) => {
+  const label = t.label ?? t.ruleLabel ?? t.name ?? t.rule_name ?? t.title ?? null;
+  if (label) return label;
+  switch (normalizeOp(t.op)) {
+    case 'SET': return '정가';
+    case 'PLUS': return '가산';
+    case 'MINUS': return '프로모션 할인';
+    case 'PCT_PLUS': return '가산(%)';
+    case 'PCT_MINUS': return '프로모션 할인(%)';
+    default: return t.op;
   }
+};
+
+const formatDelta = (before, after) => {
+  const delta = Math.round(after - before);
+  const sign = delta > 0 ? '+' : '';
+  return `${sign}${delta.toLocaleString()}원`;
 };
 
 const Seat = () => {
@@ -191,7 +188,6 @@ const Seat = () => {
   const [price, setPrice] = useState(DEFAULT_PRICE);
   const [promo, setPromo] = useState({ adult: [], teen: [] });
 
-  // seat-map 응답에서 screen_id 추출 시도
   const resolveScreenId = React.useCallback((payload) => {
     if (!payload) return undefined;
     // 가능성 있는 경로를 차례로 확인
@@ -200,7 +196,6 @@ const Seat = () => {
       payload.screen_id ??
       payload.screen?.id ??
       payload.auditorium?.id ??
-      payload.auditoriumId ??
       undefined
     );
   }, []);
@@ -468,7 +463,6 @@ const Seat = () => {
               date: resolvedDate,
               start: resolvedStart,
             };
-            // Optional: backup for refresh
             try {
               localStorage.setItem('cartItems', JSON.stringify(cartItems));
               localStorage.setItem('cartAmount', String(amountValue));
@@ -611,9 +605,6 @@ const Seat = () => {
                                   clsParts.push("!bg-blue-600", "!text-white", "!border-blue-600");
                                 }
 
-                                // 커서 규칙: 선택 가능(AVAILABLE & 인원 선택됨) 또는 이미 선택된 좌석은 항상 포인터
-                                // Removed addition of !cursor-pointer since cursor-pointer is always present
-
                                 const cls = clsParts.join(" ");
 
                                 return (
@@ -677,24 +668,34 @@ const Seat = () => {
                 {/* 가격 요약 (하단 고정) */}
                 <div className="text-sm border rounded p-3 mb-4 mt-auto  bg-gray-100">
                   <div className="flex justify-between mb-1"><span>성인 × {people.adult}</span><span>{(people.adult * price.adult).toLocaleString()}원</span></div>
-                  {promo.adult?.length > 0 && (
-                    <div className="text-xs text-gray-600 mb-2 pl-1">
-                      <div className="flex items-start gap-1">
-                        <span className="inline-block mt-0.5">•</span>
-                        <span>금액 : {promo.adult.map(p => formatOpLabel(p.op, p.amount)).join(', ')}</span>
-                      </div>
+                  {
+                    <div className="text-xs text-gray-600 mb-2 pl-1 space-y-1">
+                      <div className="flex justify-between"><span>기본가(1인)</span><span>{DEFAULT_PRICE.adult.toLocaleString()}원</span></div>
+                      {promo.adult?.map((p, idx) => (
+                        <div key={idx} className="flex justify-between">
+                          <span>{formatRuleName(p)}</span>
+                          <span>{formatDelta(p.before, p.after)}</span>
+                        </div>
+                      ))}
+                      <div className="h-px bg-gray-200" />
+                      <div className="flex justify-between font-medium"><span>성인 1인 최종</span><span>{price.adult.toLocaleString()}원</span></div>
                     </div>
-                  )}
+                  }
 
                   <div className="flex justify-between mb-2"><span>청소년 × {people.teen}</span><span>{(people.teen * price.teen).toLocaleString()}원</span></div>
-                  {promo.teen?.length > 0 && (
-                    <div className="text-xs text-gray-600 mb-2 pl-1">
-                      <div className="flex items-start gap-1">
-                        <span className="inline-block mt-0.5">•</span>
-                        <span>금액 : {promo.teen.map(p => formatOpLabel(p.op, p.amount)).join(', ')}</span>
-                      </div>
+                  {
+                    <div className="text-xs text-gray-600 mb-2 pl-1 space-y-1">
+                      <div className="flex justify-between"><span>기본가(1인)</span><span>{DEFAULT_PRICE.teen.toLocaleString()}원</span></div>
+                      {promo.teen?.map((p, idx) => (
+                        <div key={idx} className="flex justify-between">
+                          <span>{formatRuleName(p)}</span>
+                          <span>{formatDelta(p.before, p.after)}</span>
+                        </div>
+                      ))}
+                      <div className="h-px bg-gray-200" />
+                      <div className="flex justify-between font-medium"><span>청소년 1인 최종</span><span>{price.teen.toLocaleString()}원</span></div>
                     </div>
-                  )}
+                  }
 
                   <div className="h-px bg-gray-200 my-2" />
                   <div className="flex justify-between font-semibold text-base"><span>합계</span><span>{totalAmount.toLocaleString()}원</span></div>

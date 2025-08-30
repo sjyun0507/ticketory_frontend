@@ -1,4 +1,5 @@
 import api from "./axiosInstance";
+import qs from "qs";
 
 // Remove empty/NaN params so the server never receives invalid values
 const cleanParams = (obj = {}) => Object.fromEntries(
@@ -50,19 +51,12 @@ export async function deleteMovie(movieId) {
   return res.data;
 }
 
-/**
+/*
  * 영화 이미지 업로드 (포스터/스틸/기타)
- * POST /admin/movies/{movieId}/media/image
- *
- * 사용 예:
- *  uploadMovieImage(12, file, "POSTER")
- *  uploadMovieImage(12, file, { type: "STILL", title: "Scene 1" })
- *  uploadMovieImage(12, file, { kind: "OTHER" }) // kind도 허용(서버는 type 필수)
- *
- * @param {number|string} movieId
- * @param {File|Blob}     file
- * @param {string|object} typeOrOptions  - "POSTER" | "STILL" | "OTHER" 또는 옵션 객체({ type|kind, title, extra })
- * @param {object}        [maybeOptions] - 세 번째 인자를 문자열로 넘긴 경우 추가 옵션({ title, extra })
+ @param {number|string} movieId
+ @param {File|Blob}     file
+ @param {string|object} typeOrOptions  - "POSTER" | "STILL" | "OTHER" 또는 옵션 객체({ type|kind, title, extra })
+ @param {object}        [maybeOptions] - 세 번째 인자를 문자열로 넘긴 경우 추가 옵션({ title, extra })
  */
 export async function uploadMovieImage(movieId, file, typeOrOptions, maybeOptions) {
   if (!movieId) throw new Error("movieId is required");
@@ -100,12 +94,11 @@ export async function uploadMovieImage(movieId, file, typeOrOptions, maybeOption
   return res.data;
 }
 
-/**
+/*
  * 영화 트레일러(URL) 등록
- * POST /admin/movies/{movieId}/media/trailer
- * @param {number|string} movieId
- * @param {string} url                - 트레일러 URL
- * @param {object} [meta]             - { title, provider } 등 추가 메타데이터
+ @param {number|string} movieId
+ @param {string} url                - 트레일러 URL
+ @param {object} [meta]             - { title, provider } 등 추가 메타데이터
  */
 export async function addMovieTrailer(movieId, url, meta = {}) {
   if (!movieId) throw new Error("movieId is required");
@@ -137,7 +130,6 @@ export async function getAdminMovieById(movieId) {
 }
 
 // status: true(상영중) / false(상영종료)
-// 백엔드: PATCH /api/admin/movies/{id}  Body: { status: boolean }
 export async function toggleMovieStatus(movieId, status) {
     const { data } = await api.patch(`/admin/movies/${movieId}`, { status });
     return data;
@@ -178,6 +170,19 @@ export const deleteAdminPricing = async (id) => {
   if (!Number.isFinite(rid)) throw new Error('deleteAdminPricing: invalid id');
   const { data } = await api.delete('/admin/pricing', { params: { id: rid } });
   return data;
+};
+
+// 수요일 글로벌 할인 규칙 생성
+export const createWednesdayDiscount = ({ from, to, percent, kinds }) => {
+    return api.post('/admin/pricing/global/wed-discount', null, {
+        params: { from, to, percent, ...(kinds?.length ? { kinds } : {}) },
+        paramsSerializer: p => qs.stringify(p, { arrayFormat: 'repeat' }),
+    });
+};
+// 백엔드가 계산해서 내려주는 견적
+export const getPriceQuote = async ({ screeningId, items }) => {
+    const { data } = await api.post('/pricing/quote', { screeningId, items });
+    return data;
 };
 
 //Board (공지/이벤트)

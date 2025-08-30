@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AdminLayout } from "../../components/AdminSidebar.jsx";
-import {upsertAdminPricing, deleteAdminPricing, getAdminPricing,} from "../../api/adminApi.js";
+import { upsertAdminPricing, deleteAdminPricing, getAdminPricing, createWednesdayDiscount } from "../../api/adminApi.js";
 
-// ===== Helpers =====
 const OPS = ["SET", "PLUS", "MINUS", "PCT_PLUS", "PCT_MINUS"];
 const KINDS = ["ADULT", "TEEN", "ALL", "CHILD", "UNKNOWN"];
 const CURRENCIES = ["KRW", "USD", "JPY"];
@@ -29,8 +28,7 @@ const fromDateTimeLocalToMySQL = (v) => {
 const num = (v, def = 0) => (v === undefined || v === null || v === "" ? def : Number(v));
 
 const toBoolNum = (v) => {
-  if (v === undefined || v === null) return 1; // default enabled
-  // handle booleans and numbers directly
+  if (v === undefined || v === null) return 1;
   if (v === true || v === 1) return 1;
   if (v === false || v === 0) return 0;
   if (typeof v === 'string') {
@@ -63,6 +61,32 @@ export default function AdminPricing() {
     enabled: true,
     currency: "KRW",
   });
+
+  // Global Wednesday Discount (inline admin tool)
+  const [wedFrom, setWedFrom] = useState("");     // yyyy-mm-dd
+  const [wedTo, setWedTo] = useState("");         // yyyy-mm-dd
+  const [wedPercent, setWedPercent] = useState(20);
+  const [wedKinds, setWedKinds] = useState([]);    // empty => all kinds on server
+
+  const toggleWedKind = (k) => {
+    setWedKinds((prev) => prev.includes(k) ? prev.filter(x=>x!==k) : [...prev, k]);
+  };
+
+  const submitWedDiscount = async (e) => {
+    e?.preventDefault?.();
+    if (!wedFrom || !wedTo) return alert('기간을 선택해 주세요.');
+    if (!wedPercent || Number(wedPercent) <= 0) return alert('할인율(%)을 입력해 주세요.');
+    try {
+      const params = { from: wedFrom, to: wedTo, percent: Number(wedPercent) };
+      if (wedKinds && wedKinds.length) params.kinds = wedKinds; // 빈 배열이면 전체 적용
+      const { data } = await createWednesdayDiscount(params);
+      alert(`수요일 할인 규칙 적용 완료 (created=${data?.created ?? 0})`);
+      await load(); // 목록 갱신 (전역 규칙이 보이도록)
+    } catch (err) {
+      console.error(err);
+      alert('수요일 할인 생성/갱신에 실패했습니다. 콘솔을 확인하세요.');
+    }
+  };
 
   const filtered = useMemo(() => {
     return items.filter((r) => {
@@ -181,6 +205,39 @@ export default function AdminPricing() {
             <button onClick={load} className="px-3 py-2 rounded border text-sm">새로고침</button>
           </div>
         </header>
+
+        {/* Global Wednesday Discount (Inline Tool) */}
+        <section className="mb-6 p-4 border rounded-lg bg-white">
+          <h3 className="text-base font-semibold mb-3">전역 수요일 할인 생성/갱신</h3>
+          <form onSubmit={submitWedDiscount} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">기간 From</label>
+              <input type="date" className="w-full border rounded px-3 py-2" value={wedFrom} onChange={(e)=>setWedFrom(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">기간 To</label>
+              <input type="date" className="w-full border rounded px-3 py-2" value={wedTo} onChange={(e)=>setWedTo(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">할인율(%)</label>
+              <input type="number" min="1" max="100" className="w-full border rounded px-3 py-2" value={wedPercent} onChange={(e)=>setWedPercent(e.target.value)} />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-xs text-gray-600 mb-1">대상 요금종류 (비우면 전체)</label>
+              <div className="flex flex-wrap gap-2">
+                {['ADULT','TEEN','CHILD'].map(k => (
+                  <label key={k} className="inline-flex items-center gap-1 text-sm">
+                    <input type="checkbox" checked={wedKinds.includes(k)} onChange={()=>toggleWedKind(k)} />
+                    <span>{k}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="md:col-span-5 flex justify-end">
+              <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded">수요일 할인 생성/갱신</button>
+            </div>
+          </form>
+        </section>
 
         {/* Filters */}
         <section className="mb-4 grid grid-cols-1 sm:grid-cols-4 gap-2">

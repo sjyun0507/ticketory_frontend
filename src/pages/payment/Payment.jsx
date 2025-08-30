@@ -7,6 +7,20 @@ import {useAuthStore} from "../../store/useAuthStore.js";
 import { releaseBookingHold } from '../../api/bookingApi.js';
 import { getMovieDetail } from '../../api/movieApi.js';
 import { getMyInfo} from "../../api/memberApi.js";
+import PaymentSummary from "../../components/PaymentSummary.jsx";
+
+/*
+결제 페이지
+1. 장바구니, 예약정보 수집
+2. 회원포인트/포스터 로드
+	•	getMyInfo(memberId)로 보유 포인트를 가져오고,
+	•	getMovieDetail(id)로 포스터 이미지 매핑(posterMap) 생성.
+3. 금액산출, 할인 미리보기
+	•	초기 금액 계산 → 서버에 createPaymentOrder(preview: true) 호출해 최종가 견적(quote)과 할인내역 획득.
+	•	사용 포인트(usedPoints) 반영해서 실결제금액 갱신.
+4. 토스 결제 위젯 초기화/렌더
+5. 결제 실행
+ */
 
 const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY || "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
 const customerKey = "lIUt5JCR8vA3XOlDluVSz";
@@ -69,6 +83,10 @@ export default function Payment() {
     const [amount, setAmount] = useState({ currency: 'KRW', value: initialAmountValue });
     const [ready, setReady] = useState(false);
     const [policyAgreed, setPolicyAgreed] = useState(false);
+    const [quote, setQuote] = useState(null);
+    const [quoteLoading, setQuoteLoading] = useState(false);
+    const [discounts, setDiscounts] = useState([]);
+    const [serverBaseAmount, setServerBaseAmount] = useState(null);
 
     const [availablePoints, setAvailablePoints] = useState(0);
 
@@ -76,6 +94,7 @@ export default function Payment() {
 
     // 중복 뒤로가기 방지
     const [releasing, setReleasing] = useState(false);
+
 
     useEffect(() => {
         if (!memberId) return;
@@ -133,6 +152,10 @@ export default function Payment() {
       return Array.from(m.values()).map(g => ({ ...g, seats: Array.from(g.seats || []) }));
     }, [cart]);
 
+    const allSeats = useMemo(() => {
+      return groupedCart.flatMap(g => Array.isArray(g.seats) ? g.seats : []);
+    }, [groupedCart]);
+
     const ageSummary = useMemo(() => {
       const sum = { ADULT: 0, TEEN: 0, CHILD: 0 };
       groupedCart.forEach(g => {
@@ -146,6 +169,60 @@ export default function Payment() {
       if (sum.CHILD) parts.push(`어린이 ${sum.CHILD}`);
       return parts.join(' · ');
     }, [groupedCart]);
+
+    const itemsForServer = useMemo(() => {
+      const counts = { ADULT: 0, TEEN: 0, CHILD: 0 };
+      groupedCart.forEach(g => {
+        counts.ADULT += g?.age?.ADULT || 0;
+        counts.TEEN  += g?.age?.TEEN  || 0;
+        counts.CHILD += g?.age?.CHILD || 0;
+      });
+      return [
+        { kind: 'ADULT', count: counts.ADULT },
+        { kind: 'TEEN',  count: counts.TEEN  },
+        { kind: 'CHILD', count: counts.CHILD },
+      ].filter(it => it.count > 0);
+    }, [groupedCart]);
+
+    useEffect(() => {
+      if (!screeningId) return;
+      if (!Array.isArray(itemsForServer) || itemsForServer.length === 0) return;
+
+      let cancelled = false;
+      (async () => {
+        try {
+          setQuoteLoading(true);
+          const bookingInfo = {
+            bookingId: bookingId ?? undefined,
+            memberId: memberId ?? undefined,
+            usedPoints: usedPoints || 0,
+            seats: allSeats,
+          };
+          const res = await createPaymentOrder({ screeningId, items: itemsForServer, bookingInfo, preview: true });
+          const data = res?.data ?? res;
+          if (cancelled) return;
+          const amt = Number(data?.amount);
+          const dcs = Array.isArray(data?.discounts) ? data.discounts : [];
+          setDiscounts(dcs);
+          if (!Number.isNaN(amt) && amt >= 0) {
+            setQuote({ amount: amt, orderId: data?.orderId || null });
+            setServerBaseAmount(amt);
+            setAmount({ currency: 'KRW', value: amt });
+            if (widgets) {
+              try { await widgets.setAmount({ currency: 'KRW', value: amt }); } catch (_) {}
+            }
+          } else {
+            setQuote(null);
+          }
+        } catch (_) {
+          setQuote(null);
+          setDiscounts([]);
+        } finally {
+          if (!cancelled) setQuoteLoading(false);
+        }
+      })();
+      return () => { cancelled = true; };
+    }, [screeningId, itemsForServer, usedPoints, allSeats, widgets, bookingId, memberId]);
 
     useEffect(() => {
       const ids = Array.from(new Set((cart || []).map(it => it.movieId).filter(Boolean)));
@@ -214,10 +291,12 @@ export default function Payment() {
     }, [amount, widgets]);
 
     useEffect(() => {
-      const base = typeof totalPrice === 'number' ? totalPrice : initialAmountValue;
-      const newValue = Math.max(0, base - usedPoints);
+      const base = (typeof serverBaseAmount === 'number' && !Number.isNaN(serverBaseAmount))
+        ? serverBaseAmount
+        : (typeof totalPrice === 'number' ? totalPrice : initialAmountValue);
+      const newValue = Math.max(0, Math.round(base - (usedPoints || 0)));
       setAmount({ currency: 'KRW', value: newValue });
-    }, [usedPoints, totalPrice, initialAmountValue]);
+    }, [usedPoints, totalPrice, initialAmountValue, serverBaseAmount]);
 
     const handleBack = async () => {
       if (releasing) return;
@@ -254,64 +333,68 @@ export default function Payment() {
           return alert('취소/환불 정책에 동의해 주세요.');
         }
         if (!ready) return alert('결제 수단 준비 중입니다.');
+        if (!screeningId) return alert('상영 회차 정보가 없습니다. 좌석 선택으로 돌아가세요.');
         try {
             const finalAmount = amount.value;
             localStorage.setItem('cartItems', JSON.stringify(cart));
 
-            const orderPayload = {
-                memberId: memberId ?? undefined,
-                totalAmount: finalAmount || 0,
-                usedPoint: usedPoints || 0,
-                orderMethod: 'movie',
-                orderTime: new Date().toISOString(),
-                status: 'waiting',
-                earnedPoint: Math.floor((finalAmount || 0) * 0.05),
-                items: cart.map(({ id, movieId, screeningId, seatId, name, price, quantity }) => ({
-                    id,
-                    movieId,
-                    screeningId,
-                    seatId,
-                    name,
-                    price,
-                    quantity,
-                })),
+            // 2) bookingInfo: 서버로 전달할 보조 정보(선택)
+            const bookingInfo = {
+              bookingId: bookingId ?? undefined,
+              memberId: memberId ?? undefined,
+              usedPoints: usedPoints || 0,
+              seats: allSeats,
             };
 
-            console.debug('[order:create:payload]', orderPayload);
-
-            // 1) 서버에 주문 선생성 (권장) - 404일 경우 클라이언트에서 생성한 주문번호로 결제 진행 허용
+            // 3) 서버에서 최종가 재계산 + 주문 생성 (수요일 할인 포함)
             let orderIdFromServer = null;
+            let serverAmount = null;
+            let discountsFromServer = null;
             try {
-                const orderRes = await createPaymentOrder(orderPayload);
-                orderIdFromServer = orderRes?.data?.orderId || orderRes?.orderId || null;
-                console.debug('[order:create:res]', orderRes);
+              const orderRes = await createPaymentOrder({ screeningId, items: itemsForServer, bookingInfo });
+              const resData = orderRes?.data ?? orderRes;
+              orderIdFromServer = resData?.orderId || null;
+              serverAmount = Number(resData?.amount ?? 0);
+              discountsFromServer = Array.isArray(resData?.discounts) ? resData.discounts : null;
+              console.debug('[order:create:res]', resData);
             } catch (e) {
-                const status = e?.response?.status;
-                const msg = e?.response?.data?.message || e?.message;
-                console.error('[order:create:error]', status, msg, e?.response?.data);
-                if (status === 404) {
-                    // 엔드포인트 미구현/오경로인 경우에도 테스트 결제는 진행 가능하게
-                    orderIdFromServer = uuidv4();
-                    alert('서버 주문 API(404)가 아직 준비되지 않아 임시 주문번호로 결제를 진행합니다. 결제 성공 후 서버 연동을 점검하세요.');
-                } else {
-                    throw e;
-                }
+              const status = e?.response?.status;
+              const msg = e?.response?.data?.message || e?.message;
+              console.error('[order:create:error]', status, msg, e?.response?.data);
+              if (status === 404) {
+                orderIdFromServer = uuidv4();
+                serverAmount = finalAmount; // 임시로 현재 표시 금액 사용(테스트 용도)
+                alert('서버 주문 API(404)가 아직 준비되지 않아 임시 주문번호로 결제를 진행합니다. 결제 성공 후 서버 연동을 점검하세요.');
+              } else {
+                throw e;
+              }
             }
 
             const orderIdToUse = orderIdFromServer || uuidv4();
-            setOrderId(orderIdToUse);
 
-            await widgets.setAmount({ currency: 'KRW', value: amount.value });
+            // 서버 기준 최종금액(포인트 차감 전)을 고정해두고 화면/PG 모두 일치시키기
+            if (typeof serverAmount === 'number' && !Number.isNaN(serverAmount)) {
+              setServerBaseAmount(serverAmount);
+              // 포인트 차감 적용
+              const payable = Math.max(0, Math.round(serverAmount - (usedPoints || 0)));
+              setAmount({ currency: 'KRW', value: payable });
+              await widgets.setAmount({ currency: 'KRW', value: payable });
+              if (Array.isArray(discountsFromServer)) setDiscounts(discountsFromServer);
+            } else {
+              await widgets.setAmount({ currency: 'KRW', value: amount.value });
+            }
+
             const dynOrderName = ageSummary ? `영화 예매 (${ageSummary})` : '영화 예매';
+            setOrderId(orderIdToUse);
             await widgets.requestPayment({
-                orderId: orderIdToUse,
-                orderName: dynOrderName,
-                successUrl: window.location.origin + '/success',
-                failUrl: window.location.origin + '/fail',
-                customerEmail: user?.email || 'member@ticketory.app',
-                customerName: user?.name || '회원',
-                customerMobilePhone: user?.phone ? user.phone.replace(/\D/g, '') : undefined,
-        });
+              orderId: orderIdToUse,
+              orderName: dynOrderName,
+              successUrl: window.location.origin + '/success',
+              failUrl: window.location.origin + '/fail',
+              customerEmail: user?.email || 'member@ticketory.app',
+              customerName: user?.name || '회원',
+              customerMobilePhone: user?.phone ? user.phone.replace(/\D/g, '') : undefined,
+            });
 
             setPaymentStatus('성공');
             localStorage.removeItem('cartItems');
@@ -398,7 +481,16 @@ export default function Payment() {
                             />
                         </div>
                     </div>
-                {/* 이동된 Toss 결제 위젯 영역 */}
+                    {screeningId && (
+                        <div>
+                          <PaymentSummary screeningId={screeningId} items={itemsForServer} />
+                          {quoteLoading && (
+                            <p className="mt-2 text-sm text-gray-500">할인 적용 금액 확인 중...</p>
+                          )}
+                        </div>
+                    )}
+
+                {/* Toss 결제 위젯 영역 */}
                 <div className="flex flex-col items-stretch mt-6">
                   {/* 결제수단 영역: 상단 예매정보/할인영역과 동일 너비(full) */}
                   <div id="payment-method" className="w-full" />
@@ -449,6 +541,12 @@ export default function Payment() {
                             <span>-{usedPoints.toLocaleString()}원</span>
                         </div>
                     )}
+                    {Array.isArray(discounts) && discounts.map((d, idx) => (
+                      <div key={idx} className="flex justify-between text-sm text-amber-400">
+                        <span>{d.label || d.type || '할인'}</span>
+                        <span>-{Number(d.amount ?? d.value ?? 0).toLocaleString()}원</span>
+                      </div>
+                    ))}
                     <div className="flex justify-between font-semibold text-lg border-t border-gray-500 pt-2">
                         <span>최종결제금액</span>
                         <span>{amount.value.toLocaleString()}원</span>

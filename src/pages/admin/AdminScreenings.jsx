@@ -248,7 +248,6 @@ const AdminScreenings = () => {
       return `[${status}] ${serverMsg || e.message || "요청 처리 중 오류가 발생했습니다."}`;
     }
     if (e?.request && !e?.response) {
-      // Network layer (CORS / 네트워크 / 서버 다운 등)
       return `네트워크 오류로 요청이 실패했어요. (서버 응답 없음) 상세: ${e.message || "알 수 없음"}`;
     }
     return e?.message || "알 수 없는 오류가 발생했습니다.";

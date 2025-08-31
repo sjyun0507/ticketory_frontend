@@ -12,6 +12,7 @@ import {getPricingRules} from "../../api/adminApi.js";
 screeningId를 param으로 불러와서 좌석배치 불러옴 {available, hold, booked} (백엔드) -> 프론트에서는 AVAILABLE/HELD/SOLD 로 변환하여 사용)
 */
 
+// 백엔드 상태(normalize): {available, hold, booked} -> {AVAILABLE, HELD, SOLD}
 const normalizeStatus = (s) => {
     if (!s) return "AVAILABLE";
     const v = String(s).toLowerCase();
@@ -21,11 +22,6 @@ const normalizeStatus = (s) => {
     if (v === "available" || v === "avail") return "AVAILABLE";
     return String(s).toUpperCase();
 };
-
-// 가격 정책 (기본값)
-const DEFAULT_PRICE = { adult: 14000, teen: 11000 };
-// 금액 포맷터 (3자리 구분, 원)
-const fmt = (n) => new Intl.NumberFormat('ko-KR').format(Number(n || 0));
 
 const toDate = (v) => {
     if (!v) return null;
@@ -45,21 +41,19 @@ const toDate = (v) => {
     return null;
 };
 
-
-const refIsBetween = (ref, from, to) => {
-    const refDate = toDate(ref);
+const nowIsBetween = (from, to) => {
+    const now = new Date();
     const f = toDate(from);
     const t = toDate(to);
-    if (!refDate) return false;
-    const fromOk = !f || f <= refDate;
-    const toOk   = !t || refDate <= t;
+    const fromOk = !f || f <= now;
+    const toOk = !t || now <= t;
     return fromOk && toOk;
 };
 
 const normalizeKind = (k) => (k ?? "").toString().toUpperCase();
 const normalizeOp = (op) => (op ?? "").toString().toUpperCase();
 
-const applyPricingRulesWithTrace = (basePrice, rules, refDate) => {
+const applyPricingRulesWithTrace = (basePrice, rules) => {
     if (!Array.isArray(rules) || rules.length === 0) return { price: Math.max(0, Math.round(basePrice)), trace: [] };
 
     const ordered = [...rules]
@@ -74,7 +68,7 @@ const applyPricingRulesWithTrace = (basePrice, rules, refDate) => {
             id: r.id ?? r.ID,
             ID: r.ID ?? r.id,
         }))
-        .filter(r => r.enabled === 1 && refIsBetween(refDate, r.valid_from, r.valid_to))
+        .filter(r => r.enabled === 1 && nowIsBetween(r.valid_from, r.valid_to))
         .sort((a, b) => {
             if (a.priority !== b.priority) return a.priority - b.priority;
             const ia = (a.id ?? a.ID) ?? 0;
@@ -125,20 +119,33 @@ const formatOpLabel = (op, amount) => {
 
 const Seat = () => {
     // 동적 가격: screen_id + kind(ADULT/TEEN) 기반
-    const [price, setPrice] = useState(DEFAULT_PRICE);
+    const [price, setPrice] = useState(null);
     const [promo, setPromo] = useState({ adult: [], teen: [] });
 
-    // seat-map 응답에서 screen_id 추출 시도
+    // seat-map 응답에서 screen_id 추출 시도 (더 많은 경로 탐색)
     const resolveScreenId = React.useCallback((payload) => {
         if (!payload) return undefined;
-        // 가능성 있는 경로를 차례로 확인
-        return (
+        const c = (
             payload.screenId ??
             payload.screen_id ??
             payload.screen?.id ??
+            payload.screen?.screenId ??
+            payload.screen?.screen_id ??
+            payload.screening?.screenId ??
+            payload.screening?.screen_id ??
+            payload.meta?.screenId ??
+            payload.meta?.screen_id ??
             payload.auditorium?.id ??
+            payload.auditorium?.screenId ??
+            payload.auditorium?.screen_id ??
+            payload.auditoriumId ??
+            payload.hall?.id ??
+            payload.hallId ??
+            payload.theater?.screenId ??
+            payload.theater?.id ??
             undefined
         );
+        return c != null ? Number(c) : undefined;
     }, []);
     const [params] = useSearchParams();
     const location = useLocation();
@@ -160,13 +167,6 @@ const Seat = () => {
     const resolvedAuditorium = auditorium ?? savedSummary.auditorium;
     const resolvedDate = date ?? savedSummary.date;
     const resolvedStart = start ?? savedSummary.start;
-    const showStartRef = useMemo(() => {
-        if (!resolvedDate || !resolvedStart) return null;
-        const hhmm = resolvedStart.length === 5 ? `${resolvedStart}:00` : resolvedStart; // 초 보정
-        const isoKst = `${resolvedDate}T${hhmm}+09:00`; // KST 고정
-        const d = new Date(isoKst);
-        return isNaN(d.getTime()) ? null : d;
-    }, [resolvedDate, resolvedStart]);
     const resolvedTitle = (title ?? savedSummary.title) || '';
     const navigate = useNavigate();
     const queryClient = useQueryClient();
@@ -192,22 +192,10 @@ const Seat = () => {
     }, [movieId]);
     const displayTitle = resolvedTitle || movieDetail?.title || movieDetail?.name || '';
     const totalPeople = useMemo(() => people.adult + people.teen, [people]);
-    const totalAmount = useMemo(() => (people.adult * price.adult) + (people.teen * price.teen), [people, price]);
-
-    // 관람 인원 변경 시, 선택 좌석 수를 자동 정렬(초과분 제거)
-    useEffect(() => {
-      setSelected(prev => (prev.length > totalPeople ? prev.slice(0, totalPeople) : prev));
-    }, [totalPeople]);
-
-    // 정가(기본가) 기준 합계와 할인액 계산
-    const baseAdultSubtotal = useMemo(() => people.adult * DEFAULT_PRICE.adult, [people.adult]);
-    const baseTeenSubtotal  = useMemo(() => people.teen  * DEFAULT_PRICE.teen,  [people.teen]);
-    const baseTotal         = useMemo(() => baseAdultSubtotal + baseTeenSubtotal, [baseAdultSubtotal, baseTeenSubtotal]);
-    const discountedAdult   = useMemo(() => people.adult * price.adult, [people.adult, price.adult]);
-    const discountedTeen    = useMemo(() => people.teen  * price.teen,  [people.teen, price.teen]);
-    const discountAdult     = Math.max(0, baseAdultSubtotal - discountedAdult);
-    const discountTeen      = Math.max(0, baseTeenSubtotal - discountedTeen);
-    const discountTotal     = Math.max(0, baseTotal - totalAmount);
+    const totalAmount = useMemo(() => {
+        if (!price) return 0;
+        return (people.adult * price.adult) + (people.teen * price.teen);
+    }, [people, price]);
 
     // 좌석 맵 조회 (screeningId 기준)
     const { data, isLoading, isError } = useQuery({
@@ -216,46 +204,31 @@ const Seat = () => {
         enabled: !!screeningId,
     });
 
-    // 가격 정책 불러오기: screen_id 기준 (로컬+글로벌 병합)
+    // 가격 정책 불러오기: screen_id 기준 (전역+상영관 규칙 병합 적용)
     useEffect(() => {
         let cancel = false;
         async function loadPricing() {
             try {
                 const sid = resolveScreenId(data);
-                if (!sid) return; // 좌석 데이터에 screen_id가 없으면 기본가 유지
+                const targetSid = (sid != null && !Number.isNaN(Number(sid))) ? Number(sid) : 0; // screen_id를 찾지 못하면 전역 규칙(0) 시도
 
-                // 1) 해당 상영관 규칙
-                const resLocal = await getPricingRules(Number(sid));
-                const localRules = (resLocal?.data ?? resLocal ?? []);
-
-                // 2) 전역 규칙도 함께 시도 (서버가 0을 전역으로 처리하거나, null/undefined를 허용할 수 있음)
-                let globalRules = [];
+                // [변경] 전역 규칙과 상영관 규칙을 함께 불러와서 전역→로컬 순으로 병합
+                const localRules = await getPricingRules(targetSid);
+                const globalRules = targetSid !== 0 ? (await getPricingRules(0)) : [];
+                const list = [...globalRules, ...localRules];
                 try {
-                    const resGlobal0 = await getPricingRules(0);
-                    globalRules = (resGlobal0?.data ?? resGlobal0 ?? []);
-                    if (!Array.isArray(globalRules) || globalRules.length === 0) {
-                        // 일부 서버는 null을 전역으로 사용
-                        const resGlobalNull = await getPricingRules(null);
-                        globalRules = (resGlobalNull?.data ?? resGlobalNull ?? []);
-                    }
-                } catch (_) {
-                    // 전역 엔드포인트 미지원일 수 있으므로 무시
-                }
-
-                // 3) 병합 + id 기준 중복 제거 (상영관 규칙 우선)
-                const seen = new Set();
-                const list = [...localRules, ...globalRules].filter(r => {
-                    const id = r.id ?? r.ID;
-                    if (id == null) return true; // id가 없으면 통과
-                    if (seen.has(id)) return false;
-                    seen.add(id);
-                    return true;
-                });
-
-                try {
-                    console.groupCollapsed('[pricing] rules merged');
-                    console.log('screen_id=', sid, 'local=', localRules?.length || 0, 'global=', globalRules?.length || 0, 'total=', list.length);
-                    console.table(list.map(r => ({ id: r.id ?? r.ID, screen_id: r.screen_id ?? r.screenId, kind: r.kind ?? r.KIND, op: r.op ?? r.OP, amount: r.amount, priority: r.priority, valid_from: r.valid_from ?? r.validFrom, valid_to: r.valid_to ?? r.validTo, enabled: r.enabled })));
+                    console.groupCollapsed('[pricing] rules raw (merged)');
+                    console.table(list.map(r => ({
+                        id: r.id ?? r.ID,
+                        screen_id: r.screen_id ?? r.screenId ?? targetSid,
+                        kind: r.kind ?? r.KIND,
+                        op: r.op ?? r.OP,
+                        amount: r.amount,
+                        priority: r.priority,
+                        valid_from: r.valid_from ?? r.validFrom,
+                        valid_to: r.valid_to ?? r.validTo,
+                        enabled: r.enabled
+                    })));
                     console.groupEnd();
                 } catch (_) {}
 
@@ -266,38 +239,46 @@ const Seat = () => {
                     return acc;
                 }, {});
 
-                const adultBase = DEFAULT_PRICE.adult;
-                const teenBase = DEFAULT_PRICE.teen;
-
+                // Backend: null/ALL/CHILD/UNKNOWN are treated as global rules
                 const common = [
                     ...(byKind[''] || []),
                     ...(byKind['ALL'] || []),
+                    ...(byKind['CHILD'] || []),
                     ...(byKind['UNKNOWN'] || []),
                 ];
 
-                const ref = showStartRef || new Date();
-                const adultRes = applyPricingRulesWithTrace(adultBase, [...common, ...(byKind['ADULT'] || [])], ref);
-                const teenRes  = applyPricingRulesWithTrace(teenBase,  [...common, ...(byKind['TEEN']  || [])], ref);
+                const hasSet = (arr) => (arr || []).some(r => normalizeOp(r.op ?? r.OP) === 'SET');
+                const adultRules = [...common, ...(byKind['ADULT'] || [])];
+                const teenRules  = [...common, ...(byKind['TEEN']  || [])];
+
+                // SET 규칙이 없으면 가격을 확정할 수 없으므로 null 유지
+                if (!hasSet(adultRules) || !hasSet(teenRules)) {
+                    if (!cancel) setPrice(null);
+                    try { console.warn('[pricing] SET 규칙이 없어 가격 확정 불가. screen_id=', targetSid); } catch (_) {}
+                    return;
+                }
+
+                // 기본가 하드코딩 없이 0에서 시작해 SET로 덮어쓰고 나머지 연산 적용
+                const adultRes = applyPricingRulesWithTrace(0, adultRules);
+                const teenRes  = applyPricingRulesWithTrace(0, teenRules);
                 const next = { adult: adultRes.price, teen: teenRes.price };
                 if (!cancel) {
                     setPrice(next);
                     setPromo({ adult: adultRes.trace, teen: teenRes.trace });
                 }
 
+                // Console diagnostics (optional)
                 try {
-                    console.groupCollapsed('[pricing] 계산 결과 (screen_id=' + sid + ')');
-                    console.log('가격 기준 시각(ref):', (showStartRef || new Date()).toISOString());
-                    console.log('기본가(adult):', adultBase.toLocaleString(), '원');
+                    console.groupCollapsed('[pricing] 계산 결과 (screen_id=' + targetSid + ')');
                     adultRes.trace.forEach((t, i) => console.log(`ADULT #${i+1}`, t.op, t.amount, '→', Math.round(t.after).toLocaleString()));
                     console.log('최종(adult):', adultRes.price.toLocaleString(), '원');
-                    console.log('기본가(teen):', teenBase.toLocaleString(), '원');
                     teenRes.trace.forEach((t, i) => console.log(`TEEN  #${i+1}`, t.op, t.amount, '→', Math.round(t.after).toLocaleString()));
                     console.log('최종(teen):', teenRes.price.toLocaleString(), '원');
                     console.groupEnd();
                 } catch (_) {}
             } catch (e) {
                 console.warn("[pricing] load failed, fallback to default", e?.response?.status, e?.response?.data || e);
-                if (!cancel) setPrice(DEFAULT_PRICE);
+                if (!cancel) setPrice(null);
             }
         }
         if (data && !isLoading && !isError) {
@@ -379,41 +360,21 @@ const Seat = () => {
             alert("선택된 좌석이 없습니다.");
             return;
         }
-        if (totalPeople === 0) {
-            if (selected.length > 0) setSelected([]);
-            alert("관람 인원을 먼저 선택해주세요.");
+        if (totalPeople === 0 || selected.length !== totalPeople) {
+            alert("관람 인원과 선택 좌석 수가 일치해야 합니다.");
             return;
         }
-        if (selected.length !== totalPeople) {
-            // 방금 위 useEffect로 대부분 정리되지만, 혹시 비동기 타이밍 이슈 대비
-            setSelected(prev => (prev.length > totalPeople ? prev.slice(0, totalPeople) : prev));
-            alert(`좌석 선택 수(${selected.length})와 인원 수(${totalPeople})가 일치해야 합니다.`);
+        if (!price) {
+            alert('가격 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
             return;
         }
 
         try {
             setSubmitting(true);
-            const ageCounts = {
-                ADULT: Number(people.adult || 0),
-                TEEN:  Number(people.teen  || 0),
-                CHILD: 0,
-                ETC:   0,
-            };
-
-            // 가격 규칙 참조 기준시각: 좌석 선택한 회차의 상영 시작시간 기준(수요할인 등 날짜 조건 일관성)
-            const pricingRefAt = (function() {
-                const d = showStartRef instanceof Date && !isNaN(showStartRef.getTime()) ? showStartRef : new Date();
-                // ISO string in local time (server expects LocalDateTime-like)
-                const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-                return local.toISOString().slice(0, 19);
-            })();
-
             const payload = {
                 screeningId: Number.isNaN(screeningIdNum) ? screeningId : screeningIdNum,
                 seatIds,
                 counts: { adult: people.adult, teen: people.teen },
-                ageCounts,       // (선택) 서버가 새 필드를 지원할 경우 사용
-                pricingRefAt,    // 날짜 조건 규칙 적용 기준시각
                 holdSeconds: 200,
             };
             console.log('[HOLD:req]', payload);
@@ -442,7 +403,7 @@ const Seat = () => {
             if (!bookingId) {
                 throw new Error('bookingId가 응답에 없습니다.');
             }
-
+            // --- Build cart items from selected seats (assign adult first, then teen)
             const cartItems = seatIds.map((sid, idx) => {
                 const isAdult = idx < people.adult;
                 const type = isAdult ? 'ADULT' : 'TEEN';
@@ -467,9 +428,7 @@ const Seat = () => {
             const amountValue = cartItems.reduce((sum, it) => sum + Number(it.price || 0), 0);
             const state = {
                 cart: cartItems,
-                amount: { value: amountValue }, // 원가 합(표시용)
-                payableAmount: out?.payableAmount, // ✅ HOLD 응답 금액(실결제 기준)
-                pointsUsed: out?.pointsUsed ?? 0,  // ✅ HOLD에서 이미 차감된 포인트가 있다면 전달
+                amount: { value: amountValue },
                 bookingId,
                 screeningId: screeningIdNum,
                 movieId: Number(movieId) || undefined,
@@ -659,7 +618,7 @@ const Seat = () => {
                 </div>
 
                 {/* 우측 요약/전설 (좌측 전체 높이에 맞춤) */}
-                <aside className="border rounded-xl bg-white p-4 mb-4 flex flex-col h-full self-stretch">
+                <aside className="border rounded-xl bg-white p-4 flex flex-col h-full self-stretch">
                     <div className="flex flex-col gap-4 flex-1">
                         <div className="flex items-start justify-between">
                             <div className="pr-3">
@@ -685,83 +644,32 @@ const Seat = () => {
                     </div>
 
                     {/* 가격 요약 (하단 고정) */}
-                    <div className="text-[13px] border rounded p-3 mb-4 mt-auto bg-gray-100">
-                      {/* 성인 라인 */}
-                      {people.adult > 0 && (
-                        <div className="flex justify-between items-baseline mb-1">
-                          <span>성인 × {people.adult}</span>
-                          <span className="text-right">
-                            {discountAdult > 0 ? (
-                              <>
-                                <span className="mr-1 text-gray-400 line-through">{fmt(baseAdultSubtotal)}원</span>
-                                <span className="font-medium text-zinc-900">{fmt(discountedAdult)}원</span>
-                              </>
-                            ) : (
-                              <span className="font-medium text-zinc-900">{fmt(discountedAdult)}원</span>
-                            )}
-                          </span>
-                        </div>
-                      )}
-                      {promo.adult?.length > 0 && people.adult > 0 && (
-                        <div className="text-[12px] text-gray-600 mb-2 pl-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-start gap-1">
-                              <span className="inline-block mt-0.5">•</span>
-                              <span>{promo.adult.map(p => formatOpLabel(p.op, p.amount)).join(', ')}</span>
+                    <div className="text-sm border rounded p-3 mb-4 mt-auto  bg-gray-100">
+                        {!price && !isLoading && (
+                          <div className="text-xs text-gray-600 mb-2">가격 정보를 찾을 수 없습니다. 관리자에 문의하세요.</div>
+                        )}
+                        <div className="flex justify-between mb-1"><span>성인 × {people.adult}</span><span>{(price ? (people.adult * price.adult) : 0).toLocaleString()}원</span></div>
+                        {promo.adult?.length > 0 && (
+                            <div className="text-xs text-gray-600 mb-2 pl-1">
+                                <div className="flex items-start gap-1">
+                                    <span className="inline-block mt-0.5">•</span>
+                                    <span>금액 : {promo.adult.map(p => formatOpLabel(p.op, p.amount)).join(', ')}</span>
+                                </div>
                             </div>
-                            {discountAdult > 0 && (
-                              <div className="shrink-0 text-right text-amber-600">-{fmt(discountAdult)}원</div>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                        )}
 
-                      {/* 청소년 라인 */}
-                      {people.teen > 0 && (
-                        <div className="flex justify-between items-baseline mb-1">
-                          <span>청소년 × {people.teen}</span>
-                          <span className="text-right">
-                            {discountTeen > 0 ? (
-                              <>
-                                <span className="mr-1 text-gray-400 line-through">{fmt(baseTeenSubtotal)}원</span>
-                                <span className="font-medium text-zinc-900">{fmt(discountedTeen)}원</span>
-                              </>
-                            ) : (
-                              <span className="font-medium text-zinc-900">{fmt(discountedTeen)}원</span>
-                            )}
-                          </span>
-                        </div>
-                      )}
-                      {promo.teen?.length > 0 && people.teen > 0 && (
-                        <div className="text-[12px] text-gray-600 mb-2 pl-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-start gap-1">
-                              <span className="inline-block mt-0.5">•</span>
-                              <span>{promo.teen.map(p => formatOpLabel(p.op, p.amount)).join(', ')}</span>
+                        <div className="flex justify-between mb-2"><span>청소년 × {people.teen}</span><span>{(price ? (people.teen * price.teen) : 0).toLocaleString()}원</span></div>
+                        {promo.teen?.length > 0 && (
+                            <div className="text-xs text-gray-600 mb-2 pl-1">
+                                <div className="flex items-start gap-1">
+                                    <span className="inline-block mt-0.5">•</span>
+                                    <span>금액 : {promo.teen.map(p => formatOpLabel(p.op, p.amount)).join(', ')}</span>
+                                </div>
                             </div>
-                            {discountTeen > 0 && (
-                              <div className="shrink-0 text-right text-amber-600">-{fmt(discountTeen)}원</div>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                        )}
 
-                      {/* 구분선 */}
-                      <div className="h-px bg-gray-200 my-2" />
-
-                      {/* 최종가 강조 */}
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-[15px] font-semibold">최종가</span>
-                        <span className="text-[16px] font-semibold">{fmt(totalAmount)}원</span>
-                      </div>
-
-                      {/* 총 상영할인 (정보용) */}
-                      {discountTotal > 0 && (
-                        <div className="flex justify-between text-[12px] text-amber-600 mt-1">
-                          <span>상영할인</span>
-                          <span>-{fmt(discountTotal)}원</span>
-                        </div>
-                      )}
+                        <div className="h-px bg-gray-200 my-2" />
+                        <div className="flex justify-between font-semibold text-base"><span>합계</span><span>{totalAmount.toLocaleString()}원</span></div>
                     </div>
 
                     <div className="mt-auto flex items-center justify-between">

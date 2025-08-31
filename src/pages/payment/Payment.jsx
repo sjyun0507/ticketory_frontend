@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { loadTossPayments, ANONYMOUS } from '@tosspayments/tosspayments-sdk';
+import { loadTossPayments } from '@tosspayments/tosspayments-sdk';
 import { createPaymentOrder } from '../../api/paymentApi.js';
 import {useAuthStore} from "../../store/useAuthStore.js";
 import { releaseBookingHold } from '../../api/bookingApi.js';
@@ -17,12 +17,20 @@ export default function Payment() {
     const navigate = useNavigate();
     const {
         cart: cartFromState = [],
-        totalPrice,
         amount: amountState,
         bookingId: bookingIdFromState,
         payableAmount: payableAmountFromState,
         pointsUsed: pointsUsedFromState
     } = location.state || {};
+    // 다양한 서버 응답에서 숫자(혹은 숫자 문자열) 추출 보조 함수
+    const pickNumber = (...vals) => {
+      for (const v of vals) {
+        if (v === null || v === undefined) continue;
+        const n = Number(v);
+        if (!Number.isNaN(n) && Number.isFinite(n)) return n;
+      }
+      return null;
+    };
 
     const cartFromStorage = (() => {
         try { return JSON.parse(localStorage.getItem('cartItems') || '[]'); } catch { return []; }
@@ -39,19 +47,17 @@ export default function Payment() {
     const screeningId = screeningIdFromState || screeningIdFromQuery || null;
     // 새로고침 대비 폴백
     const primaryMovieId = (Array.isArray(cart) && cart[0]?.movieId) || null;
-    // 장바구니 원가 합
-    const cartSum = Array.isArray(cart)
-        ? cart.reduce((s, it) => s + Number(it.price || 0) * Number(it.quantity || 1), 0)
-        : 0;
-
-    // 초기 결제금액 우선순위:
-    // (1) 좌석/HOLD의 payableAmount > (2) state.amount.value > (3) totalPrice > (4) cart 합
+    // 초기 결제금액은 서버 제공값만 사용
     const initialAmountValue = (() => {
-        if (typeof payableAmountFromState === 'number' && !Number.isNaN(payableAmountFromState)) return payableAmountFromState;
-        if (amountState && typeof amountState.value === 'number') return amountState.value;
-        if (typeof totalPrice === 'number') return totalPrice;
-        return cartSum;
+      if (typeof payableAmountFromState === 'number' && !Number.isNaN(payableAmountFromState)) return payableAmountFromState;
+      if (amountState && typeof amountState.value === 'number') return amountState.value;
+      return 0; // 서버 값이 없으면 0 (결제 시 서버 재확인)
     })();
+
+    // 표시용 서버 기준 금액(있을 때만 사용)
+    const basePayableFromServer = (typeof payableAmountFromState === 'number' && !Number.isNaN(payableAmountFromState))
+      ? payableAmountFromState
+      : (amountState && typeof amountState.value === 'number' ? amountState.value : 0);
 
     // const user = useAuthStore((s) => s.user);
     // const memberId = user?.id ?? user?.memberId ?? null;
@@ -209,6 +215,8 @@ export default function Payment() {
             const pm = document.getElementById('payment-method');
             const ag = document.getElementById('agreement');
             if (!pm || !ag) return; // 타겟이 없으면 렌더 시도하지 않음
+            // Log initial amount for widget rendering
+            console.debug('[toss:initial:setAmount] KRW', amount.value);
             await widgets.setAmount({ currency: 'KRW', value: amount.value });
             await Promise.all([
                 widgets.renderPaymentMethods({ selector: '#payment-method', variantKey: 'DEFAULT' }),
@@ -224,11 +232,6 @@ export default function Payment() {
         widgets.setAmount({ currency: 'KRW', value: amount.value });
     }, [amount, widgets]);
 
-useEffect(() => {
-    const base = initialAmountValue; // 좌석/HOLD 금액을 일관된 기준으로 사용
-    const newValue = Math.max(0, base - usedPoints);
-    setAmount({ currency: 'KRW', value: newValue });
-}, [usedPoints, initialAmountValue]);
 
     const handleBack = async () => {
         if (releasing) return;
@@ -266,64 +269,100 @@ useEffect(() => {
         }
         if (!ready) return alert('결제 수단 준비 중입니다.');
         try {
-            const finalAmount = amount.value;
             localStorage.setItem('cartItems', JSON.stringify(cart));
 
+            // 서버가 최종 결제금액을 계산하도록 위임
             const orderPayload = {
-                bookingId: bookingId ?? null,
-                memberId: memberId ?? null,
-                orderId: null,
-                totalAmount: Number(finalAmount || 0),
-                usedPoint: Number(usedPoints || 0),
-                orderMethod: 'movie',
-                orderTime: new Date().toISOString(),
-                status: 'waiting',
-                earnedPoint: Math.floor(Number(finalAmount || 0) * 0.05),
-                items: cart.map(({ id, movieId, screeningId, seatId, name, price, quantity }) => ({
-                    id: id ?? null,
-                    movieId,
-                    screeningId,
-                    seatId: seatId ?? null,
-                    name,
-                    price: Number(price ?? 0),
-                    quantity: Number(quantity ?? 1),
-                })),
+              bookingId: bookingId ?? null,
+              memberId: memberId ?? null,
+              orderId: null,
+              totalAmount: Number(initialAmountValue || 0), // 프론트 계산 금지
+              usedPoint: Number(usedPoints || 0),
+              orderMethod: 'movie',
+              orderTime: new Date().toISOString(),
+              status: 'waiting',
+              items: cart.map(({ id, movieId, screeningId, seatId, name, price, quantity }) => ({
+                id: id ?? null,
+                movieId,
+                screeningId,
+                seatId: seatId ?? null,
+                name,
+                price: Number(price ?? 0),
+                quantity: Number(quantity ?? 1),
+              })),
             };
-            console.debug('[order:create:payload:final]', JSON.stringify(orderPayload));
+            console.debug('[order:create:payload]', JSON.stringify(orderPayload));
 
-
-            // 1) 서버에 주문 선생성 (권장) - 404일 경우 클라이언트에서 생성한 주문번호로 결제 진행 허용
             let orderIdFromServer = null;
+            let payableFromServer = null;
             try {
-                const orderRes = await createPaymentOrder(orderPayload);
-                orderIdFromServer = orderRes?.data?.orderId || orderRes?.orderId || null;
-                console.debug('[order:create:res]', orderRes);
+              const orderRes = await createPaymentOrder(orderPayload);
+              const body = orderRes?.data ?? orderRes;
+              console.debug('[order:create:res:raw]', orderRes);
+              console.debug('[order:create:res:body]', body);
+              orderIdFromServer = body?.orderId || body?.data?.orderId || body?.result?.orderId || null;
+              // 다양한 래핑/키 네이밍 대응 + 문자열 숫자까지 모두 처리
+              payableFromServer = pickNumber(
+                body?.payableAmount,
+                body?.amount,
+                body?.totalAmount,
+                body?.data?.payableAmount,
+                body?.data?.amount,
+                body?.data?.totalAmount,
+                body?.result?.payableAmount,
+                body?.result?.amount,
+                body?.result?.totalAmount,
+                body?.order?.payableAmount,
+                body?.payment?.payableAmount
+              );
             } catch (e) {
-                const status = e?.response?.status;
-                const msg = e?.response?.data?.message || e?.message;
-                console.error('[order:create:error]', status, msg, e?.response?.data);
-                if (status === 404) {
-                    // 엔드포인트 미구현/오경로인 경우에도 테스트 결제는 진행 가능하게
-                    orderIdFromServer = uuidv4();
-                    alert('서버 주문 API(404)가 아직 준비되지 않아 임시 주문번호로 결제를 진행합니다. 결제 성공 후 서버 연동을 점검하세요.');
-                } else {
-                    throw e;
-                }
+              const status = e?.response?.status;
+              const msg = e?.response?.data?.message || e?.message;
+              console.error('[order:create:error]', status, msg, e?.response?.data);
+              if (status === 404) {
+                orderIdFromServer = uuidv4();
+                payableFromServer = (typeof initialAmountValue === 'number' ? initialAmountValue : 0);
+                alert('서버 주문 API(404)로 임시 주문번호로 진행합니다. 금액 검증은 서버 구현 후 점검하세요.');
+              } else {
+                throw e;
+              }
             }
 
             const orderIdToUse = orderIdFromServer || uuidv4();
+            let finalServerAmount = Number(payableFromServer || 0);
+            if (!(finalServerAmount > 0)) {
+              // HOLD 단계에서 전달된 서버 금액으로 보조 진행 (프론트 계산 아님)
+              const fallbackFromState = pickNumber(payableAmountFromState, amountState?.value);
+              if (fallbackFromState && fallbackFromState > 0) {
+                console.warn('[order] 서버 응답에 금액 키가 없어 HOLD 전달 금액으로 진행합니다:', fallbackFromState);
+                finalServerAmount = Number(fallbackFromState);
+              }
+            }
+            if (!(finalServerAmount > 0)) {
+              return alert('결제 금액을 불러오지 못했습니다. 관리자에게 문의하세요.');
+            }
+            // Diagnostics: trace amount source before setting Toss amount
+            console.info('[payment:amount:trace]', {
+              payableFromServer,
+              fallbackFromState: pickNumber(payableAmountFromState, amountState?.value),
+              initialAmountValue,
+              finalServerAmount,
+            });
             setOrderId(orderIdToUse);
+            setAmount({ currency: 'KRW', value: finalServerAmount });
+            // Log the exact amount being sent to Toss
+            console.info('[toss:setAmount] KRW', finalServerAmount);
+            await widgets.setAmount({ currency: 'KRW', value: finalServerAmount });
 
-            await widgets.setAmount({ currency: 'KRW', value: amount.value });
             const dynOrderName = ageSummary ? `영화 예매 (${ageSummary})` : '영화 예매';
             await widgets.requestPayment({
-                orderId: orderIdToUse,
-                orderName: dynOrderName,
-                successUrl: window.location.origin + '/success',
-                failUrl: window.location.origin + '/fail',
-                customerEmail: user?.email || 'member@ticketory.app',
-                customerName: user?.name || '회원',
-                customerMobilePhone: user?.phone ? user.phone.replace(/\D/g, '') : undefined,
+              orderId: orderIdToUse,
+              orderName: dynOrderName,
+              successUrl: window.location.origin + '/success',
+              failUrl: window.location.origin + '/fail',
+              customerEmail: user?.email || 'member@ticketory.app',
+              customerName: user?.name || '회원',
+              customerMobilePhone: user?.phone ? user.phone.replace(/\D/g, '') : undefined,
             });
 
             setPaymentStatus('성공');
@@ -398,12 +437,12 @@ useEffect(() => {
                                 type="number"
                                 value={usedPoints}
                                 min={0}
-                                max={Math.min(availablePoints, amount.value)}
+                                max={Math.min(availablePoints, initialAmountValue || amount.value)}
                                 step={100}
                                 onChange={(e) => {
                                     let val = Math.floor(Number(e.target.value) / 100) * 100;
                                     if (val > availablePoints) val = availablePoints;
-                                    if (val > amount.value) val = amount.value;
+                                    if (val > (initialAmountValue || amount.value)) val = (initialAmountValue || amount.value);
                                     if (val < 0) val = 0;
                                     setUsedPoints(val);
                                 }}
@@ -457,10 +496,10 @@ useEffect(() => {
                         );
                     })}
                     {/* 상영 규칙/프로모션 등으로 좌석 페이지에서 이미 할인된 경우 시각화 */}
-                    {typeof payableAmountFromState === 'number' && payableAmountFromState < cartSum && (
+                    {typeof payableAmountFromState === 'number' && basePayableFromServer > 0 && payableAmountFromState < basePayableFromServer && (
                       <div className="flex justify-between text-sm text-amber-400">
                         <span>상영할인</span>
-                        <span>-{(cartSum - payableAmountFromState).toLocaleString()}원</span>
+                        <span>-{(basePayableFromServer - payableAmountFromState).toLocaleString()}원</span>
                       </div>
                     )}
                     {usedPoints > 0 && (

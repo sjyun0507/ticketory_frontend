@@ -15,7 +15,14 @@ console.debug('[toss] clientKey:', import.meta.env.VITE_TOSS_CLIENT_KEY);
 export default function Payment() {
     const location = useLocation();
     const navigate = useNavigate();
-    const { cart: cartFromState = [], totalPrice, amount: amountState, bookingId: bookingIdFromState } = location.state || {};
+    const {
+        cart: cartFromState = [],
+        totalPrice,
+        amount: amountState,
+        bookingId: bookingIdFromState,
+        payableAmount: payableAmountFromState,
+        pointsUsed: pointsUsedFromState
+    } = location.state || {};
 
     const cartFromStorage = (() => {
         try { return JSON.parse(localStorage.getItem('cartItems') || '[]'); } catch { return []; }
@@ -32,12 +39,18 @@ export default function Payment() {
     const screeningId = screeningIdFromState || screeningIdFromQuery || null;
     // 새로고침 대비 폴백
     const primaryMovieId = (Array.isArray(cart) && cart[0]?.movieId) || null;
-    // 초기 결제금액 결정: state.amount.value > state.totalPrice > cart 합계
+    // 장바구니 원가 합
+    const cartSum = Array.isArray(cart)
+        ? cart.reduce((s, it) => s + Number(it.price || 0) * Number(it.quantity || 1), 0)
+        : 0;
+
+    // 초기 결제금액 우선순위:
+    // (1) 좌석/HOLD의 payableAmount > (2) state.amount.value > (3) totalPrice > (4) cart 합
     const initialAmountValue = (() => {
+        if (typeof payableAmountFromState === 'number' && !Number.isNaN(payableAmountFromState)) return payableAmountFromState;
         if (amountState && typeof amountState.value === 'number') return amountState.value;
         if (typeof totalPrice === 'number') return totalPrice;
-        const sum = Array.isArray(cart) ? cart.reduce((s, it) => s + Number(it.price || 0) * Number(it.quantity || 1), 0) : 0;
-        return sum;
+        return cartSum;
     })();
 
     // const user = useAuthStore((s) => s.user);
@@ -61,7 +74,7 @@ export default function Payment() {
     })();
 
     const memberId = memberIdFromStore ?? memberIdFromToken ?? null;
-    const [usedPoints, setUsedPoints] = useState(0);
+    const [usedPoints, setUsedPoints] = useState(Number(pointsUsedFromState || 0));
     const [paymentStatus, setPaymentStatus] = useState(null);
     const [orderId, setOrderId] = useState(null);
 
@@ -134,16 +147,14 @@ export default function Payment() {
     }, [cart]);
 
     const ageSummary = useMemo(() => {
-        const sum = { ADULT: 0, TEEN: 0, CHILD: 0 };
+        const sum = { ADULT: 0, TEEN: 0};
         groupedCart.forEach(g => {
             sum.ADULT += g.age.ADULT || 0;
             sum.TEEN += g.age.TEEN || 0;
-            sum.CHILD += g.age.CHILD || 0;
         });
         const parts = [];
         if (sum.ADULT) parts.push(`성인 ${sum.ADULT}`);
         if (sum.TEEN) parts.push(`청소년 ${sum.TEEN}`);
-        if (sum.CHILD) parts.push(`어린이 ${sum.CHILD}`);
         return parts.join(' · ');
     }, [groupedCart]);
 
@@ -213,11 +224,11 @@ export default function Payment() {
         widgets.setAmount({ currency: 'KRW', value: amount.value });
     }, [amount, widgets]);
 
-    useEffect(() => {
-        const base = typeof totalPrice === 'number' ? totalPrice : initialAmountValue;
-        const newValue = Math.max(0, base - usedPoints);
-        setAmount({ currency: 'KRW', value: newValue });
-    }, [usedPoints, totalPrice, initialAmountValue]);
+useEffect(() => {
+    const base = initialAmountValue; // 좌석/HOLD 금액을 일관된 기준으로 사용
+    const newValue = Math.max(0, base - usedPoints);
+    setAmount({ currency: 'KRW', value: newValue });
+}, [usedPoints, initialAmountValue]);
 
     const handleBack = async () => {
         if (releasing) return;
@@ -259,25 +270,27 @@ export default function Payment() {
             localStorage.setItem('cartItems', JSON.stringify(cart));
 
             const orderPayload = {
-                memberId: memberId ?? undefined,
-                totalAmount: finalAmount || 0,
-                usedPoint: usedPoints || 0,
+                bookingId: bookingId ?? null,
+                memberId: memberId ?? null,
+                orderId: null,
+                totalAmount: Number(finalAmount || 0),
+                usedPoint: Number(usedPoints || 0),
                 orderMethod: 'movie',
                 orderTime: new Date().toISOString(),
                 status: 'waiting',
-                earnedPoint: Math.floor((finalAmount || 0) * 0.05),
+                earnedPoint: Math.floor(Number(finalAmount || 0) * 0.05),
                 items: cart.map(({ id, movieId, screeningId, seatId, name, price, quantity }) => ({
-                    id,
+                    id: id ?? null,
                     movieId,
                     screeningId,
-                    seatId,
+                    seatId: seatId ?? null,
                     name,
-                    price,
-                    quantity,
+                    price: Number(price ?? 0),
+                    quantity: Number(quantity ?? 1),
                 })),
             };
+            console.debug('[order:create:payload:final]', JSON.stringify(orderPayload));
 
-            console.debug('[order:create:payload]', orderPayload);
 
             // 1) 서버에 주문 선생성 (권장) - 404일 경우 클라이언트에서 생성한 주문번호로 결제 진행 허용
             let orderIdFromServer = null;
@@ -443,6 +456,13 @@ export default function Payment() {
                             </div>
                         );
                     })}
+                    {/* 상영 규칙/프로모션 등으로 좌석 페이지에서 이미 할인된 경우 시각화 */}
+                    {typeof payableAmountFromState === 'number' && payableAmountFromState < cartSum && (
+                      <div className="flex justify-between text-sm text-amber-400">
+                        <span>상영할인</span>
+                        <span>-{(cartSum - payableAmountFromState).toLocaleString()}원</span>
+                      </div>
+                    )}
                     {usedPoints > 0 && (
                         <div className="flex justify-between text-sm text-amber-400">
                             <span>포인트 사용</span>

@@ -94,6 +94,44 @@ const MyBookings = () => {
         return now < (start - THIRTY_MIN);
     };
 
+    // DTO seats: List<String> (fallback: comma-separated string)
+    const normalizeSeatLabels = (raw) => {
+        if (!raw) return [];
+        if (Array.isArray(raw)) {
+            return raw.filter(v => typeof v === 'string' && v.trim()).map(v => v.trim());
+        }
+        if (typeof raw === 'string') {
+            return raw.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        return [];
+    };
+
+    // 문자열 LocalDateTime, epoch(ms), Date 모두 처리하는 파서 (Safari/WebKit 대응)
+    const toDateSafe = (v) => {
+        if (!v) return null;
+        if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+        if (typeof v === 'number') {
+            const d = new Date(v);
+            return isNaN(d.getTime()) ? null : d;
+        }
+        if (typeof v === 'string') {
+            let s = v.trim();
+            // "YYYY-MM-DD HH:mm[:ss]" → "YYYY-MM-DDTHH:mm[:ss]"
+            if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?$/.test(s)) {
+                s = s.replace(' ', 'T');
+            }
+            // 초가 없으면 ":00" 보강
+            if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) {
+                s = s + ':00';
+            }
+            const d = new Date(s);
+            if (!isNaN(d.getTime())) return d;
+            console.warn('[MyBookings] toDateSafe: 파싱 실패 원본=', v);
+            return null;
+        }
+        return null;
+    };
+
     const handleCancel = async (bk) => {
         // 모달을 띄우는 경로로 변경
         try {
@@ -192,65 +230,59 @@ const MyBookings = () => {
 
             const detail = await getBookingDetail(bookingId);
 
-            const qrCodeUrl = detail?.qrCodeUrl || detail?.qr_code_url || null;
-            const movieTitle = detail?.movie?.title || detail?.movieTitle || pre?.movieTitle || "";
+            // Debug: raw detail
+            console.groupCollapsed('[MyBookings] Booking detail raw');
+            console.log('detail:', detail);
+            console.groupEnd();
 
-            // 상영시간/종료시간
-            const screeningStartAt = detail?.screening?.startAt
-                || detail?.screeningStartAt
-                || pre?.screeningStartAt
-                || null;
-            const screeningEndAt = detail?.screening?.endAt
-                || detail?.screeningEndAt
-                || pre?.screeningEndAt
-                || null;
-
-            // bookingTime
-            const bookingTime = detail?.bookingTime || detail?.booking_time || pre?.bookingTime || null;
-
-            // 상영관 이름 (요약/상세 중 가용값)
-            const screenName = detail?.screening?.screen?.name
-                || detail?.screenName
-                || pre?.screenName
-                || "";
-
-            // 좌석
-            let seats = Array.isArray(detail?.seats) ? detail.seats
-                : (Array.isArray(detail?.seatLabels) ? detail.seatLabels : undefined);
-            if (!seats) {
-                seats = Array.isArray(pre?.seats) ? pre.seats : [];
+            const bookingIdNum = pre?.bookingId ?? pre?.id ?? bookingId;
+            const movieTitle = detail?.movieTitle ?? '';
+            // 상영일시: DTO(top-level) 우선, 없으면 nested(screening.startAt/endAt), 마지막으로 목록(pre)
+            const screeningStartAt = (
+              detail?.screeningStartAt ?? detail?.screening?.startAt ?? pre?.screeningStartAt ?? null
+            );
+            const screeningEndAt = (
+              detail?.screeningEndAt ?? detail?.screening?.endAt ?? pre?.screeningEndAt ?? null
+            );
+            const bookingTime = detail?.bookingTime ?? null; // if DTO later includes it; otherwise remains null
+            const screenName = detail?.screenName ?? '';
+            const screenLocation = detail?.screenLocation ?? '';
+            // 좌석: 상세 응답이 비어있으면 목록(pre)에서 폴백
+            let seats = normalizeSeatLabels(detail?.seats);
+            if ((!seats || seats.length === 0) && pre?.seats) {
+              console.warn('[MyBookings] detail.seats 비어있음 → 목록 seats로 폴백');
+              seats = normalizeSeatLabels(pre.seats);
             }
+            const paymentStatus = detail?.paymentStatus ?? '';
+            const totalPrice = detail?.totalPrice ?? 0;
+            let posterUrl = detail?.posterUrl ?? pre?.posterUrl ?? null;
 
-            // 금액/상태
-            const paymentStatus = detail?.paymentStatus || detail?.status || pre?.paymentStatus || "";
-            const totalPrice = detail?.totalPrice ?? detail?.amount ?? pre?.totalPrice ?? 0;
+            // Optional debug log for date fields
+            console.groupCollapsed('[MyBookings] detail date fields');
+            console.log('screeningStartAt(raw):', screeningStartAt);
+            console.log('screeningEndAt(raw):', screeningEndAt);
+            console.log('screeningStartAt(parsed):', toDateSafe(screeningStartAt));
+            console.log('screeningEndAt(parsed):', toDateSafe(screeningEndAt));
+            console.groupEnd();
 
-            // 토스 결제 orderId (여러 후보 키 안전 수집)
-            let orderId = detail?.orderId
-              || detail?.payment?.orderId
-              || detail?.tossOrderId
-              || detail?.toss?.orderId
-              || pre?.orderId
-              || null;
-
-            // 결제 성공 화면에서 저장된 최근 orderId 폴백
-            if (!orderId) {
-                try {
-                    orderId = localStorage.getItem('lastOrderId') || null;
-                } catch {}
-            }
-            // 포스터 (리스트에서 넘어온 값 사용, 필요 시 Blob URL로 변환)
-            let posterUrl = pre?.posterUrl || null;
+            // 보호 리소스인 경우 Blob URL 처리
             if (posterUrl) {
               try {
                 const usable = await loadPosterBlobUrl(posterUrl);
                 if (usable) posterUrl = usable;
-              } catch {}
+              } catch (e) {
+                console.warn('[MyBookings] poster load failed (detail):', e);
+              }
             }
 
+            // Debug: mapped detail
+            console.groupCollapsed('[MyBookings] Booking detail mapped');
+            console.log({ bookingId: bookingIdNum, movieTitle, screeningStartAt, screeningEndAt, screenName, screenLocation, seats, paymentStatus, totalPrice, posterUrl });
+            console.groupEnd();
+
             setDetailData({
-                bookingId,
-                qrCodeUrl,
+                bookingId: bookingIdNum,
+                qrCodeUrl: detail?.qrCodeUrl || null,
                 movieTitle,
                 screeningStartAt,
                 screeningEndAt,
@@ -260,7 +292,7 @@ const MyBookings = () => {
                 paymentStatus,
                 totalPrice,
                 posterUrl,
-                orderId,
+                orderId: detail?.orderId || null,
             });
             setDetailOpen(true);
         } catch (e) {
@@ -336,6 +368,12 @@ const MyBookings = () => {
               list = merged.length > 0 ? merged : (await tryFetch()) || [];
             }
 
+            // Log raw list for debugging
+            console.groupCollapsed('[MyBookings] Bookings page raw');
+            console.log('tab:', tab);
+            console.log('list:', list);
+            console.groupEnd();
+
             // ---------- Normalize ----------
             const normalized = await Promise.all(list.map(async (b) => {
               const poster = b.posterUrl || null;
@@ -356,14 +394,14 @@ const MyBookings = () => {
 
               return {
                 bookingId: b.bookingId ?? b.id,
-                movieTitle: b.movieTitle ?? "제목 없음",
-                screeningStartAt: b.screeningStartAt ?? b.startAt ?? b.start_at ?? null,
-                screeningEndAt: b.screeningEndAt ?? b.endAt ?? b.end_at ?? null,
-                screenName: b.screenName ?? b.screen?.name ?? "",
-                screenLocation: b.screenLocation ?? b.screen?.location ?? "",
-                seats: Array.isArray(b.seats) ? b.seats : (Array.isArray(b.seatLabels) ? b.seatLabels : []),
-                paymentStatus: b.paymentStatus ?? b.status ?? "",
-                totalPrice: b.totalPrice ?? b.amount ?? 0,
+                movieTitle: b.movieTitle ?? '',
+                screeningStartAt: b.screeningStartAt ?? null,
+                screeningEndAt: b.screeningEndAt ?? null,
+                screenName: b.screenName ?? '',
+                screenLocation: b.screenLocation ?? '',
+                seats: normalizeSeatLabels(b.seats),
+                paymentStatus: b.paymentStatus ?? '',
+                totalPrice: b.totalPrice ?? 0,
                 posterUrl,
                 uiStatus,
                 uiStatusLabel,
@@ -371,6 +409,10 @@ const MyBookings = () => {
             }));
 
             setBookings(normalized);
+            // Debug: normalized bookings
+            console.groupCollapsed('[MyBookings] Bookings normalized');
+            console.table(normalized.map(n => ({ id: n.bookingId, title: n.movieTitle, start: n.screeningStartAt, seats: n.seats?.join(', '), status: n.paymentStatus, price: n.totalPrice })));
+            console.groupEnd();
           } catch (err) {
             console.error("[MyBookings] 예매 내역 로드 실패:", err, err?.response);
             const status = err?.response?.status;
@@ -614,8 +656,14 @@ const MyBookings = () => {
                           <div>
                             <div className="text-white/60 text-sm">상영일시</div>
                             <div className="font-semibold mt-0.5">
-                              {detailData.screeningStartAt ? new Date(detailData.screeningStartAt).toLocaleString() : '-'}
-                              {detailData.screeningEndAt ? ` ~ ${new Date(detailData.screeningEndAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                              {(() => {
+                                const s = toDateSafe(detailData.screeningStartAt);
+                                const e = toDateSafe(detailData.screeningEndAt);
+                                if (!s) return '-';
+                                const left = s.toLocaleString();
+                                const right = e ? ' ~ ' + e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                                return left + right;
+                              })()}
                             </div>
                           </div>
                           <div>

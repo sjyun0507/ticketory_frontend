@@ -24,6 +24,8 @@ const normalizeStatus = (s) => {
 
 // 가격 정책 (기본값)
 const DEFAULT_PRICE = { adult: 14000, teen: 11000 };
+// 금액 포맷터 (3자리 구분, 원)
+const fmt = (n) => new Intl.NumberFormat('ko-KR').format(Number(n || 0));
 
 const toDate = (v) => {
     if (!v) return null;
@@ -135,7 +137,6 @@ const Seat = () => {
             payload.screen_id ??
             payload.screen?.id ??
             payload.auditorium?.id ??
-            payload.auditoriumId ??
             undefined
         );
     }, []);
@@ -192,6 +193,21 @@ const Seat = () => {
     const displayTitle = resolvedTitle || movieDetail?.title || movieDetail?.name || '';
     const totalPeople = useMemo(() => people.adult + people.teen, [people]);
     const totalAmount = useMemo(() => (people.adult * price.adult) + (people.teen * price.teen), [people, price]);
+
+    // 관람 인원 변경 시, 선택 좌석 수를 자동 정렬(초과분 제거)
+    useEffect(() => {
+      setSelected(prev => (prev.length > totalPeople ? prev.slice(0, totalPeople) : prev));
+    }, [totalPeople]);
+
+    // 정가(기본가) 기준 합계와 할인액 계산
+    const baseAdultSubtotal = useMemo(() => people.adult * DEFAULT_PRICE.adult, [people.adult]);
+    const baseTeenSubtotal  = useMemo(() => people.teen  * DEFAULT_PRICE.teen,  [people.teen]);
+    const baseTotal         = useMemo(() => baseAdultSubtotal + baseTeenSubtotal, [baseAdultSubtotal, baseTeenSubtotal]);
+    const discountedAdult   = useMemo(() => people.adult * price.adult, [people.adult, price.adult]);
+    const discountedTeen    = useMemo(() => people.teen  * price.teen,  [people.teen, price.teen]);
+    const discountAdult     = Math.max(0, baseAdultSubtotal - discountedAdult);
+    const discountTeen      = Math.max(0, baseTeenSubtotal - discountedTeen);
+    const discountTotal     = Math.max(0, baseTotal - totalAmount);
 
     // 좌석 맵 조회 (screeningId 기준)
     const { data, isLoading, isError } = useQuery({
@@ -363,17 +379,41 @@ const Seat = () => {
             alert("선택된 좌석이 없습니다.");
             return;
         }
-        if (totalPeople === 0 || selected.length !== totalPeople) {
-            alert("관람 인원과 선택 좌석 수가 일치해야 합니다.");
+        if (totalPeople === 0) {
+            if (selected.length > 0) setSelected([]);
+            alert("관람 인원을 먼저 선택해주세요.");
+            return;
+        }
+        if (selected.length !== totalPeople) {
+            // 방금 위 useEffect로 대부분 정리되지만, 혹시 비동기 타이밍 이슈 대비
+            setSelected(prev => (prev.length > totalPeople ? prev.slice(0, totalPeople) : prev));
+            alert(`좌석 선택 수(${selected.length})와 인원 수(${totalPeople})가 일치해야 합니다.`);
             return;
         }
 
         try {
             setSubmitting(true);
+            const ageCounts = {
+                ADULT: Number(people.adult || 0),
+                TEEN:  Number(people.teen  || 0),
+                CHILD: 0,
+                ETC:   0,
+            };
+
+            // 가격 규칙 참조 기준시각: 좌석 선택한 회차의 상영 시작시간 기준(수요할인 등 날짜 조건 일관성)
+            const pricingRefAt = (function() {
+                const d = showStartRef instanceof Date && !isNaN(showStartRef.getTime()) ? showStartRef : new Date();
+                // ISO string in local time (server expects LocalDateTime-like)
+                const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+                return local.toISOString().slice(0, 19);
+            })();
+
             const payload = {
                 screeningId: Number.isNaN(screeningIdNum) ? screeningId : screeningIdNum,
                 seatIds,
                 counts: { adult: people.adult, teen: people.teen },
+                ageCounts,       // (선택) 서버가 새 필드를 지원할 경우 사용
+                pricingRefAt,    // 날짜 조건 규칙 적용 기준시각
                 holdSeconds: 200,
             };
             console.log('[HOLD:req]', payload);
@@ -427,7 +467,9 @@ const Seat = () => {
             const amountValue = cartItems.reduce((sum, it) => sum + Number(it.price || 0), 0);
             const state = {
                 cart: cartItems,
-                amount: { value: amountValue },
+                amount: { value: amountValue }, // 원가 합(표시용)
+                payableAmount: out?.payableAmount, // ✅ HOLD 응답 금액(실결제 기준)
+                pointsUsed: out?.pointsUsed ?? 0,  // ✅ HOLD에서 이미 차감된 포인트가 있다면 전달
                 bookingId,
                 screeningId: screeningIdNum,
                 movieId: Number(movieId) || undefined,
@@ -617,7 +659,7 @@ const Seat = () => {
                 </div>
 
                 {/* 우측 요약/전설 (좌측 전체 높이에 맞춤) */}
-                <aside className="border rounded-xl bg-white p-4 flex flex-col h-full self-stretch">
+                <aside className="border rounded-xl bg-white p-4 mb-4 flex flex-col h-full self-stretch">
                     <div className="flex flex-col gap-4 flex-1">
                         <div className="flex items-start justify-between">
                             <div className="pr-3">
@@ -643,29 +685,83 @@ const Seat = () => {
                     </div>
 
                     {/* 가격 요약 (하단 고정) */}
-                    <div className="text-sm border rounded p-3 mb-4 mt-auto  bg-gray-100">
-                        <div className="flex justify-between mb-1"><span>성인 × {people.adult}</span><span>{(people.adult * price.adult).toLocaleString()}원</span></div>
-                        {promo.adult?.length > 0 && (
-                            <div className="text-xs text-gray-600 mb-2 pl-1">
-                                <div className="flex items-start gap-1">
-                                    <span className="inline-block mt-0.5">•</span>
-                                    <span>금액 : {promo.adult.map(p => formatOpLabel(p.op, p.amount)).join(', ')}</span>
-                                </div>
+                    <div className="text-[13px] border rounded p-3 mb-4 mt-auto bg-gray-100">
+                      {/* 성인 라인 */}
+                      {people.adult > 0 && (
+                        <div className="flex justify-between items-baseline mb-1">
+                          <span>성인 × {people.adult}</span>
+                          <span className="text-right">
+                            {discountAdult > 0 ? (
+                              <>
+                                <span className="mr-1 text-gray-400 line-through">{fmt(baseAdultSubtotal)}원</span>
+                                <span className="font-medium text-zinc-900">{fmt(discountedAdult)}원</span>
+                              </>
+                            ) : (
+                              <span className="font-medium text-zinc-900">{fmt(discountedAdult)}원</span>
+                            )}
+                          </span>
+                        </div>
+                      )}
+                      {promo.adult?.length > 0 && people.adult > 0 && (
+                        <div className="text-[12px] text-gray-600 mb-2 pl-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-start gap-1">
+                              <span className="inline-block mt-0.5">•</span>
+                              <span>{promo.adult.map(p => formatOpLabel(p.op, p.amount)).join(', ')}</span>
                             </div>
-                        )}
+                            {discountAdult > 0 && (
+                              <div className="shrink-0 text-right text-amber-600">-{fmt(discountAdult)}원</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
-                        <div className="flex justify-between mb-2"><span>청소년 × {people.teen}</span><span>{(people.teen * price.teen).toLocaleString()}원</span></div>
-                        {promo.teen?.length > 0 && (
-                            <div className="text-xs text-gray-600 mb-2 pl-1">
-                                <div className="flex items-start gap-1">
-                                    <span className="inline-block mt-0.5">•</span>
-                                    <span>금액 : {promo.teen.map(p => formatOpLabel(p.op, p.amount)).join(', ')}</span>
-                                </div>
+                      {/* 청소년 라인 */}
+                      {people.teen > 0 && (
+                        <div className="flex justify-between items-baseline mb-1">
+                          <span>청소년 × {people.teen}</span>
+                          <span className="text-right">
+                            {discountTeen > 0 ? (
+                              <>
+                                <span className="mr-1 text-gray-400 line-through">{fmt(baseTeenSubtotal)}원</span>
+                                <span className="font-medium text-zinc-900">{fmt(discountedTeen)}원</span>
+                              </>
+                            ) : (
+                              <span className="font-medium text-zinc-900">{fmt(discountedTeen)}원</span>
+                            )}
+                          </span>
+                        </div>
+                      )}
+                      {promo.teen?.length > 0 && people.teen > 0 && (
+                        <div className="text-[12px] text-gray-600 mb-2 pl-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-start gap-1">
+                              <span className="inline-block mt-0.5">•</span>
+                              <span>{promo.teen.map(p => formatOpLabel(p.op, p.amount)).join(', ')}</span>
                             </div>
-                        )}
+                            {discountTeen > 0 && (
+                              <div className="shrink-0 text-right text-amber-600">-{fmt(discountTeen)}원</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
-                        <div className="h-px bg-gray-200 my-2" />
-                        <div className="flex justify-between font-semibold text-base"><span>합계</span><span>{totalAmount.toLocaleString()}원</span></div>
+                      {/* 구분선 */}
+                      <div className="h-px bg-gray-200 my-2" />
+
+                      {/* 최종가 강조 */}
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-[15px] font-semibold">최종가</span>
+                        <span className="text-[16px] font-semibold">{fmt(totalAmount)}원</span>
+                      </div>
+
+                      {/* 총 상영할인 (정보용) */}
+                      {discountTotal > 0 && (
+                        <div className="flex justify-between text-[12px] text-amber-600 mt-1">
+                          <span>상영할인</span>
+                          <span>-{fmt(discountTotal)}원</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-auto flex items-center justify-between">

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAdminMovies, getAdminScreens } from "../../api/adminApi.js";
+import {createScreening, deleteScreening, fetchScreenings, getAdminMovies, getAdminScreens, updateScreening} from "../../api/adminApi.js";
 import { AdminLayout } from "../../components/AdminSidebar.jsx";
 import ReactDOM from "react-dom";
-import { createScreening, fetchScreenings, updateScreening, deleteScreening } from "../../api/adminScreeningApi.js";
+
 import { computeMovieStatus } from "../../utils/movieStatus.js";
 
 const AdminScreenings = () => {
@@ -46,17 +46,111 @@ const AdminScreenings = () => {
   const [sortKey, setSortKey] = useState("start");
   const [sortAsc, setSortAsc] = useState(true);
 
-  function toDateKey(v) {
-    if (!v) return '';
+  // ---- KST helpers ----
+  const KST_TZ = "Asia/Seoul";
+
+ // 서버가 오프셋 없는 'YYYY-MM-DDTHH:mm:ss'를 주면 KST로 가정해 +09:00을 붙인다.
+    function ensureKstOffset(raw) {
+        if (!raw) return raw;
+        const s = String(raw);
+        if (/[Zz]$/.test(s) || /[+-]\d{2}:\d{2}$/.test(s)) return s; // 이미 Z나 오프셋이 있으면 그대로
+        return s + "+09:00";
+    }
+ // 안전 파서: 오프셋 없으면 KST로 가정해서 Date 생성
+    function parseAsKst(raw) {
+        if (!raw) return null;
+        const s = ensureKstOffset(raw);
+        const d = new Date(s);
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+  // Return YYYY-MM-DD computed in KST, regardless of input timezone (e.g., 'Z')
+  function toKstDateKey(v) {
+    if (!v) return "";
     let d = new Date(v);
     if (isNaN(d.getTime())) {
-      const s = String(v).replace(' ', 'T');
+      const s = String(v).replace(" ", "T");
       d = new Date(s);
     }
-    if (isNaN(d.getTime())) return '';
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    if (isNaN(d.getTime())) return "";
+    const parts = new Intl.DateTimeFormat("ko-KR", {
+      timeZone: KST_TZ,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(d);
+    const y = parts.find(p => p.type === "year")?.value ?? "";
+    const m = parts.find(p => p.type === "month")?.value ?? "";
+    const dd = parts.find(p => p.type === "day")?.value ?? "";
+    return `${y}-${m}-${dd}`;
   }
+
+  // Human-readable in KST (used for table)
+  function fmtKst(v) {
+    if (!v) return "";
+    try {
+      const d = new Date(v);
+      if (isNaN(d.getTime())) return String(v);
+      return d.toLocaleString("ko-KR", { timeZone: KST_TZ });
+    } catch {
+      return String(v);
+    }
+  }
+
+  // Build ISO with explicit +09:00 offset (server expects/keeps KST)
+  function toIsoWithKstOffset(dateObj) {
+    if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return "";
+    const pad = (n) => String(n).padStart(2, "0");
+    const y = dateObj.getFullYear();
+    const M = pad(dateObj.getMonth() + 1);
+    const d = pad(dateObj.getDate());
+    const h = pad(dateObj.getHours());
+    const m = pad(dateObj.getMinutes());
+    const s = pad(dateObj.getSeconds());
+    return `${y}-${M}-${d}T${h}:${m}:${s}+09:00`;
+  }
+  // ---- /KST helpers ----
+
+  // ---- Debug helpers ----
+  function logTime(label, value) {
+    try {
+      const d = value instanceof Date ? value : new Date(value);
+      const valid = !isNaN(d.getTime());
+      const offsetMin = valid ? -d.getTimezoneOffset() : null; // positive for east
+      const info = {
+        label,
+        input: value,
+        valid,
+        browserTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        offsetMinutes: offsetMin,
+        local: valid ? d.toString() : "Invalid Date",
+        isoLocalNoZ: valid ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}T${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}` : "",
+        isoUTC: valid ? d.toISOString() : "",
+        kst: valid ? d.toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }) : "",
+        kstKey: valid ? toKstDateKey(d) : "",
+      };
+      console.table(info);
+      return info;
+    } catch (e) {
+      console.warn("[AdminScreenings][logTime] error", e);
+    }
+  }
+
+  function logEnv() {
+    const now = new Date();
+    console.group("[AdminScreenings] Time Environment");
+    console.log("Browser tz:", Intl.DateTimeFormat().resolvedOptions().timeZone);
+    console.log("Now local:", now.toString());
+    console.log("Now ISO UTC:", now.toISOString());
+    console.log("Now as KST:", now.toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }));
+    console.log("KST dateKey:", toKstDateKey(now));
+    console.groupEnd();
+  }
+  // expose quick checker for manual console use
+  if (typeof window !== "undefined") {
+    window.__tzcheck = (v) => logTime("__tzcheck", v ?? new Date());
+  }
+  // ---- /Debug helpers ----
 
   const keyToDate = (key) => {
     if (!key) return null;
@@ -95,14 +189,14 @@ const AdminScreenings = () => {
     movieId: (s) => s.movieId ?? s.movie?.id ?? s.movie?.movieId ?? s.movie_id ?? s.movie?.movie_id ?? "",
     title: (s) => s.movieTitle ?? s.movie?.title ?? s.title ?? "",
     screen: (s) => s.screenName ?? s.screen?.name ?? s.screenId ?? s.screen_id ?? "",
-    start: (s) => {
-      const t = (new Date(s.startAt ?? s.start_at ?? s.start)).getTime();
-      return isNaN(t) ? 0 : t;
-    },
-    end: (s) => {
-      const t = (new Date(s.endAt ?? s.end_at ?? s.end)).getTime();
-      return isNaN(t) ? 0 : t;
-    },
+      start: (s) => {
+          const t = (parseAsKst(s.startAt ?? s.start_at ?? s.start))?.getTime?.();
+          return isNaN(t) ? 0 : t;
+      },
+      end: (s) => {
+          const t = (parseAsKst(s.endAt ?? s.end_at ?? s.end))?.getTime?.();
+          return isNaN(t) ? 0 : t;
+      },
   };
 
   const filteredItems = React.useMemo(() => {
@@ -113,7 +207,7 @@ const AdminScreenings = () => {
       const screen = (s.screenName ?? s.screen?.name ?? s.screenId ?? s.screen_id ?? "").toString().toLowerCase();
       const titleOk = titleKeyword ? title.includes(titleKeyword) : true;
       const screenOk = screenKeyword ? screen.includes(screenKeyword) : true;
-        const dateKey = toDateKey(s.startAt ?? s.start_at ?? s.start);
+        const dateKey = toKstDateKey(s.startAt ?? s.start_at ?? s.start);
         const dateOk = activeDate === 'ALL' ? true : dateKey === activeDate;
         if (!dateOk) return false;
         return titleOk && screenOk && dateOk;
@@ -137,14 +231,14 @@ const AdminScreenings = () => {
   const dateHasItems = React.useMemo(() => {
     const set = new Set();
     (Array.isArray(items) ? items : []).forEach((s) => {
-      const key = toDateKey(s.startAt ?? s.start_at ?? s.start);
+      const key = toKstDateKey(s.startAt ?? s.start_at ?? s.start);
       if (key) set.add(key);
     });
     return set;
   }, [items]);
 
   // 오늘 키
-  const todayKey = React.useMemo(() => toDateKey(new Date()), []);
+  const todayKey = React.useMemo(() => toKstDateKey(new Date()), []);
 
   // 주간 시작일 초기화 (처음 로드 시)
   useEffect(() => {
@@ -199,12 +293,8 @@ const AdminScreenings = () => {
 
   const toInputValue = (v) => {
     if (!v) return "";
-    let d = new Date(v);
-    if (isNaN(d.getTime())) {
-      const s = String(v).replace(" ", "T");
-      d = new Date(s);
-    }
-    if (isNaN(d.getTime())) return "";
+    const d = parseAsKst(v);
+    if (!d) return "";
     const pad = (n) => String(n).padStart(2, "0");
     return (
       d.getFullYear() +
@@ -217,24 +307,18 @@ const AdminScreenings = () => {
 
   const fromInputValue = (s) => {
     if (!s) return null;
-    const d = new Date(s);
-    return isNaN(d.getTime()) ? null : d;
+    return parseAsKst(s);
   };
 
   const composeDateTime = (dateStr, timeStr) => {
-    // timeStr like HH:mm
     const [hh = "00", mm = "00"] = String(timeStr || "00:00").split(":");
-    const d = new Date(dateStr + "T" + hh.padStart(2, "0") + ":" + mm.padStart(2, "0") + ":00");
-    return d;
+    const raw = `${dateStr}T${hh.padStart(2, "0")}:${mm.padStart(2, "0")}:00`;
+    return parseAsKst(raw);
   };
 
   const parseDate = (v) => {
     if (!v) return null;
-    const d = new Date(v);
-    if (!isNaN(d.getTime())) return d;
-    const s = String(v).replace(" ", "T");
-    const d2 = new Date(s);
-    return isNaN(d2.getTime()) ? null : d2;
+    return parseAsKst(v);
   };
 
   const intervalsOverlap = (aStart, aEnd, bStart, bEnd) => {
@@ -261,7 +345,28 @@ const AdminScreenings = () => {
         setErr(null);
         const res = await fetchScreenings();
         const list = Array.isArray(res.data) ? res.data : (res.data?.content ?? []);
-        if (alive) setItems(list);
+
+          const normalized = (Array.isArray(list) ? list : []).map(it => {
+              const startRaw = it.startAt ?? it.start_at ?? it.start;
+              const endRaw = it.endAt ?? it.end_at ?? it.end;
+              return {
+                  ...it,
+                  startAt: ensureKstOffset(startRaw),
+                  endAt: endRaw ? ensureKstOffset(endRaw) : endRaw,
+              };
+          });
+        console.group("[AdminScreenings] fetchScreenings()");
+        logEnv();
+        (normalized || []).slice(0, 5).forEach((it, i) => {
+          const startRaw = it.startAt ?? it.start_at ?? it.start;
+          const endRaw = it.endAt ?? it.end_at ?? it.end;
+          console.group(`Row ${i}`);
+          logTime("startRaw", startRaw);
+          logTime("endRaw", endRaw);
+          console.groupEnd();
+        });
+        console.groupEnd();
+        if (alive) setItems(normalized);
       } catch (e) {
         if (alive) setErr(e?.response?.data?.message || e.message || "상영시간 목록을 불러오지 못했어요.");
       } finally {
@@ -331,7 +436,15 @@ const AdminScreenings = () => {
     if (form.mode === "single") {
       const end = addMinutes(first, runtime);
       const outEnd = addMinutes(end, 0); // show exact end (청소시간 제외)
-      return [{ start: first, end: outEnd }];
+      const list = [{ start: first, end: outEnd }];
+      // Debug: preview log
+      console.group("[AdminScreenings] buildSchedule preview");
+      list.slice(0, 5).forEach((slot, i) => {
+        logTime(`preview#${i+1}.start`, slot.start);
+        logTime(`preview#${i+1}.end`, slot.end);
+      });
+      console.groupEnd();
+      return list;
     }
 
     // auto mode: back-to-back until closeTime (exclusive)
@@ -346,6 +459,13 @@ const AdminScreenings = () => {
       // 다음 회차: 종료 + 청소
       cur = addMinutes(end, clean);
     }
+    // Debug: preview log
+    console.group("[AdminScreenings] buildSchedule preview");
+    list.slice(0, 5).forEach((slot, i) => {
+      logTime(`preview#${i+1}.start`, slot.start);
+      logTime(`preview#${i+1}.end`, slot.end);
+    });
+    console.groupEnd();
     return list;
   };
 
@@ -375,7 +495,7 @@ const AdminScreenings = () => {
     }
     if (overlaps.length > 0) {
       const msg = overlaps.slice(0, 5).map((o, i) => {
-        return `#${i + 1}) ${toLocalIso(o.slot.start)} ~ ${toLocalIso(o.slot.end)} 가 기존 상영(${fmt(o.ex.startAt ?? o.ex.start_at ?? o.ex.start)} ~ ${fmt(o.ex.endAt ?? o.ex.end_at ?? o.ex.end)})과 겹칩니다.`;
+        return `#${i + 1}) ${toIsoWithKstOffset(o.slot.start)} ~ ${toIsoWithKstOffset(o.slot.end)} (KST: ${fmtKst(o.slot.start)} ~ ${fmtKst(o.slot.end)}) 가 기존 상영(${fmtKst(o.ex.startAt ?? o.ex.start_at ?? o.ex.start)} ~ ${fmtKst(o.ex.endAt ?? o.ex.end_at ?? o.ex.end)})과 겹칩니다.`;
       }).join("\n");
       alert("선택한 상영관의 기존 상영시간과 겹치므로 생성할 수 없습니다.\n\n" + msg + (overlaps.length > 5 ? `\n...외 ${overlaps.length - 5}건` : ""));
       return;
@@ -388,9 +508,15 @@ const AdminScreenings = () => {
         const payload = {
           movieId: Number(form.movieId),
           screenId: Number(screenIdStr),
-          startAt: toLocalIso(slot.start),
-          endAt: toLocalIso(slot.end)
+          startAt: toIsoWithKstOffset(slot.start),
+          endAt: toIsoWithKstOffset(slot.end)
         };
+        // Debug: log slot and payload
+        console.group("[AdminScreenings] createScreening payload");
+        logTime("slot.start(Date)", slot.start);
+        logTime("slot.end(Date)", slot.end);
+        console.log("payload:", payload);
+        console.groupEnd();
         await postOne(payload);
       }
       // 생성 후 목록 리프레시
@@ -416,13 +542,22 @@ const AdminScreenings = () => {
     const movieId = s.movieId ?? s.movie?.id ?? s.movie?.movieId ?? "";
     const screenId = s.screenId ?? s.screen?.id ?? s.screen?.screenId ?? s.screen_id ?? "";
     setEditing(s);
+    const startInput = toInputValue(s.startAt ?? s.start_at ?? s.start);
+    const endInput = toInputValue(s.endAt ?? s.end_at ?? s.end);
     setEditForm({
       id: id ? String(id) : "",
       movieId: movieId ? String(movieId) : "",
       screenId: screenId ? String(screenId) : "",
-      startInput: toInputValue(s.startAt ?? s.start_at ?? s.start),
-      endInput: toInputValue(s.endAt ?? s.end_at ?? s.end),
+      startInput,
+      endInput,
     });
+    // Debug: log openEdit prefill
+    console.group("[AdminScreenings] openEdit");
+    logTime("row.start(raw)", s.startAt ?? s.start_at ?? s.start);
+    logTime("row.end(raw)", s.endAt ?? s.end_at ?? s.end);
+    console.log("prefill.startInput(datetime-local)", toInputValue(s.startAt ?? s.start_at ?? s.start));
+    console.log("prefill.endInput(datetime-local)", toInputValue(s.endAt ?? s.end_at ?? s.end));
+    console.groupEnd();
     setIsEditOpen(true);
   };
 
@@ -436,9 +571,17 @@ const AdminScreenings = () => {
       const payload = {
         movieId: Number(editForm.movieId || 0) || undefined,
         screenId: Number(editForm.screenId || 0) || undefined,
-        startAt: toLocalIso(start),
-        endAt: toLocalIso(end),
+        startAt: toIsoWithKstOffset(start),
+        endAt: toIsoWithKstOffset(end),
       };
+      // Debug: log update payload
+      console.group("[AdminScreenings] updateScreening payload");
+      logTime("edit.startInput(raw)", editForm.startInput);
+      logTime("edit.endInput(raw)", editForm.endInput);
+      logTime("start(Date)", start);
+      logTime("end(Date)", end);
+      console.log("payload:", payload);
+      console.groupEnd();
       await updateScreening(editForm.id, payload);
       // refresh list
       const res = await fetchScreenings();
@@ -623,8 +766,8 @@ const AdminScreenings = () => {
                       <td className="px-4 py-3">{String(movieIdCol)}</td>
                       <td className="px-4 py-3">{movie}</td>
                       <td className="px-4 py-3">{screen}</td>
-                      <td className="px-4 py-3">{fmt(s.startAt ?? s.start_at ?? s.start)}</td>
-                      <td className="px-4 py-3">{fmt(s.endAt ?? s.end_at ?? s.end)}</td>
+                      <td className="px-4 py-3">{fmtKst(s.startAt ?? s.start_at ?? s.start)}</td>
+                      <td className="px-4 py-3">{fmtKst(s.endAt ?? s.end_at ?? s.end)}</td>
                       <td className="px-4 py-3 text-right">
                         <button
                           type="button"
@@ -766,7 +909,7 @@ const AdminScreenings = () => {
                         {buildSchedule().map((slot, idx) => (
                           <div key={idx} className="flex items-center justify-between py-1">
                             <span>#{idx + 1}</span>
-                            <span>{toLocalIso(slot.start)} → {toLocalIso(slot.end)}</span>
+                            <span>{toIsoWithKstOffset(slot.start)} → {toIsoWithKstOffset(slot.end)}</span>
                           </div>
                         ))}
                       </div>

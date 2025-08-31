@@ -181,8 +181,31 @@ export const createWednesdayDiscount = ({ from, to, percent, kinds }) => {
 };
 
 
-//Board (공지/이벤트)
+// 상영관리
+export const fetchScreenings = () =>
+    api.get("/admin/screenings", { params: { page: 0, size: 100 } });
+
+export const createScreening = (payload) =>
+    api.post("/admin/screenings", payload);
+
+export const updateScreening = (id, payload) =>
+    api.put(`/admin/screenings/${id}`, payload);
+
+export const deleteScreening = (id) =>
+    api.delete(`/admin/screenings/${id}`);
+
+// 이벤트/공지 게시판
 export const getBoards = () => api.get("/board");
 export const createBoard = (payload) => api.post("/admin/board", payload);
 export const updateBoard = (id, payload) => api.put(`/admin/board/${id}`, payload);
 export const deleteBoard = (id) => api.delete(`/admin/board/${id}`);
+
+// 매출통계
+export const getStatsSummary = (params) =>
+    api.get('/admin/stats/summary', { params });
+
+export const getDailyRevenue = (params) =>
+    api.get('/admin/stats/revenue/daily', { params });
+
+export const getTopMovies = (params) =>
+    api.get('/admin/stats/top-movies', { params });

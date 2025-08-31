@@ -199,9 +199,6 @@ export default function MyPage() {
                                             {b.date} • {b.time} • {b.screen} • 좌석 {b.seats}
                                         </p>
                                     </div>
-                                    {b.cancellable && (
-                                        <span className="text-[11px] sm:text-xs px-2 py-1 rounded-full border bg-white">취소 가능</span>
-                                    )}
                                 </li>
                             ))}
                         </ul>

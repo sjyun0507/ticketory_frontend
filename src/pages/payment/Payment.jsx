@@ -41,35 +41,11 @@ export default function Payment() {
         try { return JSON.parse(localStorage.getItem('cartItems') || '[]'); } catch { return []; }
     }, []);
 
-    const baseItem =
-        (Array.isArray(cartFromState) && cartFromState[0]) ||
-        (Array.isArray(cartFromStorage) && cartFromStorage[0]) || {};
-
-    const cartFromLineItems =
-        Array.isArray(lineItemsFromState) && lineItemsFromState.length > 0
-            ? lineItemsFromState.flatMap((li) => {
-                const qty = Number(li.qty ?? li.quantity ?? 0);
-                if (!qty) return [];
-                return [{
-                    movieId: baseItem.movieId,
-                    screeningId: baseItem.screeningId,
-                    name: baseItem.name || '영화',
-                    price: Number(li.unitPrice ?? li.unit_price ?? 0),
-                    quantity: qty,
-                    ageGroup: li.kind,
-                    seatIds: baseItem.seatIds,
-                    seatLabel: baseItem.seatLabel,
-                    screeningInfo: baseItem.screeningInfo,
-                }];
-            })
-            : null;
-
     // 최종 cart 결정 메모이즈
     const cart = useMemo(() => {
-        if (cartFromLineItems && cartFromLineItems.length > 0) return cartFromLineItems;
         if (Array.isArray(cartFromState) && cartFromState.length > 0) return cartFromState;
         return cartFromStorage;
-    }, [cartFromLineItems, cartFromState, cartFromStorage]);
+    }, [cartFromState, cartFromStorage]);
 
     // 포스터 로딩을 안정화하기 위한 movieId 키
     const movieIdsKey = useMemo(() => {

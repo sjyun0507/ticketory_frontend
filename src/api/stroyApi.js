@@ -6,10 +6,16 @@ export const getProfile = async () => {
     return res.data;
 };
 
-// Get eligible bookings for a member
-export const getEligibleBookings = async (memberId) => {
-    const res = await api.get(`/members/${memberId}/eligible-bookings`);
-    return res.data;
+//지불처리된 부킹정보 확인
+export const getEligibleBookings = async (memberId, { page = 0, size = 10, sort } = {}) => {
+    const res = await api.get(`/members/${memberId}/eligible-bookings`, {
+        params: {
+            page,
+            size,
+            ...(sort ? { sort } : {}),
+        },
+    });
+    return res.data?.content ?? res.data ?? [];
 };
 
 // 스토리 목록 조회

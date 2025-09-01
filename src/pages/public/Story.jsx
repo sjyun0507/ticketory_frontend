@@ -1,4 +1,15 @@
 import React,{ useState, useEffect } from "react";
+// util: 날짜만 표시 (시간 제거)
+function formatDateOnly(v) {
+  if (!v) return '';
+  const d = new Date(v);
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleDateString('ko-KR'); // 예: 2025. 8. 27.
+  }
+  // ISO가 아니거나 파싱 실패 시 안전 분기: 'T' 또는 공백 앞까지
+  const s = String(v);
+  return s.includes('T') ? s.split('T')[0] : s.split(' ')[0];
+}
 import { useNavigate } from "react-router-dom";
 import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Star, Film } from "lucide-react";
 import { getProfile, getStories, createStory, getEligibleBookings } from "../../api/stroyApi.js";
@@ -29,11 +40,9 @@ export default function StoryFeed() {
       if (!profile?.memberId) return;
       (async () => {
         try {
-          const page = await getEligibleBookings(profile.memberId);
-          const rows = Array.isArray(page?.content) ? page.content : (Array.isArray(page) ? page : []);
-          // filter paid & no existing story
-          const paid = rows.filter(r => r?.paymentStatus === 'PAID' && !r?.hasStory);
-          // hydrate posterUrl if missing
+          // getEligibleBookings now returns an ARRAY (not a Page)
+          const rows = await getEligibleBookings(profile.memberId, { page: 0, size: 10, sort: 'RECENT' });
+          const paid = (Array.isArray(rows) ? rows : []).filter(r => r?.paymentStatus === 'PAID' && !r?.hasStory);
           const withPosters = await Promise.all(paid.map(async (r) => {
             if (r.posterUrl) return r;
             try {
@@ -45,6 +54,12 @@ export default function StoryFeed() {
           }));
           setEligible(withPosters);
         } catch (e) {
+          // If backend currently 404s due to JPQL error, fail soft
+          if (e?.response?.status === 404) {
+            console.warn('[eligible:load] 404 from API, showing empty list until backend fix');
+            setEligible([]);
+            return;
+          }
           console.error('[eligible:load:error]', e);
           setEligible([]);
         }
@@ -56,9 +71,10 @@ export default function StoryFeed() {
 
             <main className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <section className="lg:col-span-2 space-y-6">
-                    {Array.isArray(stories) && stories.map((s) => (
-                        <StoryCard key={s.id} story={s} />
-                    ))}
+                    {Array.isArray(stories) && stories.map((s, idx) => {
+                        const key = s?.id ?? s?.storyId ?? s?.uuid ?? `${s?.memberId ?? 'm'}-${s?.movie?.id ?? s?.movieId ?? 'mv'}-${s?.createdAt ?? idx}`;
+                        return <StoryCard key={key} story={s} />;
+                    })}
                 </section>
 
                 <aside className="hidden lg:block">
@@ -287,10 +303,10 @@ function RightRail({ profile, onOpenWrite }) {
                         <img src={profile?.avatarUrl} alt="avatar" className="h-10 w-10 rounded-full object-cover" />
                         <div>
                             <div className="text-sm font-semibold">{profile?.name}</div>
-                            <div className="text-[11px] text-neutral-500">최근 관람: {profile?.lastWatchedAt}</div>
+                            <div className="text-[11px] text-neutral-500">최근 관람: {formatDateOnly(profile?.lastWatchedAt)}</div>
                         </div>
                     </div>
-                    <button onClick={() => navigate('/mypage')} className="rounded-xl border px-3 py-1.5 text-sm">프로필</button>
+                    <button onClick={() => navigate('/mypage')} className="rounded-xl border px-3 py-1.5 text-sm hover:bg-indigo-50">프로필</button>
                 </div>
                 <div className="mt-3 grid grid-cols-3 text-center">
                     <Stat label="좋아요" value="128" />

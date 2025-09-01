@@ -109,9 +109,7 @@ const AdminScreenings = () => {
     const s = pad(dateObj.getSeconds());
     return `${y}-${M}-${d}T${h}:${m}:${s}+09:00`;
   }
-  // ---- /KST helpers ----
 
-  // ---- Debug helpers ----
   function logTime(label, value) {
     try {
       const d = value instanceof Date ? value : new Date(value);
@@ -146,7 +144,7 @@ const AdminScreenings = () => {
     console.log("KST dateKey:", toKstDateKey(now));
     console.groupEnd();
   }
-  // expose quick checker for manual console use
+
   if (typeof window !== "undefined") {
     window.__tzcheck = (v) => logTime("__tzcheck", v ?? new Date());
   }
@@ -447,7 +445,6 @@ const AdminScreenings = () => {
       return list;
     }
 
-    // auto mode: back-to-back until closeTime (exclusive)
     const [ch = "24", cm = "00"] = String(form.closeTime || "24:00").split(":");
     const close = composeDateTime(form.date, `${ch.padStart(2, "0")}:${cm.padStart(2, "0")}`);
     const list = [];
@@ -459,7 +456,7 @@ const AdminScreenings = () => {
       // 다음 회차: 종료 + 청소
       cur = addMinutes(end, clean);
     }
-    // Debug: preview log
+
     console.group("[AdminScreenings] buildSchedule preview");
     list.slice(0, 5).forEach((slot, i) => {
       logTime(`preview#${i+1}.start`, slot.start);
@@ -511,7 +508,7 @@ const AdminScreenings = () => {
           startAt: toIsoWithKstOffset(slot.start),
           endAt: toIsoWithKstOffset(slot.end)
         };
-        // Debug: log slot and payload
+
         console.group("[AdminScreenings] createScreening payload");
         logTime("slot.start(Date)", slot.start);
         logTime("slot.end(Date)", slot.end);
@@ -574,7 +571,6 @@ const AdminScreenings = () => {
         startAt: toIsoWithKstOffset(start),
         endAt: toIsoWithKstOffset(end),
       };
-      // Debug: log update payload
       console.group("[AdminScreenings] updateScreening payload");
       logTime("edit.startInput(raw)", editForm.startInput);
       logTime("edit.endInput(raw)", editForm.endInput);

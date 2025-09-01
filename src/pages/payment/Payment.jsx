@@ -3,70 +3,109 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { loadTossPayments } from '@tosspayments/tosspayments-sdk';
 import { createPaymentOrder } from '../../api/paymentApi.js';
-import {useAuthStore} from "../../store/useAuthStore.js";
+import { useAuthStore } from "../../store/useAuthStore.js";
 import { releaseBookingHold } from '../../api/bookingApi.js';
 import { getMovieDetail } from '../../api/movieApi.js';
-import { getMyInfo} from "../../api/memberApi.js";
+import { getMyInfo } from "../../api/memberApi.js";
 
 const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY || "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
 const customerKey = "lIUt5JCR8vA3XOlDluVSz";
 
 console.debug('[toss] clientKey:', import.meta.env.VITE_TOSS_CLIENT_KEY);
+
 export default function Payment() {
     const location = useLocation();
     const navigate = useNavigate();
+
     const {
         cart: cartFromState = [],
         amount: amountState,
         bookingId: bookingIdFromState,
         payableAmount: payableAmountFromState,
-        pointsUsed: pointsUsedFromState
+        pointsUsed: pointsUsedFromState,
+        lineItems: lineItemsFromState
     } = location.state || {};
-    // 다양한 서버 응답에서 숫자(혹은 숫자 문자열) 추출 보조 함수
+
+    // 숫자 파싱 유틸
     const pickNumber = (...vals) => {
-      for (const v of vals) {
-        if (v === null || v === undefined) continue;
-        const n = Number(v);
-        if (!Number.isNaN(n) && Number.isFinite(n)) return n;
-      }
-      return null;
+        for (const v of vals) {
+            if (v === null || v === undefined) continue;
+            const n = Number(v);
+            if (!Number.isNaN(n) && Number.isFinite(n)) return n;
+        }
+        return null;
     };
 
-    const cartFromStorage = (() => {
+    // cart 복구 메모이즈
+    const cartFromStorage = useMemo(() => {
         try { return JSON.parse(localStorage.getItem('cartItems') || '[]'); } catch { return []; }
-    })();
+    }, []);
 
-    const cart = (Array.isArray(cartFromState) && cartFromState.length > 0)
-        ? cartFromState
-        : cartFromStorage;
+    const baseItem =
+        (Array.isArray(cartFromState) && cartFromState[0]) ||
+        (Array.isArray(cartFromStorage) && cartFromStorage[0]) || {};
+
+    const cartFromLineItems =
+        Array.isArray(lineItemsFromState) && lineItemsFromState.length > 0
+            ? lineItemsFromState.flatMap((li) => {
+                const qty = Number(li.qty ?? li.quantity ?? 0);
+                if (!qty) return [];
+                return [{
+                    movieId: baseItem.movieId,
+                    screeningId: baseItem.screeningId,
+                    name: baseItem.name || '영화',
+                    price: Number(li.unitPrice ?? li.unit_price ?? 0),
+                    quantity: qty,
+                    ageGroup: li.kind,
+                    seatIds: baseItem.seatIds,
+                    seatLabel: baseItem.seatLabel,
+                    screeningInfo: baseItem.screeningInfo,
+                }];
+            })
+            : null;
+
+    // 최종 cart 결정 메모이즈
+    const cart = useMemo(() => {
+        if (cartFromLineItems && cartFromLineItems.length > 0) return cartFromLineItems;
+        if (Array.isArray(cartFromState) && cartFromState.length > 0) return cartFromState;
+        return cartFromStorage;
+    }, [cartFromLineItems, cartFromState, cartFromStorage]);
+
+    // 포스터 로딩을 안정화하기 위한 movieId 키
+    const movieIdsKey = useMemo(() => {
+        const ids = Array.from(new Set((cart || []).map(it => it?.movieId).filter(Boolean)));
+        ids.sort();
+        return ids.join(',');
+    }, [cart]);
+
     const bookingIdFromQuery = new URLSearchParams(location.search).get('bookingId');
     const bookingId = bookingIdFromState || bookingIdFromQuery || null;
-    // 좌석 페이지로 돌아갈 때 사용할 screeningId를 파생
+
     const screeningIdFromState = location.state?.screeningId || (Array.isArray(cart) && cart[0]?.screeningId) || null;
     const screeningIdFromQuery = new URLSearchParams(location.search).get('screeningId');
     const screeningId = screeningIdFromState || screeningIdFromQuery || null;
-    // 새로고침 대비 폴백
+
     const primaryMovieId = (Array.isArray(cart) && cart[0]?.movieId) || null;
-    // 초기 결제금액은 서버 제공값만 사용
+
     const initialAmountValue = (() => {
-      if (typeof payableAmountFromState === 'number' && !Number.isNaN(payableAmountFromState)) return payableAmountFromState;
-      if (amountState && typeof amountState.value === 'number') return amountState.value;
-      return 0; // 서버 값이 없으면 0 (결제 시 서버 재확인)
+        if (typeof payableAmountFromState === 'number' && !Number.isNaN(payableAmountFromState)) return payableAmountFromState;
+        if (amountState && typeof amountState.value === 'number') return amountState.value;
+        return 0;
     })();
 
-    // 표시용 서버 기준 금액(있을 때만 사용)
-    const basePayableFromServer = (typeof payableAmountFromState === 'number' && !Number.isNaN(payableAmountFromState))
-      ? payableAmountFromState
-      : (amountState && typeof amountState.value === 'number' ? amountState.value : 0);
+    const basePayableFromServer =
+        (typeof payableAmountFromState === 'number' && !Number.isNaN(payableAmountFromState))
+            ? payableAmountFromState
+            : (amountState && typeof amountState.value === 'number' ? amountState.value : 0);
 
-    // const user = useAuthStore((s) => s.user);
-    // const memberId = user?.id ?? user?.memberId ?? null;
-
+    // auth
     const storeSnap = typeof useAuthStore?.getState === 'function' ? useAuthStore.getState() : {};
     const user = storeSnap.user;
     const memberIdFromStore = user?.id ?? user?.memberId ?? storeSnap.member?.id ?? storeSnap.userId ?? null;
     const tokenFromStorage =
-        (typeof window !== 'undefined' && (localStorage.getItem('accessToken') || localStorage.getItem('token') || sessionStorage.getItem('token'))) || null;
+        (typeof window !== 'undefined' &&
+            (localStorage.getItem('accessToken') || localStorage.getItem('token') || sessionStorage.getItem('token'))) || null;
+
     const memberIdFromToken = (() => {
         if (!tokenFromStorage) return null;
         try {
@@ -80,6 +119,7 @@ export default function Payment() {
     })();
 
     const memberId = memberIdFromStore ?? memberIdFromToken ?? null;
+
     const [usedPoints, setUsedPoints] = useState(Number(pointsUsedFromState || 0));
     const [paymentStatus, setPaymentStatus] = useState(null);
     const [orderId, setOrderId] = useState(null);
@@ -90,18 +130,15 @@ export default function Payment() {
     const [policyAgreed, setPolicyAgreed] = useState(false);
 
     const [availablePoints, setAvailablePoints] = useState(0);
-
     const [posterMap, setPosterMap] = useState({});
-
-    // 중복 뒤로가기 방지
     const [releasing, setReleasing] = useState(false);
 
+    // 내 포인트
     useEffect(() => {
         if (!memberId) return;
         (async () => {
             try {
                 const data = await getMyInfo(memberId);
-                // DTO: { ..., points: number }
                 const bal = (data && (data.points ?? data.pointBalance)) || 0;
                 setAvailablePoints(bal);
             } catch (e) {
@@ -138,12 +175,20 @@ export default function Payment() {
             };
             prev.qty += q;
             prev.total += Number(it.price || 0) * q;
-            // 좌석 라벨 추출 및 추가
-            const seatLabel = it.seatLabel || it.seatName || it.seat || (Array.isArray(it.seatIds) ? it.seatIds.join(', ') : (typeof it.seatId === 'string' ? it.seatId : null));
+
+            const seatLabel =
+                it.seatLabel || it.seatName || it.seat ||
+                (Array.isArray(it.seatIds) ? it.seatIds.join(', ') :
+                    (typeof it.seatId === 'string' ? it.seatId : null));
+
             if (seatLabel) {
-                // 쉼표로 넘어오는 경우 개별 좌석으로 분해하여 추가
-                seatLabel.split(',').map(s => s.trim()).filter(Boolean).forEach(s => prev.seats.add(s));
+                seatLabel
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean)
+                    .forEach(s => prev.seats.add(s));
             }
+
             const ageCandidate = it.ageGroup ?? it.kind ?? it.pricingKind ?? it.age ?? it.type;
             const ageKey = normalizeAge(ageCandidate);
             prev.age[ageKey] = (prev.age[ageKey] || 0) + q;
@@ -153,7 +198,7 @@ export default function Payment() {
     }, [cart]);
 
     const ageSummary = useMemo(() => {
-        const sum = { ADULT: 0, TEEN: 0};
+        const sum = { ADULT: 0, TEEN: 0 };
         groupedCart.forEach(g => {
             sum.ADULT += g.age.ADULT || 0;
             sum.TEEN += g.age.TEEN || 0;
@@ -164,15 +209,16 @@ export default function Payment() {
         return parts.join(' · ');
     }, [groupedCart]);
 
+    // 포스터 로딩: movieIdsKey 기준
     useEffect(() => {
-        const ids = Array.from(new Set((cart || []).map(it => it.movieId).filter(Boolean)));
-        if (ids.length === 0) return;
+        if (!movieIdsKey) return;
+        const ids = movieIdsKey.split(',').filter(Boolean);
         let cancelled = false;
         (async () => {
             try {
                 const pairs = await Promise.all(ids.map(async (id) => {
                     try {
-                        const res = await getMovieDetail(id);
+                        const res = await getMovieDetail(Number(id));
                         const raw = res?.data ?? res;
                         const mediaArr = Array.isArray(raw?.media)
                             ? raw.media
@@ -181,7 +227,8 @@ export default function Payment() {
                                 : Array.isArray(raw)
                                     ? raw
                                     : [];
-                        const poster = mediaArr.find(m => (m.type || m.mediaType) === 'POSTER')?.url
+                        const poster =
+                            mediaArr.find(m => (m.type || m.mediaType) === 'POSTER')?.url
                             || raw?.posterUrl
                             || raw?.posterURL
                             || null;
@@ -191,31 +238,31 @@ export default function Payment() {
                     }
                 }));
                 if (!cancelled) setPosterMap(Object.fromEntries(pairs));
-            } catch (_) {}
+            } catch (_) { }
         })();
         return () => { cancelled = true; };
-    }, [cart]);
+    }, [movieIdsKey]);
 
+    // Toss 위젯 준비
     useEffect(() => {
         async function loadWidgetsOnce() {
             const tossPayments = await loadTossPayments(clientKey);
             const w = tossPayments.widgets({ customerKey });
             setWidgets(w);
         }
-        // 장바구니가 비어있으면 렌더 타겟이 없어 InvalidSelectorError가 발생할 수 있으므로, 비어있지 않을 때만 로드
         if (cart.length > 0) {
             loadWidgetsOnce();
         }
     }, [cart.length]);
 
+    // Toss 위젯 렌더
     useEffect(() => {
         async function render() {
             if (!widgets) return;
             if (cart.length === 0) return;
             const pm = document.getElementById('payment-method');
             const ag = document.getElementById('agreement');
-            if (!pm || !ag) return; // 타겟이 없으면 렌더 시도하지 않음
-            // Log initial amount for widget rendering
+            if (!pm || !ag) return;
             console.debug('[toss:initial:setAmount] KRW', amount.value);
             await widgets.setAmount({ currency: 'KRW', value: amount.value });
             await Promise.all([
@@ -227,11 +274,11 @@ export default function Payment() {
         render();
     }, [widgets, cart.length]);
 
+    // 금액 변경 → Toss에 반영
     useEffect(() => {
         if (!widgets) return;
         widgets.setAmount({ currency: 'KRW', value: amount.value });
     }, [amount, widgets]);
-
 
     const handleBack = async () => {
         if (releasing) return;
@@ -245,11 +292,9 @@ export default function Payment() {
             }
         } catch (e) {
             console.error('[booking:release] failed', e?.response?.status, e?.response?.data || e);
-            // 실패해도 사용자는 좌석 페이지로 돌아갈 수 있도록 진행
         } finally {
-            try { localStorage.removeItem('cartItems'); } catch {}
-            try { sessionStorage.removeItem('sessionId'); } catch {}
-            // 좌석 페이지에 상영 회차 + 영화 ID를 전달해 즉시 좌석/영화 정보를 재조회하도록 유도
+            try { localStorage.removeItem('cartItems'); } catch { }
+            try { sessionStorage.removeItem('sessionId'); } catch { }
             if (screeningId) {
                 const params = new URLSearchParams({ screeningId: String(screeningId), refresh: '1' });
                 if (primaryMovieId) params.set('movieId', String(primaryMovieId));
@@ -271,98 +316,94 @@ export default function Payment() {
         try {
             localStorage.setItem('cartItems', JSON.stringify(cart));
 
-            // 서버가 최종 결제금액을 계산하도록 위임
             const orderPayload = {
-              bookingId: bookingId ?? null,
-              memberId: memberId ?? null,
-              orderId: null,
-              totalAmount: Number(initialAmountValue || 0), // 프론트 계산 금지
-              usedPoint: Number(usedPoints || 0),
-              orderMethod: 'movie',
-              orderTime: new Date().toISOString(),
-              status: 'waiting',
-              items: cart.map(({ id, movieId, screeningId, seatId, name, price, quantity }) => ({
-                id: id ?? null,
-                movieId,
-                screeningId,
-                seatId: seatId ?? null,
-                name,
-                price: Number(price ?? 0),
-                quantity: Number(quantity ?? 1),
-              })),
+                bookingId: bookingId ?? null,
+                memberId: memberId ?? null,
+                orderId: null,
+                totalAmount: Number(initialAmountValue || 0),
+                usedPoint: Number(usedPoints || 0),
+                orderMethod: 'movie',
+                orderTime: new Date().toISOString(),
+                status: 'waiting',
+                items: cart.map(({ id, movieId, screeningId, seatId, name, price, quantity }) => ({
+                    id: id ?? null,
+                    movieId,
+                    screeningId,
+                    seatId: seatId ?? null,
+                    name,
+                    price: Number(price ?? 0),
+                    quantity: Number(quantity ?? 1),
+                })),
             };
             console.debug('[order:create:payload]', JSON.stringify(orderPayload));
 
             let orderIdFromServer = null;
             let payableFromServer = null;
             try {
-              const orderRes = await createPaymentOrder(orderPayload);
-              const body = orderRes?.data ?? orderRes;
-              console.debug('[order:create:res:raw]', orderRes);
-              console.debug('[order:create:res:body]', body);
-              orderIdFromServer = body?.orderId || body?.data?.orderId || body?.result?.orderId || null;
-              // 다양한 래핑/키 네이밍 대응 + 문자열 숫자까지 모두 처리
-              payableFromServer = pickNumber(
-                body?.payableAmount,
-                body?.amount,
-                body?.totalAmount,
-                body?.data?.payableAmount,
-                body?.data?.amount,
-                body?.data?.totalAmount,
-                body?.result?.payableAmount,
-                body?.result?.amount,
-                body?.result?.totalAmount,
-                body?.order?.payableAmount,
-                body?.payment?.payableAmount
-              );
+                const orderRes = await createPaymentOrder(orderPayload);
+                const body = orderRes?.data ?? orderRes;
+                console.debug('[order:create:res:raw]', orderRes);
+                console.debug('[order:create:res:body]', body);
+                orderIdFromServer = body?.orderId || body?.data?.orderId || body?.result?.orderId || null;
+                payableFromServer = pickNumber(
+                    body?.payableAmount,
+                    body?.amount,
+                    body?.totalAmount,
+                    body?.data?.payableAmount,
+                    body?.data?.amount,
+                    body?.data?.totalAmount,
+                    body?.result?.payableAmount,
+                    body?.result?.amount,
+                    body?.result?.totalAmount,
+                    body?.order?.payableAmount,
+                    body?.payment?.payableAmount
+                );
             } catch (e) {
-              const status = e?.response?.status;
-              const msg = e?.response?.data?.message || e?.message;
-              console.error('[order:create:error]', status, msg, e?.response?.data);
-              if (status === 404) {
-                orderIdFromServer = uuidv4();
-                payableFromServer = (typeof initialAmountValue === 'number' ? initialAmountValue : 0);
-                alert('서버 주문 API(404)로 임시 주문번호로 진행합니다. 금액 검증은 서버 구현 후 점검하세요.');
-              } else {
-                throw e;
-              }
+                const status = e?.response?.status;
+                const msg = e?.response?.data?.message || e?.message;
+                console.error('[order:create:error]', status, msg, e?.response?.data);
+                if (status === 404) {
+                    orderIdFromServer = uuidv4();
+                    payableFromServer = (typeof initialAmountValue === 'number' ? initialAmountValue : 0);
+                    alert('서버 주문 API(404)로 임시 주문번호로 진행합니다. 금액 검증은 서버 구현 후 점검하세요.');
+                } else {
+                    throw e;
+                }
             }
 
             const orderIdToUse = orderIdFromServer || uuidv4();
             let finalServerAmount = Number(payableFromServer || 0);
             if (!(finalServerAmount > 0)) {
-              // HOLD 단계에서 전달된 서버 금액으로 보조 진행 (프론트 계산 아님)
-              const fallbackFromState = pickNumber(payableAmountFromState, amountState?.value);
-              if (fallbackFromState && fallbackFromState > 0) {
-                console.warn('[order] 서버 응답에 금액 키가 없어 HOLD 전달 금액으로 진행합니다:', fallbackFromState);
-                finalServerAmount = Number(fallbackFromState);
-              }
+                const fallbackFromState = pickNumber(payableAmountFromState, amountState?.value);
+                if (fallbackFromState && fallbackFromState > 0) {
+                    console.warn('[order] 서버 응답에 금액 키가 없어 HOLD 전달 금액으로 진행합니다:', fallbackFromState);
+                    finalServerAmount = Number(fallbackFromState);
+                }
             }
             if (!(finalServerAmount > 0)) {
-              return alert('결제 금액을 불러오지 못했습니다. 관리자에게 문의하세요.');
+                return alert('결제 금액을 불러오지 못했습니다. 관리자에게 문의하세요.');
             }
-            // Diagnostics: trace amount source before setting Toss amount
+
             console.info('[payment:amount:trace]', {
-              payableFromServer,
-              fallbackFromState: pickNumber(payableAmountFromState, amountState?.value),
-              initialAmountValue,
-              finalServerAmount,
+                payableFromServer,
+                fallbackFromState: pickNumber(payableAmountFromState, amountState?.value),
+                initialAmountValue,
+                finalServerAmount,
             });
             setOrderId(orderIdToUse);
             setAmount({ currency: 'KRW', value: finalServerAmount });
-            // Log the exact amount being sent to Toss
             console.info('[toss:setAmount] KRW', finalServerAmount);
             await widgets.setAmount({ currency: 'KRW', value: finalServerAmount });
 
             const dynOrderName = ageSummary ? `영화 예매 (${ageSummary})` : '영화 예매';
             await widgets.requestPayment({
-              orderId: orderIdToUse,
-              orderName: dynOrderName,
-              successUrl: window.location.origin + '/success',
-              failUrl: window.location.origin + '/fail',
-              customerEmail: user?.email || 'member@ticketory.app',
-              customerName: user?.name || '회원',
-              customerMobilePhone: user?.phone ? user.phone.replace(/\D/g, '') : undefined,
+                orderId: orderIdToUse,
+                orderName: dynOrderName,
+                successUrl: window.location.origin + '/success',
+                failUrl: window.location.origin + '/fail',
+                customerEmail: user?.email || 'member@ticketory.app',
+                customerName: user?.name || '회원',
+                customerMobilePhone: user?.phone ? user.phone.replace(/\D/g, '') : undefined,
             });
 
             setPaymentStatus('성공');
@@ -497,10 +538,10 @@ export default function Payment() {
                     })}
                     {/* 상영 규칙/프로모션 등으로 좌석 페이지에서 이미 할인된 경우 시각화 */}
                     {typeof payableAmountFromState === 'number' && basePayableFromServer > 0 && payableAmountFromState < basePayableFromServer && (
-                      <div className="flex justify-between text-sm text-amber-400">
-                        <span>상영할인</span>
-                        <span>-{(basePayableFromServer - payableAmountFromState).toLocaleString()}원</span>
-                      </div>
+                        <div className="flex justify-between text-sm text-amber-400">
+                            <span>상영할인</span>
+                            <span>-{(basePayableFromServer - payableAmountFromState).toLocaleString()}원</span>
+                        </div>
                     )}
                     {usedPoints > 0 && (
                         <div className="flex justify-between text-sm text-amber-400">

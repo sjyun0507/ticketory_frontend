@@ -176,6 +176,9 @@ const Seat = () => {
     const [selected, setSelected] = useState([]); // [101, 102] 숫자로 매핑
     const [submitting, setSubmitting] = useState(false);
     const [movieDetail, setMovieDetail] = useState(null);
+    // 서버 계산 견적(할인 포함) 미리보기
+    const [serverQuote, setServerQuote] = useState(null); // { bookingId, paymentId, lineItems, payableAmount }
+    const [showQuote, setShowQuote] = useState(false);
     useEffect(() => {
         let cancel = false;
         (async () => {
@@ -196,6 +199,17 @@ const Seat = () => {
         if (!price) return 0;
         return (people.adult * price.adult) + (people.teen * price.teen);
     }, [people, price]);
+
+    // Determine if screening is on Wednesday (Culture Day)
+    const screeningDateObj = useMemo(() => {
+        // try combining date + start, then date only
+        const combined = (resolvedDate ? `${resolvedDate} ${resolvedStart || ''}`.trim() : null);
+        return toDate(combined) || toDate(resolvedDate) || null;
+    }, [resolvedDate, resolvedStart]);
+
+    const isCultureWednesday = useMemo(() => {
+        return screeningDateObj ? screeningDateObj.getDay() === 3 : false; // 0=Sun ... 3=Wed
+    }, [screeningDateObj]);
 
     // 좌석 맵 조회 (screeningId 기준)
     const { data, isLoading, isError } = useQuery({
@@ -375,7 +389,7 @@ const Seat = () => {
                 screeningId: Number.isNaN(screeningIdNum) ? screeningId : screeningIdNum,
                 seatIds,
                 counts: { adult: people.adult, teen: people.teen },
-                holdSeconds: 200,
+                holdSeconds: 120,
             };
             console.log('[HOLD:req]', payload);
 
@@ -397,6 +411,10 @@ const Seat = () => {
             const res = await initBooking(payload);
             console.log('[HOLD:res raw]', res);
             const out = res?.data ?? res;
+
+            // server-side pricing info (e.g., Culture Day / Wednesday promo)
+            const serverLineItems = Array.isArray(out?.lineItems) ? out.lineItems : null;
+            const payableAmount = out?.payableAmount ?? out?.amount ?? null;
 
             const bookingId = out?.bookingId ?? out?.id;
             const paymentId = out?.paymentId ?? out?.payment?.id;
@@ -425,10 +443,15 @@ const Seat = () => {
                     code, // 호환성 유지
                 };
             });
-            const amountValue = cartItems.reduce((sum, it) => sum + Number(it.price || 0), 0);
+            // client-side subtotal (fallback)
+            const amountValueClient = cartItems.reduce((sum, it) => sum + Number(it.price || 0), 0);
+            // choose server amount if provided
+            const amountForPaymentBox = Number(
+                payableAmount != null ? payableAmount : amountValueClient
+            );
             const state = {
                 cart: cartItems,
-                amount: { value: amountValue },
+                amount: { currency: 'KRW', value: amountForPaymentBox },
                 bookingId,
                 screeningId: screeningIdNum,
                 movieId: Number(movieId) || undefined,
@@ -436,11 +459,34 @@ const Seat = () => {
                 auditorium: resolvedAuditorium,
                 date: resolvedDate,
                 start: resolvedStart,
+                // include server breakdown if any; otherwise synthesize from client
+                lineItems: serverLineItems ?? [
+                  ...(people.adult ? [{ kind: 'ADULT', unitPrice: price.adult, qty: people.adult, subtotal: price.adult * people.adult }] : []),
+                  ...(people.teen  ? [{ kind: 'TEEN',  unitPrice: price.teen,  qty: people.teen,  subtotal: price.teen  * people.teen  }] : []),
+                ],
+                payableAmount: amountForPaymentBox,
             };
+            // --- Show server-calculated pricing (includes Culture Day etc.) before navigating
+            setServerQuote({
+                bookingId,
+                paymentId,
+                lineItems: state.lineItems,
+                payableAmount: amountForPaymentBox,
+                cart: cartItems,
+                navState: state,
+                qs: (() => {
+                  const q = new URLSearchParams({ bookingId: String(bookingId) });
+                  if (paymentId != null) q.set('paymentId', String(paymentId));
+                  if (movieId) q.set('movieId', String(movieId));
+                  if (screeningIdNum) q.set('screeningId', String(screeningIdNum));
+                  return q.toString();
+                })(),
+            });
+            setShowQuote(true);
             // Optional: backup for refresh
             try {
                 localStorage.setItem('cartItems', JSON.stringify(cartItems));
-                localStorage.setItem('cartAmount', String(amountValue));
+                localStorage.setItem('cartAmount', String(amountForPaymentBox));
                 localStorage.setItem('seatSummary', JSON.stringify({
                     movieId: Number(movieId) || undefined,
                     screeningId: screeningIdNum,
@@ -450,11 +496,7 @@ const Seat = () => {
                     start: resolvedStart,
                 }));
             } catch (_) {}
-            const qs = new URLSearchParams({ bookingId: String(bookingId) });
-            if (paymentId != null) qs.set('paymentId', String(paymentId));
-            if (movieId) qs.set('movieId', String(movieId));
-            if (screeningIdNum) qs.set('screeningId', String(screeningIdNum));
-            navigate(`/payment?${qs.toString()}`, { state });
+            // 네비게이션은 견적 확인 모달에서 진행
         } catch (e) {
             const status = e?.response?.status ?? 0;
             const data = e?.response?.data;
@@ -644,9 +686,14 @@ const Seat = () => {
                     </div>
 
                     {/* 가격 요약 (하단 고정) */}
-                    <div className="text-sm border rounded p-3 mb-4 mt-auto  bg-gray-100">
+                    <div className="text-sm border rounded p-3 mb-4 mt-4  bg-gray-100">
                         {!price && !isLoading && (
                           <div className="text-xs text-gray-600 mb-2">가격 정보를 찾을 수 없습니다. 관리자에 문의하세요.</div>
+                        )}
+                        {isCultureWednesday && (
+                          <div className="mb-2 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
+                            수요일 무비데이 20% 프로모션
+                          </div>
                         )}
                         <div className="flex justify-between mb-1"><span>성인 × {people.adult}</span><span>{(price ? (people.adult * price.adult) : 0).toLocaleString()}원</span></div>
                         {promo.adult?.length > 0 && (
@@ -668,8 +715,46 @@ const Seat = () => {
                             </div>
                         )}
 
+                        {/* 서버 계산 항목 표시 */}
+                        {serverQuote?.lineItems?.length > 0 && (
+                          <div className="text-xs text-gray-700 mb-2 pl-1">
+                              <div className="h-px bg-gray-300 my-2" />
+                            <div className="font-medium mb-1">프로모션 적용 항목</div>
+                            <ul className="space-y-1">
+                              {serverQuote.lineItems.map((li, i) => {
+                                let name;
+                                const kindVal = (li.kind || '').toString().toUpperCase();
+                                if (kindVal === "ADULT") {
+                                  name = "성인";
+                                } else if (kindVal === "TEEN") {
+                                  name = "청소년";
+                                } else {
+                                  name = li.label || li.name || li.kind || `항목 ${i+1}`;
+                                }
+                                const qty = li.qty ?? li.quantity ?? 1;
+                                const unit = li.unitPrice ?? li.unit_price ?? li.price ?? 0;
+                                const subtotal = li.subtotal ?? (Number(unit) * Number(qty));
+                                return (
+                                  <li key={i} className="flex justify-between">
+                                    <span>{name}{qty ? ` × ${qty}` : ''}</span>
+                                    <span>{Number(subtotal || 0).toLocaleString()}원</span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                            <div className="h-px bg-gray-300 my-2" />
+                            <div className="flex justify-between font-semibold">
+                              <span>프로모션 계산 합계</span>
+                              <span>{Number(serverQuote.payableAmount || 0).toLocaleString()}원</span>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="h-px bg-gray-200 my-2" />
-                        <div className="flex justify-between font-semibold text-base"><span>합계</span><span>{totalAmount.toLocaleString()}원</span></div>
+                        <div className="flex justify-between font-semibold text-base">
+                          <span>합계</span>
+                          <span>{((serverQuote?.payableAmount ?? totalAmount) || 0).toLocaleString()}원</span>
+                        </div>
                     </div>
 
                     <div className="mt-auto flex items-center justify-between">
@@ -703,6 +788,70 @@ const Seat = () => {
                     </div>
                 </aside>
             </div>
+        {/* 견적 확인 모달 */}
+        {showQuote && serverQuote && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="w-full max-w-md rounded-lg bg-white shadow-lg">
+              <div className="border-b px-4 py-3">
+                <h3 className="text-base font-semibold">가격 요약 확인</h3>
+              </div>
+              <div className="p-4 text-sm">
+                <div className="mb-2 text-gray-700">
+                  {resolvedAuditorium ?? ''} · {resolvedDate ?? ''} {resolvedStart ?? ''}
+                </div>
+                {isCultureWednesday && (
+                  <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
+                      수요일 무비데이 20% 프로모션
+                  </div>
+                )}
+                {serverQuote?.lineItems?.length ? (
+                  <ul className="space-y-1 mb-3">
+                    {serverQuote.lineItems.map((li, i) => {
+                      let name;
+                      const kindVal = (li.kind || '').toString().toUpperCase();
+                      if (kindVal === "ADULT") {
+                        name = "성인";
+                      } else if (kindVal === "TEEN") {
+                        name = "청소년";
+                      } else {
+                        name = li.label || li.name || li.kind || `항목 ${i+1}`;
+                      }
+                      const qty = li.qty ?? li.quantity ?? 1;
+                      const unit = li.unitPrice ?? li.unit_price ?? li.price ?? 0;
+                      const subtotal = li.subtotal ?? (Number(unit) * Number(qty));
+                      return (
+                        <li key={i} className="flex justify-between">
+                          <span>{name}{qty ? ` × ${qty}` : ''}</span>
+                          <span>{Number(subtotal || 0).toLocaleString()}원</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <div className="text-gray-600">항목 정보를 불러오는 중입니다…</div>
+                )}
+                <div className="h-px bg-gray-200 my-2" />
+                <div className="flex justify-between font-semibold">
+                  <span>최종 결제 금액</span>
+                  <span>{Number(serverQuote?.payableAmount || 0).toLocaleString()}원</span>
+                </div>
+                <div className="mt-1 text-xs text-gray-500">※ 좌석은 2분 동안 임시 선점됩니다.</div>
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t px-4 py-3">
+                <button
+                  type="button"
+                  className="px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+                  onClick={() => {
+                    const qs = serverQuote.qs || '';
+                    navigate(`/payment?${qs}`, { state: serverQuote.navState });
+                  }}
+                >
+                  결제 페이지로
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         </div>
 
     );

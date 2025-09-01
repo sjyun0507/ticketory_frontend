@@ -30,12 +30,6 @@ export async function createMovie(payload) {
   return res.data;
 }
 
-// 영화 수정(전체) PUT /admin/movies/{movieId}
-export async function updateMovie(movieId, payload) {
-  if (!movieId) throw new Error("movieId is required");
-  const res = await api.put(`/admin/movies/${movieId}`, payload);
-  return res.data;
-}
 
 // 영화 부분 수정 PATCH /admin/movies/{movieId}
 export async function patchMovie(movieId, partial) {

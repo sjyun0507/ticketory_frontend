@@ -368,14 +368,20 @@ const MyBookings = () => {
               list = merged.length > 0 ? merged : (await tryFetch()) || [];
             }
 
+            // Exclude FAILED payments from any tab
+            const filteredList = (list || []).filter(b => {
+              const ps = (b?.paymentStatus ?? b?.status ?? '').toString().toUpperCase();
+              return ps !== 'FAILED';
+            });
+
             // Log raw list for debugging
             console.groupCollapsed('[MyBookings] Bookings page raw');
             console.log('tab:', tab);
-            console.log('list:', list);
+            console.log('list (after excluding FAILED):', filteredList);
             console.groupEnd();
 
             // ---------- Normalize ----------
-            const normalized = await Promise.all(list.map(async (b) => {
+            const normalized = await Promise.all(filteredList.map(async (b) => {
               const poster = b.posterUrl || null;
               let posterUrl = poster;
               if (posterUrl) {
@@ -428,12 +434,18 @@ const MyBookings = () => {
     const filteredBookings = useMemo(() => {
       const toPS = (b) => (b.paymentStatus || '').toString().toUpperCase();
       const isSticky = (b) => stickyIds.has(b.bookingId);
-      if (tab === 'PAID') return bookings.filter(b => toPS(b) === 'PAID' || isSticky(b));
-      if (tab === 'CANCELED') return bookings.filter(b => {
+      // Base: exclude FAILED for all views
+      const base = bookings.filter(b => toPS(b) !== 'FAILED');
+
+      if (tab === 'PAID') return base.filter(b => toPS(b) === 'PAID' || isSticky(b));
+
+      if (tab === 'CANCELED') return base.filter(b => {
         const ps = toPS(b);
         return ps === 'CANCELLED' || ps === 'CANCELED';
       });
-      return bookings;
+
+      // ALL
+      return base;
     }, [bookings, tab, stickyIds]);
 
     // PAID 탭이 아닐 때 stickyIds를 비움 (UX: 무한 스티키 방지)

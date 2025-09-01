@@ -1,7 +1,7 @@
 import React,{ useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Star, Film } from "lucide-react";
-import { getProfile, getStories, createStory, getEligibleBookings } from "../../api/stroyApi.js";
+import { getProfile, getStories, createStory, getEligibleBookings, getMyStories } from "../../api/stroyApi.js";
 import Modal from "../../components/Modal.jsx";
 import { getMovieDetail } from "../../api/movieApi.js";
 
@@ -23,6 +23,38 @@ function formatDateOnly(v) {
     const s = String(v);
     return s.includes('T') ? s.split('T')[0] : s.split(' ')[0];
 }
+
+// 별점 컴포넌트 (0.5 단위)
+function StarRating({ value = 0, onChange }) {
+  const stars = [1, 2, 3, 4, 5];
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex">
+        {stars.map((i) => {
+          const full = value >= i;
+          const half = !full && value >= i - 0.5;
+          const width = full ? '100%' : half ? '50%' : '0%';
+          return (
+            <div key={i} className="relative w-7 h-7">
+              {/* 바닥: 비활성 별 */}
+              <Star className="w-7 h-7 text-neutral-300" />
+              {/* 위: 채워지는 별 (가변 폭) */}
+              <div className="absolute inset-0 overflow-hidden" style={{ width }}>
+                <Star className="w-7 h-7 text-amber-500 fill-current" />
+              </div>
+              {/* 클릭 영역: 좌/우 0.5 단위 */}
+              <button type="button" aria-label={`${i - 0.5}점`} className="absolute left-0 top-0 h-full w-1/2"
+                      onClick={() => onChange?.(i - 0.5)} />
+              <button type="button" aria-label={`${i}점`} className="absolute right-0 top-0 h-full w-1/2"
+                      onClick={() => onChange?.(i)} />
+            </div>
+          );
+        })}
+      </div>
+      <span className="text-sm w-10 text-right">{Number.isFinite(value) ? value.toFixed(1) : '0.0'}</span>
+    </div>
+  );
+}
 export default function StoryFeed() {
     const [stories, setStories] = useState([]);
     const [profile, setProfile] = useState(null);
@@ -31,6 +63,8 @@ export default function StoryFeed() {
     const [selectedBooking, setSelectedBooking] = useState(null);
     const [storyForm, setStoryForm] = useState({ rating: 4.5, content: "", tags: "" });
     const [submitting, setSubmitting] = useState(false);
+
+    const [myRecentStories, setMyRecentStories] = useState([]);
 
     useEffect(() => {
         getProfile().then(setProfile);
@@ -67,6 +101,21 @@ export default function StoryFeed() {
       })();
     }, [profile?.memberId]);
 
+    useEffect(() => {
+      const id = profile?.memberId;
+      if (!id) return;
+      (async () => {
+        try {
+          const res = await getMyStories(id, { limit: 5, sort: 'RECENT' });
+          const rows = Array.isArray(res?.content) ? res.content : (Array.isArray(res) ? res : []);
+          setMyRecentStories(rows);
+        } catch (e) {
+          console.error('[story:my-recent:error]', e);
+          setMyRecentStories([]);
+        }
+      })();
+    }, [profile?.memberId]);
+
     return (
         <div className="min-h-screen bg-neutral-50">
 
@@ -79,19 +128,19 @@ export default function StoryFeed() {
                 </section>
 
                 <aside className="hidden lg:block">
-                    <RightRail profile={profile} onOpenWrite={() => setWriteOpen(true)} />
+                    <RightRail profile={profile} recentMyStories={myRecentStories} onOpenWrite={() => setWriteOpen(true)} />
                 </aside>
             </main>
 
-            <Modal isOpen={writeOpen} onClose={() => setWriteOpen(false)} title="관람평 작성">
-  <div className="space-y-4">
+            <Modal isOpen={writeOpen} onClose={() => setWriteOpen(false)} title="관람평 작성"  contentClassName="w-[1000px] max-w-[95vw]">
+  <div className="space-y-4 w-full">
     {/* Step 1: 결제 완료된 예매 선택 (포스터 그리드) */}
     <div>
-      <div className="mb-2 text-sm font-semibold">내 최근 예매 (결제완료만)</div>
+      <div className="mb-2 text-sm font-semibold">내 최근 예매 (결제완료)</div>
       {eligible.length === 0 ? (
-        <div className="text-sm text-neutral-500">작성 가능한 예매가 없어요.</div>
+        <div className="text-sm text-neutral-500">작성 가능한 예매가 없어요</div>
       ) : (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-5 gap-3">
           {eligible.map(b => (
             <button
               key={b.bookingId}
@@ -105,7 +154,7 @@ export default function StoryFeed() {
               </div>
               <div className="p-2 text-left">
                 <div className="truncate text-[13px] font-medium">{b.movieTitle}</div>
-                <div className="text-[11px] text-neutral-500">{new Date(b.screeningStartAt).toLocaleString('ko-KR')}</div>
+                <div className="text-[11px] text-neutral-500">{formatDateOnly(b.screeningStartAt)}</div>
               </div>
             </button>
           ))}
@@ -117,14 +166,7 @@ export default function StoryFeed() {
     <div className="grid grid-cols-1 gap-3">
       <label className="flex items-center justify-between gap-3">
         <span className="text-sm text-neutral-700">평점</span>
-        <input
-          type="range"
-          min="0" max="5" step="0.5"
-          value={storyForm.rating}
-          onChange={(e) => setStoryForm(f => ({ ...f, rating: parseFloat(e.target.value) }))}
-          className="w-40"
-        />
-        <span className="text-sm w-8 text-right">{Number.isFinite(storyForm.rating) ? storyForm.rating.toFixed(1) : '0.0'}</span>
+        <StarRating value={storyForm.rating} onChange={(v) => setStoryForm(f => ({ ...f, rating: v }))} />
       </label>
 
       <label className="flex flex-col gap-1">
@@ -186,7 +228,7 @@ export default function StoryFeed() {
             setSubmitting(false);
           }
         }}
-        className="rounded-xl bg-black px-4 py-2 text-white text-sm disabled:opacity-50"
+        className="rounded-xl bg-indigo-600 px-4 py-2 text-white text-sm disabled:opacity-50"
       >
         {submitting ? '저장 중…' : '저장'}
       </button>
@@ -294,27 +336,50 @@ function StoryCard({ story }) {
     );
 }
 
-function RightRail({ profile, onOpenWrite }) {
+function RightRail({ profile, onOpenWrite, recentMyStories = [] }) {
     const navigate = useNavigate();
+    const location = useLocation();
+    const isLoggedIn = !!profile?.memberId;
     return (
         <div className="sticky top-16 space-y-4">
             {/* 내 활동 요약 */}
             <Card>
-                <div className="flex items-center justify-between">
+              {isLoggedIn ? (
+                <>
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <img src={profile?.avatarUrl} alt="avatar" className="h-10 w-10 rounded-full object-cover" />
-                        <div>
-                            <div className="text-sm font-semibold">{profile?.name}</div>
-                            <div className="text-[11px] text-neutral-500">최근 관람: {formatDateOnly(profile?.lastWatchedAt)}</div>
-                        </div>
+                      <img src={profile?.avatarUrl} alt="avatar" className="h-10 w-10 rounded-full object-cover" />
+                      <div>
+                        <div className="text-sm font-semibold">{profile?.name}</div>
+                        <div className="text-[11px] text-neutral-500">최근 관람: {formatDateOnly(profile?.lastWatchedAt)}</div>
+                      </div>
                     </div>
                     <button onClick={() => navigate('/mypage')} className="rounded-xl border px-3 py-1.5 text-sm hover:bg-indigo-50">프로필</button>
-                </div>
-                <div className="mt-3 grid grid-cols-3 text-center">
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 text-center">
                     <Stat label="좋아요" value="128" />
                     <Stat label="관람평" value="12" />
                     <Stat label="북마크" value="9" />
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold">로그인이 필요합니다</div>
+                    <div className="text-[10px] text-neutral-600">관람평 쓰기, 북마크 등 기능을 사용하려면 로그인해 주세요.</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const back = (location?.pathname || '/story') + (location?.search || '');
+                      try { sessionStorage.setItem('postLoginRedirect', back); } catch {}
+                      navigate(`/login?redirect=${encodeURIComponent(back)}`, { state: { from: back } });
+                    }}
+                    className="rounded-xl bg-indigo-600 px-4 py-1 text-sm text-white hover:bg-indigo-700"
+                  >
+                    로그인
+                  </button>
                 </div>
+              )}
             </Card>
             {/* 브랜드/CTA: Ticket × Story 중심 페이지 강조 */}
             <Card>
@@ -325,39 +390,48 @@ function RightRail({ profile, onOpenWrite }) {
                 </div>
             </Card>
 
-            {/* 최근 남긴 관람평 */}
-            <Card title="최근 남긴 관람평">
-                <ul className="space-y-3">
-                    {[{t:'F1 더 무비',c:'레이스 몰입감 최고! IMAX 추천'}, {t:'해피엔드',c:'배우들 연기 합이 완벽'}].map((r, i) => (
-                        <li key={i} className="flex items-start gap-3">
-                            <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-neutral-400"></div>
-                            <div>
-                                <div className="text-sm font-medium">{r.t}</div>
-                                <div className="text-[12px] text-neutral-600 overflow-hidden text-ellipsis whitespace-nowrap">{r.c}</div>
-                            </div>
-                        </li>
-                    ))}
-                </ul>
-                <div className="mt-3 text-right">
-                    <a className="text-[12px] text-neutral-600 hover:text-neutral-900"
-                    onClick={()=>navigate('/mypage/myreviews')}>리뷰 더 보기</a>
-                </div>
-            </Card>
-
-            {/* 북마크한 영화 */}
-            <Card title="북마크한 영화">
-                <div className="flex gap-2 overflow-x-auto no-scrollbar pr-1">
-                    {[
-                        'https://image.tmdb.org/t/p/w300/6dr8Lz4LZrQJ7sG0mq06R4G3Ecr.jpg',
-                        'https://image.tmdb.org/t/p/w300/3xqJmXz3wQF8yZL1JqvQnZrX1qS.jpg',
-                        'https://image.tmdb.org/t/p/w300/9dpjssW6XMYp3B5qScbwoCOAayG.jpg',
-                    ].map((src, i) => (
-                        <div key={i} className="aspect-[2/3] w-16 shrink-0 overflow-hidden rounded-md border">
-                            <img src={src} className="h-full w-full object-cover" />
+            {/* 최근 남긴 관람평 (로그인 사용자 전용) */}
+            {isLoggedIn && (
+              <Card title="최근 남긴 관람평">
+                {(!Array.isArray(recentMyStories) || recentMyStories.length === 0) ? (
+                  <div className="text-[12px] text-neutral-500">아직 작성한 관람평이 없어요.</div>
+                ) : (
+                  <ul className="space-y-3">
+                    {recentMyStories.map((s, i) => (
+                      <li key={s.id ?? s.storyId ?? i} className="flex items-start gap-3">
+                        <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-neutral-400"></div>
+                        <div>
+                          <div className="text-sm font-medium">{s.movieTitle || s.movie?.title || '제목 없음'}</div>
+                          <div className="text-[12px] text-neutral-600 overflow-hidden text-ellipsis whitespace-nowrap">{s.content || ''}</div>
                         </div>
+                      </li>
                     ))}
+                  </ul>
+                )}
+                <div className="mt-3 text-right">
+                  <button className="text-[12px] text-neutral-600 hover:text-neutral-900 underline" onClick={() => navigate('/mypage/myreviews')}>
+                    리뷰 더 보기
+                  </button>
                 </div>
-            </Card>
+              </Card>
+            )}
+
+            {/* 북마크한 영화 (로그인 사용자 전용) */}
+            {isLoggedIn && (
+              <Card title="북마크한 영화">
+                <div className="flex gap-2 overflow-x-auto no-scrollbar pr-1">
+                  {[
+                    'https://image.tmdb.org/t/p/w300/6dr8Lz4LZrQJ7sG0mq06R4G3Ecr.jpg',
+                    'https://image.tmdb.org/t/p/w300/3xqJmXz3wQF8yZL1JqvQnZrX1qS.jpg',
+                    'https://image.tmdb.org/t/p/w300/9dpjssW6XMYp3B5qScbwoCOAayG.jpg',
+                  ].map((src, i) => (
+                    <div key={i} className="aspect-[2/3] w-16 shrink-0 overflow-hidden rounded-md border">
+                      <img src={src} className="h-full w-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
 
             {/* 커뮤니티: 팔로우 추천 & 베스트 관람평 */}
             <Card title="커뮤니티 추천 계정">

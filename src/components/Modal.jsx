@@ -65,7 +65,7 @@ const Modal = ({ isOpen, onClose, children, contentStyle, contentClassName }) =>
                 style={{
                     background: "#fff",
                     borderRadius: "10px",
-                    width: "min(92vw, 560px)",
+                    width: (contentStyle && contentStyle.width) ? contentStyle.width : (contentClassName ? undefined : "min(92vw, 560px)"),
                     maxHeight: "85vh",
                     overflowY: "auto",
                     padding: "20px",

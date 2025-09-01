@@ -54,7 +54,19 @@ export default function MyPage() {
         (async () => {
             try {
                 const data = await getMyInfo(memberId);
-                if (mounted && data) setUser(data);
+                if (mounted && data) {
+                  const normalized = {
+                    name: data?.name ?? '',
+                    grade: data?.grade ?? data?.memberGrade ?? '',
+                    points: data?.points ?? data?.pointBalance ?? 0,
+                    avatarUrl: data?.avatarUrl ?? data?.avatar_url ?? '',
+                  };
+                  setUser(prev => ({
+                    ...prev,
+                    ...normalized,
+                    avatarUrl: (normalized.avatarUrl && String(normalized.avatarUrl).trim()) || prev.avatarUrl || defaultAvatar,
+                  }));
+                }
 
                 // 최근 예매 1건 불러오기 (목록 API → 최신 1건 선별)
                 try {
@@ -127,9 +139,14 @@ export default function MyPage() {
                         {/* 아바타 */}
                         <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-full ring-2 ring-white shadow-md overflow-hidden shrink-0">
                             <img
-                                src={user.avatarUrl ? user.avatarUrl : defaultAvatar}
+                                src={user?.avatarUrl ? user.avatarUrl : defaultAvatar}
                                 alt="User avatar"
                                 className="h-full w-full object-cover"
+                                onError={(e) => {
+                                  if (e.currentTarget.src !== defaultAvatar) {
+                                    e.currentTarget.src = defaultAvatar;
+                                  }
+                                }}
                             />
                         </div>
 

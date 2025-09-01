@@ -1,5 +1,6 @@
-import React,{ useState } from "react";
+import React,{ useState, useEffect } from "react";
 import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Star, Film } from "lucide-react";
+import {getStories} from "../../api/stroyApi.js";
 
 /*
  StoryFeed - 카드형 실관람평 피드 (인스타그램 느낌)
@@ -8,12 +9,18 @@ import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Star, Film } fr
  - 우측 여백(라이트 레일): 해시태그/빠른 필터/주간 픽/내 티켓 바로가기/가이드
  */
 export default function StoryFeed() {
+    const [stories, setStories] = useState([]);
+
+    useEffect(() => {
+        getStories().then(data => setStories(data));
+    }, []);
+
     return (
         <div className="min-h-screen bg-neutral-50">
 
             <main className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <section className="lg:col-span-2 space-y-6">
-                    {MOCK_STORIES.map((s) => (
+                    {stories.map((s) => (
                         <StoryCard key={s.id} story={s} />
                     ))}
                 </section>
@@ -217,45 +224,3 @@ function Card({ title, children }) {
         </div>
     );
 }
-
-// --- Mock Data ---
-const MOCK_STORIES = [
-    {
-        id: 1,
-        author: {
-            name: "블랙",
-            avatar: "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=300&auto=format&fit=crop",
-        },
-        meta: { theater: "CGV 판교", when: "8분 전" },
-        movie: {
-            title: "F1 더 무비",
-            age: "12",
-            poster: "https://image.tmdb.org/t/p/w500/9dpjssW6XMYp3B5qScbwoCOAayG.jpg",
-        },
-        content:
-            "기대보다 다큐 톤이 강했지만 레이스 씬의 몰입감은 최고!\nIMAX 추천합니다.",
-        tags: ["레이싱", "IMAX추천", "긴장감"],
-        rating: 4.3,
-        likes: 12,
-        comments: 3,
-    },
-    {
-        id: 2,
-        author: {
-            name: "영원한곰돌20032",
-            avatar: "https://images.unsplash.com/photo-1544006659-f0b21884ce1d?q=80&w=300&auto=format&fit=crop",
-        },
-        meta: { theater: "CGV 제주", when: "9분 전" },
-        movie: {
-            title: "해피엔드",
-            age: "15",
-            poster: "https://image.tmdb.org/t/p/w500/3xqJmXz3wQF8yZL1JqvQnZrX1qS.jpg",
-        },
-        content:
-            "무겁지만 섬세한 감정선이 마음에 남아요.\n배우들 연기 합이 완벽.",
-        tags: ["연기맛집", "잔잔한여운"],
-        rating: 4.5,
-        likes: 33,
-        comments: 8,
-    },
-];

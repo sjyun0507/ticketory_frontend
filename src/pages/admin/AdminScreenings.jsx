@@ -853,6 +853,7 @@ const AdminScreenings = () => {
                         <span className="text-sm text-gray-600">첫 회차 시작</span>
                         <input
                           type="time"
+                          step={600}
                           className="rounded border px-3 py-2"
                           value={form.firstStart}
                           onChange={(e) => onChange("firstStart", e.target.value)}
@@ -887,6 +888,7 @@ const AdminScreenings = () => {
                           <span className="text-sm text-gray-600">운영 마감 시간</span>
                           <input
                             type="time"
+                            step={600}
                             className="rounded border px-3 py-2"
                             value={form.closeTime}
                             onChange={(e) => onChange("closeTime", e.target.value)}
@@ -949,6 +951,7 @@ const AdminScreenings = () => {
                         <span className="text-sm text-gray-600">시작 일시</span>
                         <input
                           type="datetime-local"
+                          step={600}
                           className="rounded border px-3 py-2"
                           value={editForm.startInput}
                           onChange={(e) => setEditForm((p) => ({ ...p, startInput: e.target.value }))}
@@ -959,6 +962,7 @@ const AdminScreenings = () => {
                         <span className="text-sm text-gray-600">종료 일시</span>
                         <input
                           type="datetime-local"
+                          step={600}
                           className="rounded border px-3 py-2"
                           value={editForm.endInput}
                           onChange={(e) => setEditForm((p) => ({ ...p, endInput: e.target.value }))}

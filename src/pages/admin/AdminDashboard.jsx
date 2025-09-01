@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AdminLayout } from "../../components/AdminSidebar";
 import { Link } from "react-router-dom";
 import { getStatsSummary, getDailyRevenue, getTopMovies, fetchScreenings } from "../../api/adminApi.js";
+import { getScreenings as fetchPublicScreenings, getMovies as fetchMoviesList } from "../../api/movieApi.js";
 
 function StatCard({ title, value, delta, positive, icon, to }) {
     return (
@@ -29,7 +30,6 @@ function StatCard({ title, value, delta, positive, icon, to }) {
 
 /* ---------- 라인 차트 (SVG) ---------- */
 function LineChart({ data, labels }) {
-    // data: [series1, series2] 각 배열은 숫자
     const width = 720, height = 260, pad = 32;
     const safeData = Array.isArray(data) && data.length ? data : [[]];
     const safeLabels = Array.isArray(labels) ? labels : [];
@@ -37,7 +37,6 @@ function LineChart({ data, labels }) {
     const hasData = flat.length > 0;
     const min = hasData ? Math.min(...flat) : 0;
     const max = hasData ? Math.max(...flat) : 1;
-    // Value axis ticks (match 5 grid lines)
     const tickCount = 5;
     const ticks = Array.from({ length: tickCount }, (_, i) => min + ((max - min) * i) / (tickCount - 1));
     const fmtCompact = (v) => new Intl.NumberFormat('ko-KR', { notation: 'compact' }).format(Math.round(v));
@@ -75,7 +74,6 @@ function LineChart({ data, labels }) {
                         className="stroke-slate-100"
                     />
                 ))}
-                {/* left value axis */}
                 <line x1={pad} x2={pad} y1={pad} y2={height - pad} className="stroke-slate-200" />
                 {ticks.map((tv, i) => (
                   <text
@@ -89,7 +87,6 @@ function LineChart({ data, labels }) {
                   </text>
                 ))}
                 {paths}
-                {/* points */}
                 {safeData.map((series, sidx) =>
                     series.map((v, i) => (
                         <circle
@@ -101,8 +98,7 @@ function LineChart({ data, labels }) {
                         />
                     ))
                 )}
-                {/* x labels */}
-                {(safeLabels || []).map((lb, i) => (
+       {(safeLabels || []).map((lb, i) => (
                     <text key={lb} x={x(i)} y={height - 8} textAnchor="middle" className="fill-slate-400 text-[10px]">
                         {lb}
                     </text>
@@ -138,7 +134,7 @@ function BarChart({ data, labels }) {
         <div className="bg-white rounded-xl shadow-sm p-5">
             <div className="flex items-center justify-between mb-3">
                 <h4 className="font-semibold text-slate-800">Top 매출 영화</h4>
-                <Link to="/admin/movies" className="text-xs text-sky-600">관리로 이동</Link>
+                <Link to="/admin/movies" className="text-xs text-sky-600">영화관리로 이동</Link>
             </div>
             <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-64">
                 {[0, 1, 2, 3].map((g) => (
@@ -151,7 +147,6 @@ function BarChart({ data, labels }) {
                         className="stroke-slate-100"
                     />
                 ))}
-                {/* left value axis */}
                 <line x1={pad} x2={pad} y1={pad} y2={height - pad} className="stroke-slate-200" />
                 {ticks.map((tv, i) => (
                   <text
@@ -199,46 +194,51 @@ function BarChart({ data, labels }) {
     );
 }
 
-/* ---------- 간단 테이블 ---------- */
 function MiniTable({ title, rows, columns, actionText, to }) {
-    return (
-        <div className="bg-white rounded-xl shadow-sm p-5">
-            <div className="flex items-center justify-between mb-3">
-                <h4 className="font-semibold text-slate-800">{title}</h4>
-                {actionText && (to ? <Link to={to} className="text-xs text-sky-600">{actionText}</Link> : <button className="text-xs text-sky-600">{actionText}</button>)}
-            </div>
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                    <thead>
-                    <tr className="text-left text-slate-500 border-b border-slate-100">
-                        {columns.map((c) => (
-                            <th key={c} className="py-2 pr-3 font-medium">{c}</th>
-                        ))}
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {(Array.isArray(rows) ? rows : []).map((r, i) => (
-                        <tr key={i} className="border-b last:border-0 border-slate-50">
-                            {(Array.isArray(r) ? r : []).map((cell, j) => (
-                                <td key={j} className="py-2 pr-3 text-slate-700">{cell}</td>
-                            ))}
-                        </tr>
-                    ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
+  const hasRows = Array.isArray(rows) && rows.length > 0;
+  return (
+    <div className="bg-white rounded-xl shadow-sm p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="font-semibold text-slate-800">{title}</h4>
+        {actionText && (to ? <Link to={to} className="text-xs text-sky-600">{actionText}</Link> : <button className="text-xs text-sky-600">{actionText}</button>)}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-slate-500 border-b border-slate-100">
+              {columns.map((c) => (
+                <th key={c} className="py-2 pr-3 font-medium">{c}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {hasRows ? (
+              (rows || []).map((r, i) => (
+                <tr key={i} className="border-b last:border-0 border-slate-50">
+                  {(Array.isArray(r) ? r : []).map((cell, j) => (
+                    <td key={j} className="py-2 pr-3 text-slate-700">{cell}</td>
+                  ))}
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={columns.length} className="py-6 text-center text-slate-400">표시할 항목이 없습니다.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 /* ---------- 페이지 본문 ---------- */
 export default function AdminDashboard() {
-    // 더미 데이터
     const [summary, setSummary] = useState({ gross: 0, refunded: 0, net: 0, count: 0 });
     const [daily, setDaily] = useState([]); // [{date, revenue}]
     const [topMovies, setTopMovies] = useState([]); // [{movieId, title, revenue}]
-    const [screenings, setScreenings] = useState([]); // upcoming screenings
     const [loading, setLoading] = useState(false);
+    const [screenings, setScreenings] = useState([]); // upcoming screenings
 
     // 기간 기본값: 최근 30일
     const toISO = (d) => d.toISOString().slice(0,10);
@@ -253,50 +253,99 @@ export default function AdminDashboard() {
             getStatsSummary({ from: start, to: end }),
             getDailyRevenue({ from: start, to: end }),
             getTopMovies({ from: start, to: end, limit: 5 }),
-            fetchScreenings({ page: 0, size: 5 }),
+            fetchScreenings({ page: 0, size: 100 }),
           ]);
-          // --- Normalize list payloads first ---
+          // --- Normalize list payloads ---
           const dailyArr = Array.isArray(d?.content) ? d.content : Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
           const topsArr = Array.isArray(tops?.content) ? tops.content : Array.isArray(tops?.data) ? tops.data : Array.isArray(tops) ? tops : [];
-          const scrArr = Array.isArray(scr?.content) ? scr.content : Array.isArray(scr?.data) ? scr.data : Array.isArray(scr) ? scr : [];
+          const scrArr  = Array.isArray(scr?.content) ? scr.content : Array.isArray(scr?.data) ? scr.data : Array.isArray(scr) ? scr : [];
+          // Fallback: if admin endpoint returned nothing, try public screenings endpoint
+          let scrAll = scrArr;
+          if (!Array.isArray(scrAll) || scrAll.length === 0) {
+            try {
+              const pub = await fetchPublicScreenings();
+              const pubArr = Array.isArray(pub?.content) ? pub.content : Array.isArray(pub?.data) ? pub.data : Array.isArray(pub) ? pub : [];
+              if (Array.isArray(pubArr) && pubArr.length > 0) {
+                scrAll = pubArr.slice(0,200);
+              }
+            } catch (e) {
 
+            }
+          }
+          // Build movie title map to resolve missing movie titles
+          let titleMap = new Map();
+          try {
+            const mv = await fetchMoviesList({ page: 0, size: 500 });
+            const mvArr = Array.isArray(mv?.content) ? mv.content : Array.isArray(mv?.data) ? mv.data : Array.isArray(mv) ? mv : [];
+            (mvArr || []).forEach(m => {
+              const mid = (m.id ?? m.movieId ?? m.movie_id);
+              const mtitle = (m.title ?? m.movieTitle ?? m.movie_title);
+              if (mid != null && mtitle) titleMap.set(String(mid), String(mtitle));
+            });
+          } catch (e) {
+            // ignore – titleMap stays empty if fetch fails
+          }
           setDaily(dailyArr);
           setTopMovies(topsArr);
-          setScreenings(scrArr);
 
+          const parseStart = (obj) => {
+            if (!obj || typeof obj !== 'object') return null;
+            const val =
+              obj.startAt ?? obj.start_at ?? obj.startTime ?? obj.start_time ??
+              obj.startsAt ?? obj.starts_at ?? obj.start ?? obj.startDateTime ??
+              obj.start_date_time ?? obj.startDate ?? obj.start_date ?? null;
+            if (!val) return null;
+            const dt = new Date(val);
+            return isNaN(dt) ? null : dt;
+          };
+          const now = new Date();
+          const withStart = (scrAll || []).map(s => ({ s, st: parseStart(s) })).filter(x => !!x.st);
+          let upcoming = [];
+          if (withStart.length > 0) {
+            upcoming = withStart
+              .filter(x => x.st.getTime() > now.getTime())
+              .sort((a, b) => a.st.getTime() - b.st.getTime())
+              .map(x => x.s)
+              .slice(0, 5);
+            if (upcoming.length === 0) {
+              upcoming = withStart
+                .sort((a, b) => a.st.getTime() - b.st.getTime())
+                .map(x => x.s)
+                .slice(-5);
+            }
+          } else {
+            upcoming = (scrAll || []).slice(0, 5);
+          }
+          const upcomingResolved = (upcoming || []).map(s => {
+            const rawTitle = (s.movieTitle ?? s.movie_title ?? s.movie?.title ?? '');
+            const rawId = (s.movieId ?? s.movie_id ?? s.movie?.id ?? null);
+            const mapped = rawId != null ? (titleMap.get(String(rawId)) ?? '') : '';
+            return { ...s, _resolvedTitle: (rawTitle && String(rawTitle).trim()) || mapped || '' };
+          });
+          setScreenings(upcomingResolved);
           // --- Normalize summary keys for dashboard cards ---
-          // Accept various wrappers: {data:{...}}, {summary:{...}}, or the object itself
           const sWrap = sRes && typeof sRes === 'object' ? sRes : {};
-          const sRaw = (sWrap.data && typeof sWrap.data === 'object') ? sWrap.data
-                      : (sWrap.summary && typeof sWrap.summary === 'object') ? sWrap.summary
-                      : sWrap;
-
+          const sRaw =
+            (sWrap.data && typeof sWrap.data === 'object') ? sWrap.data :
+            (sWrap.summary && typeof sWrap.summary === 'object') ? sWrap.summary :
+            sWrap;
           const toNum = (v) => (v == null || v === '' || Number.isNaN(Number(v)) ? 0 : Number(v));
-          let gross = sRaw.grossRevenue ?? sRaw.gross_revenue ?? sRaw.gross;
-          let refunded = sRaw.refundedAmount ?? sRaw.refunded_amount ?? sRaw.refundAmount ?? sRaw.refund_amount ?? sRaw.refunded;
-          let net = sRaw.netRevenue ?? sRaw.net_revenue;
-          let count = sRaw.paymentCount ?? sRaw.payment_count ?? sRaw.count;
-
-          gross = toNum(gross);
-          refunded = toNum(refunded);
-          // If net missing, compute from gross-refunded
-          net = toNum(net != null ? net : gross - refunded);
-          count = toNum(count);
-
-          // --- Fallback: if summary is all zeros but daily has data, synthesize gross/net from daily ---
+          let gross = toNum(sRaw.grossRevenue ?? sRaw.gross_revenue ?? sRaw.gross);
+          let refunded = toNum(sRaw.refundedAmount ?? sRaw.refunded_amount ?? sRaw.refundAmount ?? sRaw.refund_amount ?? sRaw.refunded);
+          let net = toNum(sRaw.netRevenue ?? sRaw.net_revenue);
+          let count = toNum(sRaw.paymentCount ?? sRaw.payment_count ?? sRaw.count);
+          if (net === 0) net = toNum(gross - refunded);
           const dailyTotal = dailyArr.reduce((sum, row) => sum + (toNum(row.revenue) || 0), 0);
           if (gross === 0 && net === 0 && count === 0 && dailyTotal > 0) {
             gross = toNum(dailyTotal);
-            // Keep refunded as parsed (may be 0 if missing)
             net = toNum(gross - refunded);
           }
-
           setSummary({ gross, refunded, net, count });
-          console.log('[Dashboard] summary raw', sRes);
-          console.log('[Dashboard] summary computed ->', { gross, refunded, net, count });
-          console.log('[Dashboard] daily raw', d);
-          console.log('[Dashboard] top raw', tops);
-          console.log('[Dashboard] screenings raw', scr);
+          const __DEV__ = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.MODE !== 'production');
+          if (__DEV__) {
+            console.log('[Dashboard] summary computed ->', { gross, refunded, net, count });
+            console.log('[Dashboard] screenings parsed -> total:', (scrAll || []).length, 'withStart:', withStart?.length ?? 0, 'upcomingShown:', upcoming.length);
+          }
         } catch (err) {
           console.error('[Dashboard] fetch error', err);
         } finally {
@@ -316,14 +365,39 @@ export default function AdminDashboard() {
     const screeningRows = useMemo(() => (
       Array.isArray(screenings)
         ? screenings.map(s => {
-            const start = (s.startAt || s.start_at || s.startTime || '').toString();
-            const end = (s.endAt || s.end_at || s.endTime || '').toString();
-            const startTxt = start ? start.replace('T',' ').slice(0,16) : '-';
-            const endTxt = end ? end.replace('T',' ').slice(0,16) : '';
+            const start = (
+              s.startAt ?? s.start_at ?? s.startTime ?? s.start_time ??
+              s.startsAt ?? s.starts_at ?? s.start ?? s.startDateTime ??
+              s.start_date_time ?? s.startDate ?? s.start_date ?? ''
+            ).toString();
+            const end = (
+              s.endAt ?? s.end_at ?? s.endTime ?? s.end_time ??
+              s.endsAt ?? s.ends_at ?? s.end ?? s.endDateTime ??
+              s.end_date_time ?? s.endDate ?? s.end_date ?? ''
+            ).toString();
+            const toLocal = (iso) => {
+              const d = new Date(iso);
+              if (isNaN(d)) return '-';
+              const y = d.getFullYear();
+              const m = String(d.getMonth() + 1).padStart(2, '0');
+              const dd = String(d.getDate()).padStart(2, '0');
+              const hh = String(d.getHours()).padStart(2, '0');
+              const mi = String(d.getMinutes()).padStart(2, '0');
+              return `${y}-${m}-${dd} ${hh}:${mi}`;
+            };
+            const startTxt = start ? toLocal(start) : '-';
+            const endTxt = end ? toLocal(end) : '-';
+            // Build movie cell: "#<id> - <title>" using resolved title map fallback
+            const rawTitle = (s._resolvedTitle ?? s.movieTitle ?? s.movie_title ?? s.movie?.title ?? s.title ?? '');
+            const title = (typeof rawTitle === 'string' ? rawTitle : String(rawTitle || '')).trim() || '-';
+            const rawId = (s.movieId ?? s.movie_id ?? s.movie?.id ?? null);
+            const idStr = (rawId != null && rawId !== '') ? String(rawId) : '';
+            const movieCell = idStr ? `#${idStr} - ${title}` : title;
             return [
-              s.movieTitle || s.movie?.title || '-',
-              s.screenName || s.screen?.name || '-',
-              endTxt ? `${startTxt} ~ ${endTxt}` : startTxt,
+              movieCell,
+              (s.screenName ?? s.screen_name ?? s.screen?.name ?? '-') || '-',
+              startTxt,
+              endTxt,
             ];
           })
         : []
@@ -368,16 +442,17 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* 테이블 영역 */}
+                {/* 곧 시작하는 회차 */}
                 <div className="mt-6 grid grid-cols-1 gap-6">
-                    <MiniTable
-                        title="다가오는 상영"
-                        columns={["MOVIE", "SCREEN", "START"]}
-                        rows={screeningRows}
-                        actionText="상영 관리"
-                        to="/admin/screenings"
-                    />
+                  <MiniTable
+                    title="곧 시작하는 회차(예정)"
+                    columns={["영화(ID+제목)", "상영관", "시작시간", "종료시간"]}
+                    rows={screeningRows}
+                    actionText="상영 관리"
+                    to="/admin/screenings"
+                  />
                 </div>
+
             </div>
         </AdminLayout>
     );

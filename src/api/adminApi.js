@@ -183,7 +183,7 @@ export const createWednesdayDiscount = ({ from, to, percent, kinds }) => {
 
 // 상영관리
 export const fetchScreenings = () =>
-    api.get("/admin/screenings", { params: { page: 0, size: 100 } });
+    api.get("/admin/screenings", { params: { page: 0, size: 999 } });
 
 export const createScreening = (payload) =>
     api.post("/admin/screenings", payload);

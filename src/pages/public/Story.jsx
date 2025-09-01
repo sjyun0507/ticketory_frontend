@@ -1,7 +1,7 @@
 import React,{ useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Star, Film } from "lucide-react";
-import { getProfile, getStories, createStory, getEligibleBookings, getMyStories } from "../../api/stroyApi.js";
+import { getProfile, getStories, createStory, getEligibleBookings, getMyStories, likeStory, unlikeStory, bookmarkStory, unbookmarkStory, getMyBookmarkedStories, getComments, addComment,updateComment,deleteComment } from "../../api/stroyApi.js";
 import Modal from "../../components/Modal.jsx";
 import { getMovieDetail } from "../../api/movieApi.js";
 
@@ -65,6 +65,11 @@ export default function StoryFeed() {
     const [submitting, setSubmitting] = useState(false);
 
     const [myRecentStories, setMyRecentStories] = useState([]);
+    const [bookmarkedStories, setBookmarkedStories] = useState([]);
+
+    const navigate = useNavigate();
+    const location = useLocation();
+    const loggedIn = !!profile?.memberId;
 
     useEffect(() => {
         getProfile().then(setProfile);
@@ -116,6 +121,21 @@ export default function StoryFeed() {
       })();
     }, [profile?.memberId]);
 
+    useEffect(() => {
+      const id = profile?.memberId;
+      if (!id) return;
+      (async () => {
+        try {
+          const res = await getMyBookmarkedStories(id, { limit: 12, sort: 'RECENT' });
+          const rows = Array.isArray(res?.content) ? res.content : (Array.isArray(res) ? res : []);
+          setBookmarkedStories(rows);
+        } catch (e) {
+          console.error('[story:my-bookmarks:error]', e);
+          setBookmarkedStories([]);
+        }
+      })();
+    }, [profile?.memberId]);
+
     return (
         <div className="min-h-screen bg-neutral-50">
 
@@ -123,12 +143,23 @@ export default function StoryFeed() {
                 <section className="lg:col-span-2 space-y-6">
                     {Array.isArray(stories) && stories.map((s, idx) => {
                         const key = s?.id ?? s?.storyId ?? s?.uuid ?? `${s?.memberId ?? 'm'}-${s?.movie?.id ?? s?.movieId ?? 'mv'}-${s?.createdAt ?? idx}`;
-                        return <StoryCard key={key} story={s} />;
+                        return (
+                          <StoryCard
+                            key={key}
+                            story={s}
+                            loggedIn={loggedIn}
+                            onLoginRequired={() => {
+                              const back = (location?.pathname || '/story') + (location?.search || '');
+                              try { sessionStorage.setItem('postLoginRedirect', back); } catch {}
+                              navigate(`/login?redirect=${encodeURIComponent(back)}`, { state: { from: back } });
+                            }}
+                          />
+                        );
                     })}
                 </section>
 
                 <aside className="hidden lg:block">
-                    <RightRail profile={profile} recentMyStories={myRecentStories} onOpenWrite={() => setWriteOpen(true)} />
+                    <RightRail profile={profile} recentMyStories={myRecentStories} myBookmarks={bookmarkedStories} onOpenWrite={() => setWriteOpen(true)} />
                 </aside>
             </main>
 
@@ -208,14 +239,34 @@ export default function StoryFeed() {
               tags: storyForm.tags ? storyForm.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
               hasProof: true,
             };
-            const saved = await createStory(payload);
-            // normalize for feed card expectations
-            const normalized = {
-              ...saved,
-              name: saved?.member?.name,
-              avatarUrl: saved?.member?.avatarUrl,
-              movie: { ...saved?.movie, poster: saved?.movie?.poster || saved?.movie?.posterUrl },
-            };
+              const saved = await createStory(payload);
+
+              // 보강: 응답에 member/movie 포스터가 비어있으면 각각 가져와서 채움
+              let memberName = saved?.member?.name;
+              let memberAvatar = saved?.member?.avatarUrl;
+              if (!memberName || !memberAvatar) {
+                  try {
+                      const p = await getProfile();
+                      memberName = memberName || p?.name;
+                      memberAvatar = memberAvatar || p?.avatarUrl;
+                  } catch {}
+              }
+              let moviePoster = saved?.movie?.poster || saved?.movie?.posterUrl;
+              if (!moviePoster) {
+                  try {
+                      const detail = await getMovieDetail(saved?.movieId || payload.movieId);
+                      moviePoster = detail?.posterUrl || detail?.poster || detail?.images?.poster;
+                  } catch {}
+              }
+
+              const normalized = {
+                  ...saved,
+                  name: memberName,
+                  avatarUrl: memberAvatar,
+                  movie: { ...saved?.movie, poster: moviePoster },
+              };
+
+
             setStories(prev => Array.isArray(prev) ? [normalized, ...prev] : [normalized]);
             setEligible(prev => prev.map(b => b.bookingId === selectedBooking.bookingId ? { ...b, hasStory: true } : b));
             setSelectedBooking(null);
@@ -239,8 +290,37 @@ export default function StoryFeed() {
     );
 }
 
-function StoryCard({ story }) {
-    const [liked, setLiked] = useState(false);
+function StoryCard({ story, loggedIn = false, onLoginRequired }) {
+    const [liked, setLiked] = useState(!!story?.liked);
+    const [likeCount, setLikeCount] = useState(Number.isFinite(story?.likes) ? story.likes : 0);
+    const [bookmarked, setBookmarked] = useState(!!story?.bookmarked);
+    const [commentsOpen, setCommentsOpen] = useState(false);
+    const [commentList, setCommentList] = useState(Array.isArray(story?.commentsList) ? story.commentsList : []);
+    const [commentDraft, setCommentDraft] = useState("");
+    const [editingId, setEditingId] = useState(null);
+    const [editingDraft, setEditingDraft] = useState("");
+    const [commentsLoading, setCommentsLoading] = useState(false);
+    const [commentsError, setCommentsError] = useState("");
+
+    useEffect(() => {
+      if (!commentsOpen) return;
+      (async () => {
+        setCommentsLoading(true);
+        setCommentsError("");
+        try {
+          // Try to fetch; supports Page or Array responses
+          const res = await getComments(story.id ?? story.storyId, { page: 0, size: 50 });
+          const rows = Array.isArray(res?.content) ? res.content : (Array.isArray(res) ? res : []);
+          setCommentList(rows);
+        } catch (e) {
+          console.error('[comments:load:error]', e);
+          setCommentsError('댓글을 불러오지 못했어요.');
+          // keep any existing list; do not clear hard
+        } finally {
+          setCommentsLoading(false);
+        }
+      })();
+    }, [commentsOpen, story.id, story.storyId]);
 
     const avatar = story?.avatarUrl || "/images/avatar-placeholder.png";
     const name = story?.name || "익명";
@@ -251,7 +331,6 @@ function StoryCard({ story }) {
     const age = story?.movie?.age || "";
     const content = story?.content || "";
     const tags = Array.isArray(story?.tags) ? story.tags : [];
-    const likes = Number.isFinite(story?.likes) ? story.likes : 0;
     const comments = Number.isFinite(story?.comments) ? story.comments : 0;
 
     return (
@@ -307,7 +386,6 @@ function StoryCard({ story }) {
                         {/* 액션 버튼 */}
                         <div className="mt-4 flex items-center gap-2">
                             {/* 모던/중립 버튼 (강조색 X) */}
-                            <button className="h-9 rounded-xl border px-3 text-sm hover:bg-neutral-50">예매하기</button>
                             <button className="h-9 rounded-xl border px-3 text-sm hover:bg-neutral-50">상세보기</button>
                         </div>
                     </div>
@@ -317,26 +395,174 @@ function StoryCard({ story }) {
             {/* 하단: 인터랙션 */}
             <div className="px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => setLiked(!liked)} className={`group flex items-center gap-1 text-sm ${liked ? "text-neutral-900" : "text-neutral-600"}`}>
-                        <Heart className={`w-5 h-5 ${liked ? "fill-current" : ""}`} />
-                        <span>{liked ? likes + 1 : likes}</span>
+                    <button
+                      onClick={async () => {
+                        if (!loggedIn) { onLoginRequired?.(); return; }
+                        const next = !liked;
+                        // optimistic update
+                        setLiked(next);
+                        setLikeCount((c) => c + (next ? 1 : -1));
+                        try {
+                          if (next) await likeStory(story.id ?? story.storyId);
+                          else await unlikeStory(story.id ?? story.storyId);
+                        } catch (e) {
+                          // rollback on error
+                          setLiked(!next);
+                          setLikeCount((c) => c + (next ? -1 : 1));
+                          console.error('[story:like:error]', e);
+                        }
+                      }}
+                      className={`group flex items-center gap-1 text-sm ${liked ? 'text-neutral-900' : 'text-neutral-600'}`}
+                    >
+                      <Heart className={`w-5 h-5 ${liked ? 'fill-current' : ''}`} />
+                      <span>{likeCount}</span>
                     </button>
-                    <button className="flex items-center gap-1 text-sm text-neutral-600">
+                    <button
+                        onClick={() => setCommentsOpen(v => !v)}
+                        className="flex items-center gap-1 text-sm text-neutral-600"
+                    >
                         <MessageCircle className="w-5 h-5" />
-                        <span>{comments}</span>
-                    </button>
-                    <button className="flex items-center gap-1 text-sm text-neutral-600">
-                        <Share2 className="w-5 h-5" />
-                        <span>공유</span>
+                        <span>{commentsOpen ? commentList.length : comments}</span>
                     </button>
                 </div>
-                <button className="text-neutral-500 hover:text-neutral-800"><Bookmark className="w-5 h-5" /></button>
+                <button
+                  onClick={async () => {
+                    if (!loggedIn) { onLoginRequired?.(); return; }
+                    const next = !bookmarked;
+                    setBookmarked(next);
+                    try {
+                      const id = story.id ?? story.storyId;
+                      if (next) await bookmarkStory(id);
+                      else await unbookmarkStory(id);
+                    } catch (e) {
+                      setBookmarked(!next);
+                      console.error('[story:bookmark:error]', e);
+                    }
+                  }}
+                  className={`transition-colors ${bookmarked ? 'text-neutral-900' : 'text-neutral-500 hover:text-neutral-800'}`}
+                  aria-pressed={bookmarked}
+                  aria-label={bookmarked ? '북마크 취소' : '북마크'}
+                >
+                  <Bookmark className={`w-5 h-5 ${bookmarked ? 'fill-current' : ''}`} />
+                </button>
             </div>
+
+            {commentsOpen && (
+                <div className="border-t bg-neutral-50/60 px-4 py-3">
+                    {commentsLoading && (
+                        <div className="mb-2 text-[12px] text-neutral-500">불러오는 중…</div>
+                    )}
+                    {commentsError && (
+                        <div className="mb-2 rounded-md border border-red-200 bg-red-50 p-2 text-[12px] text-red-700">{commentsError}</div>
+                    )}
+
+                    {/* 입력 영역 */}
+                    <div className="mb-3 flex items-start gap-2">
+      <textarea
+          value={commentDraft}
+          onChange={(e) => setCommentDraft(e.target.value)}
+          rows={2}
+          className="min-h-[36px] grow rounded-md border px-2 py-1 text-sm"
+          placeholder="댓글을 입력하세요"
+      />
+                        <button
+                            className="shrink-0 rounded-md bg-neutral-900 px-3 py-1.5 text-sm text-white hover:bg-neutral-800"
+                            onClick={async () => {
+                                if (!loggedIn) { onLoginRequired?.(); return; }
+                                const text = commentDraft.trim();
+                                if (!text) return;
+                                try {
+                                    const saved = await addComment(story.id ?? story.storyId, { content: text });
+                                    const newItem = saved || { id: Date.now(), content: text, mine: true, createdAt: new Date().toISOString() };
+                                    setCommentList((prev) => [newItem, ...prev]);
+                                    setCommentDraft("");
+                                } catch (e) {
+                                    console.error('[comment:add:error]', e);
+                                    alert('댓글 저장에 실패했어요.');
+                                }
+                            }}
+                        >등록</button>
+                    </div>
+
+                    {/* 리스트 */}
+                    <ul className="space-y-2">
+                        {commentList.map((c) => (
+                            <li key={c.id ?? c.commentId ?? `${c.createdAt}-${(c.content || '').slice(0,8)}`} className="rounded-md border bg-white px-3 py-2">
+                                {editingId === (c.id ?? c.commentId) ? (
+                                    <div className="flex items-start gap-2">
+              <textarea
+                  className="min-h-[36px] grow rounded-md border px-2 py-1 text-sm"
+                  rows={2}
+                  value={editingDraft}
+                  onChange={(e) => setEditingDraft(e.target.value)}
+              />
+                                        <div className="flex shrink-0 gap-1">
+                                            <button
+                                                className="rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs text-white hover:bg-indigo-700"
+                                                onClick={async () => {
+                                                    if (!loggedIn) { onLoginRequired?.(); return; }
+                                                    const id = c.id ?? c.commentId;
+                                                    const text = editingDraft.trim();
+                                                    if (!id || !text) return;
+                                                    try {
+                                                        const updated = await updateComment(story.id ?? story.storyId, id, { content: text });
+                                                        setCommentList((prev) => prev.map((x) => ((x.id ?? x.commentId) === id ? (updated || { ...x, content: text }) : x)));
+                                                        setEditingId(null);
+                                                        setEditingDraft("");
+                                                    } catch (e) {
+                                                        console.error('[comment:update:error]', e);
+                                                        alert('댓글 수정에 실패했어요.');
+                                                    }
+                                                }}
+                                            >저장</button>
+                                            <button
+                                                className="rounded-md border px-2.5 py-1.5 text-xs hover:bg-neutral-50"
+                                                onClick={() => { setEditingId(null); setEditingDraft(""); }}
+                                            >취소</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div>
+                                            <div className="text-[12px] text-neutral-500">{c.author?.name || c.authorName || '익명'} · {formatDateOnly(c.createdAt)}</div>
+                                            <div className="text-sm text-neutral-800 whitespace-pre-wrap">{c.content}</div>
+                                        </div>
+                                        {(c.mine || c.isMine) && (
+                                            <div className="flex shrink-0 gap-1">
+                                                <button
+                                                    className="rounded-md border px-2.5 py-1 text-xs hover:bg-neutral-50"
+                                                    onClick={() => { setEditingId(c.id ?? c.commentId); setEditingDraft(c.content || ""); }}
+                                                >수정</button>
+                                                <button
+                                                    className="rounded-md border px-2.5 py-1 text-xs text-red-600 hover:bg-red-50"
+                                                    onClick={async () => {
+                                                        if (!loggedIn) { onLoginRequired?.(); return; }
+                                                        const id = c.id ?? c.commentId;
+                                                        if (!id) return;
+                                                        if (!confirm('댓글을 삭제할까요?')) return;
+                                                        try {
+                                                            await deleteComment(story.id ?? story.storyId, id);
+                                                            setCommentList((prev) => prev.filter((x) => (x.id ?? x.commentId) !== id));
+                                                        } catch (e) {
+                                                            console.error('[comment:delete:error]', e);
+                                                            alert('댓글 삭제에 실패했어요.');
+                                                        }
+                                                    }}
+                                                >삭제</button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
         </article>
     );
 }
 
-function RightRail({ profile, onOpenWrite, recentMyStories = [] }) {
+function RightRail({ profile, onOpenWrite, recentMyStories = [], myBookmarks = [] }) {
     const navigate = useNavigate();
     const location = useLocation();
     const isLoggedIn = !!profile?.memberId;
@@ -357,8 +583,8 @@ function RightRail({ profile, onOpenWrite, recentMyStories = [] }) {
                     <button onClick={() => navigate('/mypage')} className="rounded-xl border px-3 py-1.5 text-sm hover:bg-indigo-50">프로필</button>
                   </div>
                   <div className="mt-3 grid grid-cols-3 text-center">
-                    <Stat label="좋아요" value="128" />
                     <Stat label="관람평" value="12" />
+                    <Stat label="댓글" value="134" />
                     <Stat label="북마크" value="9" />
                   </div>
                 </>
@@ -419,17 +645,30 @@ function RightRail({ profile, onOpenWrite, recentMyStories = [] }) {
             {/* 북마크한 영화 (로그인 사용자 전용) */}
             {isLoggedIn && (
               <Card title="북마크한 영화">
-                <div className="flex gap-2 overflow-x-auto no-scrollbar pr-1">
-                  {[
-                    'https://image.tmdb.org/t/p/w300/6dr8Lz4LZrQJ7sG0mq06R4G3Ecr.jpg',
-                    'https://image.tmdb.org/t/p/w300/3xqJmXz3wQF8yZL1JqvQnZrX1qS.jpg',
-                    'https://image.tmdb.org/t/p/w300/9dpjssW6XMYp3B5qScbwoCOAayG.jpg',
-                  ].map((src, i) => (
-                    <div key={i} className="aspect-[2/3] w-16 shrink-0 overflow-hidden rounded-md border">
-                      <img src={src} className="h-full w-full object-cover" />
-                    </div>
-                  ))}
-                </div>
+                {(!Array.isArray(myBookmarks) || myBookmarks.length === 0) ? (
+                  <div className="text-[12px] text-neutral-500">아직 북마크한 영화가 없어요.</div>
+                ) : (
+                  <div className="flex gap-2 overflow-x-auto no-scrollbar pr-1">
+                    {myBookmarks.map((s, i) => {
+                      const poster = s?.movie?.poster || s?.posterUrl || '/images/poster-placeholder.png';
+                      const title = s?.movie?.title || s?.movieTitle || '';
+                      const movieId = s?.movie?.id ?? s?.movieId;
+                      const storyId = s?.id ?? s?.storyId;
+                      return (
+                        <button
+                          key={storyId ?? i}
+                          className="aspect-[2/3] w-16 shrink-0 overflow-hidden rounded-md border"
+                          onClick={() => {
+                            if (movieId) navigate(`/movies/${movieId}`); else if (storyId) navigate(`/stories/${storyId}`);
+                          }}
+                          title={title}
+                        >
+                          <img src={poster} alt={title} className="h-full w-full object-cover" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </Card>
             )}
 

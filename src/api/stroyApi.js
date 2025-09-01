@@ -1,6 +1,6 @@
 import api from './axiosInstance';
 
-// Get current user profile
+// 스토리용 프로필 조회
 export const getProfile = async () => {
     const res = await api.get('/members/me');
     return res.data;
@@ -12,12 +12,11 @@ export const getEligibleBookings = async (memberId) => {
     return res.data;
 };
 
-// Get all stories
+// 스토리 목록 조회
 export const getStories = async () => {
     const res = await api.get('/stories');
-    return res.data;
+    return res.data.content ?? [];
 };
-
 // Get stories by a member
 export const getMyStories = async (memberId) => {
     const res = await api.get(`/members/${memberId}/stories`);

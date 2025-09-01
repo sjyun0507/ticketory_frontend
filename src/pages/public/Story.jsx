@@ -1,6 +1,9 @@
 import React,{ useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Star, Film } from "lucide-react";
-import {getStories} from "../../api/stroyApi.js";
+import { getProfile, getStories, createStory, getEligibleBookings } from "../../api/stroyApi.js";
+import Modal from "../../components/Modal.jsx";
+import { getMovieDetail } from "../../api/movieApi.js";
 
 /*
  StoryFeed - 카드형 실관람평 피드 (인스타그램 느낌)
@@ -10,25 +13,168 @@ import {getStories} from "../../api/stroyApi.js";
  */
 export default function StoryFeed() {
     const [stories, setStories] = useState([]);
+    const [profile, setProfile] = useState(null);
+    const [writeOpen, setWriteOpen] = useState(false);
+    const [eligible, setEligible] = useState([]);
+    const [selectedBooking, setSelectedBooking] = useState(null);
+    const [storyForm, setStoryForm] = useState({ rating: 4.5, content: "", tags: "" });
+    const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
+        getProfile().then(setProfile);
         getStories().then(data => setStories(data));
     }, []);
+
+    useEffect(() => {
+      if (!profile?.memberId) return;
+      (async () => {
+        try {
+          const page = await getEligibleBookings(profile.memberId);
+          const rows = Array.isArray(page?.content) ? page.content : (Array.isArray(page) ? page : []);
+          // filter paid & no existing story
+          const paid = rows.filter(r => r?.paymentStatus === 'PAID' && !r?.hasStory);
+          // hydrate posterUrl if missing
+          const withPosters = await Promise.all(paid.map(async (r) => {
+            if (r.posterUrl) return r;
+            try {
+              const detail = await getMovieDetail(r.movieId);
+              return { ...r, posterUrl: detail?.posterUrl || detail?.poster || detail?.images?.poster };
+            } catch {
+              return r;
+            }
+          }));
+          setEligible(withPosters);
+        } catch (e) {
+          console.error('[eligible:load:error]', e);
+          setEligible([]);
+        }
+      })();
+    }, [profile?.memberId]);
 
     return (
         <div className="min-h-screen bg-neutral-50">
 
-            <main className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <main className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <section className="lg:col-span-2 space-y-6">
-                    {stories.map((s) => (
+                    {Array.isArray(stories) && stories.map((s) => (
                         <StoryCard key={s.id} story={s} />
                     ))}
                 </section>
 
                 <aside className="hidden lg:block">
-                    <RightRail />
+                    <RightRail profile={profile} onOpenWrite={() => setWriteOpen(true)} />
                 </aside>
             </main>
+
+            <Modal isOpen={writeOpen} onClose={() => setWriteOpen(false)} title="관람평 작성">
+  <div className="space-y-4">
+    {/* Step 1: 결제 완료된 예매 선택 (포스터 그리드) */}
+    <div>
+      <div className="mb-2 text-sm font-semibold">내 최근 예매 (결제완료만)</div>
+      {eligible.length === 0 ? (
+        <div className="text-sm text-neutral-500">작성 가능한 예매가 없어요.</div>
+      ) : (
+        <div className="grid grid-cols-3 gap-3">
+          {eligible.map(b => (
+            <button
+              key={b.bookingId}
+              type="button"
+              onClick={() => setSelectedBooking(b)}
+              className={`group relative overflow-hidden rounded-lg border ${selectedBooking?.bookingId === b.bookingId ? 'ring-2 ring-black' : ''}`}
+            >
+              <div className="aspect-[2/3] w-full overflow-hidden">
+                <img src={b.posterUrl || '/images/poster-placeholder.png'} alt={b.movieTitle}
+                     className="h-full w-full object-cover group-hover:scale-105 transition-transform" />
+              </div>
+              <div className="p-2 text-left">
+                <div className="truncate text-[13px] font-medium">{b.movieTitle}</div>
+                <div className="text-[11px] text-neutral-500">{new Date(b.screeningStartAt).toLocaleString('ko-KR')}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+
+    {/* Step 2: 평점/내용/태그 */}
+    <div className="grid grid-cols-1 gap-3">
+      <label className="flex items-center justify-between gap-3">
+        <span className="text-sm text-neutral-700">평점</span>
+        <input
+          type="range"
+          min="0" max="5" step="0.5"
+          value={storyForm.rating}
+          onChange={(e) => setStoryForm(f => ({ ...f, rating: parseFloat(e.target.value) }))}
+          className="w-40"
+        />
+        <span className="text-sm w-8 text-right">{Number.isFinite(storyForm.rating) ? storyForm.rating.toFixed(1) : '0.0'}</span>
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <span className="text-sm text-neutral-700">내용</span>
+        <textarea
+          rows={5}
+          className="w-full rounded-lg border px-3 py-2 text-sm"
+          placeholder="영화 어땠어요? 스포는 자제!"
+          value={storyForm.content}
+          onChange={(e) => setStoryForm(f => ({ ...f, content: e.target.value }))}
+        />
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <span className="text-sm text-neutral-700">태그 (쉼표로 구분)</span>
+        <input
+          type="text"
+          className="w-full rounded-lg border px-3 py-2 text-sm"
+          placeholder="레이싱, IMAX추천"
+          value={storyForm.tags}
+          onChange={(e) => setStoryForm(f => ({ ...f, tags: e.target.value }))}
+        />
+      </label>
+    </div>
+
+    <div className="flex items-center justify-end gap-2 pt-2">
+      <button onClick={() => setWriteOpen(false)} className="rounded-xl border px-4 py-2 text-sm">취소</button>
+      <button
+        disabled={!selectedBooking || submitting || !storyForm.content.trim()}
+        onClick={async () => {
+          if (!selectedBooking) return;
+          setSubmitting(true);
+          try {
+            const payload = {
+              bookingId: selectedBooking.bookingId,
+              rating: storyForm.rating,
+              content: storyForm.content.trim(),
+              tags: storyForm.tags.split(',').map(t => t.trim()).filter(Boolean),
+            };
+            const saved = await createStory(payload);
+            // normalize for feed card expectations
+            const normalized = {
+              ...saved,
+              name: saved?.member?.name,
+              avatarUrl: saved?.member?.avatarUrl,
+              movie: { ...saved?.movie, poster: saved?.movie?.poster || saved?.movie?.posterUrl },
+            };
+            // prepend to feed
+            setStories(prev => Array.isArray(prev) ? [normalized, ...prev] : [normalized]);
+            // reset & close
+            setSelectedBooking(null);
+            setStoryForm({ rating: 4.5, content: "", tags: "" });
+            setWriteOpen(false);
+          } catch (e) {
+            console.error('[story:create:error]', e);
+            alert('관람평 저장에 실패했어요. 잠시 후 다시 시도해 주세요.');
+          } finally {
+            setSubmitting(false);
+          }
+        }}
+        className="rounded-xl bg-black px-4 py-2 text-white text-sm disabled:opacity-50"
+      >
+        {submitting ? '저장 중…' : '저장'}
+      </button>
+    </div>
+  </div>
+</Modal>
         </div>
     );
 }
@@ -36,20 +182,32 @@ export default function StoryFeed() {
 function StoryCard({ story }) {
     const [liked, setLiked] = useState(false);
 
+    const avatar = story?.avatarUrl || "/images/avatar-placeholder.png";
+    const name = story?.name || "익명";
+    const lastWatched = story?.lastWatchedAt || "";
+    const ratingText = Number.isFinite(story?.rating) ? story.rating.toFixed(1) : "—";
+    const poster = story?.movie?.poster || "/images/poster-placeholder.png";
+    const movieTitle = story?.movie?.title || "";
+    const age = story?.movie?.age || "";
+    const content = story?.content || "";
+    const tags = Array.isArray(story?.tags) ? story.tags : [];
+    const likes = Number.isFinite(story?.likes) ? story.likes : 0;
+    const comments = Number.isFinite(story?.comments) ? story.comments : 0;
+
     return (
 
         <article className="rounded-2xl border bg-white shadow-sm hover:shadow transition-shadow">
             {/* 상단: 사용자 정보 */}
             <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-3">
-                    <img src={story.author.avatar} alt="avatar" className="h-9 w-9 rounded-full object-cover" />
+                    <img src={avatar} alt="avatar" className="h-9 w-9 rounded-full object-cover" />
                     <div>
                         <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">{story.author.name}</span>
-                            <span className="text-[11px] text-neutral-500">{story.meta.theater} · {story.meta.when}</span>
+                            <span className="text-sm font-medium">{name}</span>
+                            <span className="text-[11px] text-neutral-500">{lastWatched}</span>
                         </div>
                         <div className="flex items-center gap-1 text-[11px] text-neutral-500">
-                            <Star className="w-3.5 h-3.5 fill-current" /> <span>{story.rating.toFixed(1)}</span>
+                            <Star className="w-3.5 h-3.5 fill-current" /> <span>{ratingText}</span>
                             <span className="mx-1">·</span>
                             <span>관람 인증</span>
                         </div>
@@ -64,24 +222,24 @@ function StoryCard({ story }) {
                     {/* 포스터: 2:3 비율 고정 */}
                     <div className="relative">
                         <div className="aspect-[2/3] overflow-hidden rounded-xl border">
-                            <img src={story.movie.poster} alt={story.movie.title}
+                            <img src={poster} alt={movieTitle}
                                  className="h-full w-full object-cover" />
                         </div>
                         <div className="absolute left-2 top-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[11px] text-white">
-                            {story.movie.age}
+                            {age}
                         </div>
                     </div>
 
                     {/* 텍스트 본문 */}
                     <div className="flex flex-col">
-                        <h3 className="text-[15px] font-semibold leading-tight mb-1">{story.movie.title}</h3>
+                        <h3 className="text-[15px] font-semibold leading-tight mb-1">{movieTitle}</h3>
                         <p className="text-sm text-neutral-800 whitespace-pre-line">
-                            {story.content}
+                            {content}
                         </p>
 
                         {/* 해시태그 */}
                         <div className="mt-2 flex flex-wrap gap-1.5">
-                            {(story.tags ?? []).map((t) => (
+                            {tags.map((t) => (
                                 <span key={t} className="rounded-full border px-2 py-0.5 text-[11px] text-neutral-600">#{t}</span>
                             ))}
                         </div>
@@ -101,11 +259,11 @@ function StoryCard({ story }) {
                 <div className="flex items-center gap-4">
                     <button onClick={() => setLiked(!liked)} className={`group flex items-center gap-1 text-sm ${liked ? "text-neutral-900" : "text-neutral-600"}`}>
                         <Heart className={`w-5 h-5 ${liked ? "fill-current" : ""}`} />
-                        <span>{liked ? story.likes + 1 : story.likes}</span>
+                        <span>{liked ? likes + 1 : likes}</span>
                     </button>
                     <button className="flex items-center gap-1 text-sm text-neutral-600">
                         <MessageCircle className="w-5 h-5" />
-                        <span>{story.comments}</span>
+                        <span>{comments}</span>
                     </button>
                     <button className="flex items-center gap-1 text-sm text-neutral-600">
                         <Share2 className="w-5 h-5" />
@@ -118,20 +276,21 @@ function StoryCard({ story }) {
     );
 }
 
-function RightRail() {
+function RightRail({ profile, onOpenWrite }) {
+    const navigate = useNavigate();
     return (
         <div className="sticky top-16 space-y-4">
             {/* 내 활동 요약 */}
             <Card>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <img src="https://images.unsplash.com/photo-1544723795-3fb6469f5b39?q=80&w=300&auto=format&fit=crop" className="h-10 w-10 rounded-full object-cover" />
+                        <img src={profile?.avatarUrl} alt="avatar" className="h-10 w-10 rounded-full object-cover" />
                         <div>
-                            <div className="text-sm font-semibold">Rachel</div>
-                            <div className="text-[11px] text-neutral-500">최근 관람: 8월 27일</div>
+                            <div className="text-sm font-semibold">{profile?.name}</div>
+                            <div className="text-[11px] text-neutral-500">최근 관람: {profile?.lastWatchedAt}</div>
                         </div>
                     </div>
-                    <button className="rounded-xl border px-3 py-1.5 text-sm">프로필</button>
+                    <button onClick={() => navigate('/mypage')} className="rounded-xl border px-3 py-1.5 text-sm">프로필</button>
                 </div>
                 <div className="mt-3 grid grid-cols-3 text-center">
                     <Stat label="좋아요" value="128" />
@@ -144,7 +303,7 @@ function RightRail() {
                 <div className="rounded-2xl bg-gradient-to-tr from-indigo-500 via-fuchsia-500 to-rose-500 p-4 text-white">
                     <div className="text-sm opacity-90">Ticketory — Ticket × Story</div>
                     <div className="mt-1 text-lg font-semibold leading-tight">당신의 관람이 이야기가 되는 곳</div>
-                    <button className="mt-3 w-full rounded-xl bg-white/90 px-3 py-2 text-sm text-neutral-900 hover:bg-white">관람평 쓰기</button>
+                    <button onClick={onOpenWrite} className="mt-3 w-full rounded-xl bg-white/90 px-3 py-2 text-sm text-neutral-900 hover:bg-white">관람평 쓰기</button>
                 </div>
             </Card>
 

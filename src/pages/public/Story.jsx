@@ -1,15 +1,4 @@
 import React,{ useState, useEffect } from "react";
-// util: 날짜만 표시 (시간 제거)
-function formatDateOnly(v) {
-  if (!v) return '';
-  const d = new Date(v);
-  if (!Number.isNaN(d.getTime())) {
-    return d.toLocaleDateString('ko-KR'); // 예: 2025. 8. 27.
-  }
-  // ISO가 아니거나 파싱 실패 시 안전 분기: 'T' 또는 공백 앞까지
-  const s = String(v);
-  return s.includes('T') ? s.split('T')[0] : s.split(' ')[0];
-}
 import { useNavigate } from "react-router-dom";
 import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Star, Film } from "lucide-react";
 import { getProfile, getStories, createStory, getEligibleBookings } from "../../api/stroyApi.js";
@@ -22,6 +11,18 @@ import { getMovieDetail } from "../../api/movieApi.js";
  - 버튼: 모던/중립 톤 (강조 색 사용 X)
  - 우측 여백(라이트 레일): 해시태그/빠른 필터/주간 픽/내 티켓 바로가기/가이드
  */
+
+// util: 날짜만 표시 (시간 제거)
+function formatDateOnly(v) {
+    if (!v) return '';
+    const d = new Date(v);
+    if (!Number.isNaN(d.getTime())) {
+        return d.toLocaleDateString('ko-KR'); // 예: 2025. 8. 27.
+    }
+    // ISO가 아니거나 파싱 실패 시 안전 분기: 'T' 또는 공백 앞까지
+    const s = String(v);
+    return s.includes('T') ? s.split('T')[0] : s.split(' ')[0];
+}
 export default function StoryFeed() {
     const [stories, setStories] = useState([]);
     const [profile, setProfile] = useState(null);
@@ -159,9 +160,11 @@ export default function StoryFeed() {
           try {
             const payload = {
               bookingId: selectedBooking.bookingId,
+              movieId: selectedBooking.movieId,
               rating: storyForm.rating,
               content: storyForm.content.trim(),
-              tags: storyForm.tags.split(',').map(t => t.trim()).filter(Boolean),
+              tags: storyForm.tags ? storyForm.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+              hasProof: true,
             };
             const saved = await createStory(payload);
             // normalize for feed card expectations
@@ -171,9 +174,8 @@ export default function StoryFeed() {
               avatarUrl: saved?.member?.avatarUrl,
               movie: { ...saved?.movie, poster: saved?.movie?.poster || saved?.movie?.posterUrl },
             };
-            // prepend to feed
             setStories(prev => Array.isArray(prev) ? [normalized, ...prev] : [normalized]);
-            // reset & close
+            setEligible(prev => prev.map(b => b.bookingId === selectedBooking.bookingId ? { ...b, hasStory: true } : b));
             setSelectedBooking(null);
             setStoryForm({ rating: 4.5, content: "", tags: "" });
             setWriteOpen(false);
@@ -337,7 +339,8 @@ function RightRail({ profile, onOpenWrite }) {
                     ))}
                 </ul>
                 <div className="mt-3 text-right">
-                    <a className="text-[12px] text-neutral-600 hover:text-neutral-900" href="#">더 보기</a>
+                    <a className="text-[12px] text-neutral-600 hover:text-neutral-900"
+                    onClick={()=>navigate('/mypage/myreviews')}>리뷰 더 보기</a>
                 </div>
             </Card>
 

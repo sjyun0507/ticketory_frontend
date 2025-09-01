@@ -23,7 +23,7 @@ export const getStories = async () => {
     const res = await api.get('/stories');
     return res.data.content ?? [];
 };
-// Get stories by a member
+//내 스토리 목록
 export const getMyStories = async (memberId) => {
     const res = await api.get(`/members/${memberId}/stories`);
     return res.data;

@@ -190,7 +190,7 @@ export default function MyPage() {
             <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
                 <QuickAction to="/mypage/bookings" label="예매 내역" icon="ticket" />
                 <QuickAction to="/mypage/points" label="포인트 내역" icon="coin" />
-                <QuickAction to="/mypage/reviews" label="내 리뷰" icon="review" />
+                <QuickAction to="/mypage/myreviews" label="내 리뷰" icon="review" />
                 <QuickAction to="/mypage/settings" label="회원정보수정" icon="settings" />
             </section>
 

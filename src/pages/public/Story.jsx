@@ -77,6 +77,41 @@ export default function StoryFeed() {
     const location = useLocation();
     const loggedIn = !!profile?.memberId;
 
+    // 북마크 토글 시 우측 레일(북마크한 영화) 즉시 반영
+    const handleBookmarkChange = (story, next) => {
+      const storyId = story?.id ?? story?.storyId;
+      if (!storyId) return;
+
+      // 1) 피드 내 해당 카드의 bookmarked 플래그 동기화
+      setStories((prev) => Array.isArray(prev)
+        ? prev.map((s) => ((s?.id ?? s?.storyId) === storyId ? { ...s, bookmarked: next } : s))
+        : prev);
+
+      // 2) 우측 레일 "북마크한 영화" 목록에 즉시 반영 (optimistic)
+      setBookmarkedStories((prev) => {
+        const arr = Array.isArray(prev) ? prev.slice() : [];
+        if (next) {
+          // 추가(중복 방지). 가능한 한 포스터/타이틀을 채움
+          const exists = arr.some((x) => (x?.id ?? x?.storyId) === storyId);
+          if (!exists) {
+            const poster = story?.movie?.poster || story?.movie?.posterUrl || story?.posterUrl || story?.moviePoster;
+            const title = story?.movie?.title || story?.movieTitle || '';
+            const movieId = story?.movie?.id ?? story?.movieId;
+            const enriched = {
+              ...story,
+              movie: { ...(story?.movie || {}), poster, title, id: movieId },
+              id: storyId,
+            };
+            arr.unshift(enriched);
+          }
+          // 최대 12개 정도만 유지(가로 스크롤 과도 방지)
+          return arr.slice(0, 12);
+        }
+        // 제거
+        return arr.filter((x) => (x?.id ?? x?.storyId) !== storyId);
+      });
+    };
+
     useEffect(() => {
         getProfile().then(setProfile);
         getStories().then(data => setStories(data));
@@ -157,6 +192,7 @@ export default function StoryFeed() {
                               try { sessionStorage.setItem('postLoginRedirect', back); } catch {}
                               navigate(`/login?redirect=${encodeURIComponent(back)}`, { state: { from: back } });
                             }}
+                            onBookmarkChange={handleBookmarkChange}
                           />
                         );
                     })}
@@ -294,7 +330,7 @@ export default function StoryFeed() {
     );
 }
 
-function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
+function StoryCard({ story, loggedIn = false, onLoginRequired, profile, onBookmarkChange }) {
     const [liked, setLiked] = useState(!!story?.liked);
     const [likeCount, setLikeCount] = useState(
         Number.isFinite(story?.likeCount) ? story.likeCount :
@@ -569,22 +605,28 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
                 <button
                   onClick={
                     async () => {
-                      if (!loggedIn) { onLoginRequired?.(); return; }
-                      if (bookmarkBusy) return;
-                      setBookmarkBusy(true);
-                      const next = !bookmarked;
-                      setBookmarked(next);
-                      try {
-                        const id = story.id ?? story.storyId;
-                        if (next) await bookmarkStory(id);
-                        else await unbookmarkStory(id);
-                      } catch (e) {
-                        setBookmarked(!next);
-                        console.error('[story:bookmark:error]', e);
-                      } finally {
-                        setBookmarkBusy(false);
-                      }
-                    }
+  if (!loggedIn) { onLoginRequired?.(); return; }
+  if (bookmarkBusy) return;
+  setBookmarkBusy(true);
+  const next = !bookmarked;
+
+  // optimistic: 카드 상태/우측 레일 동시 반영
+  setBookmarked(next);
+  try { onBookmarkChange?.(story, next); } catch {}
+
+  try {
+    const id = story.id ?? story.storyId;
+    if (next) await bookmarkStory(id);
+    else await unbookmarkStory(id);
+  } catch (e) {
+    // rollback both
+    setBookmarked(!next);
+    try { onBookmarkChange?.(story, !next); } catch {}
+    console.error('[story:bookmark:error]', e);
+  } finally {
+    setBookmarkBusy(false);
+  }
+}
                   }
                   className={`transition-colors ${bookmarked ? 'text-indigo-500' : 'text-neutral-500 hover:text-neutral-800'}`}
                   aria-pressed={bookmarked}

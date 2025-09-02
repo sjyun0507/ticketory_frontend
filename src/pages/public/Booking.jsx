@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import {getMovies, getScreenings} from "../../api/movieApi.js";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../../store/useAuthStore.js";
+import { DateStrip } from "../admin/AdminScreenings.jsx";
 /* 예매 페이지
 영화별 상영목록 > 날짜필터링에서 상영시간 노출> 예매하기 흐름
 */
@@ -25,6 +26,30 @@ function toHHMMLocal(date) {
     const mm = String(date.getMinutes()).padStart(2, "0");
     return `${hh}:${mm}`;
 }
+
+// ---- DateStrip helpers (KST date keys) ----
+function toKstDateKey(date) {
+  // Use local time as KST in browser (assumes user is KST or data is already normalized)
+  return toYmdLocal(date);
+}
+function parseKeyToDate(key) {
+  const [y, m, d] = key.split("-").map((v) => Number(v));
+  return new Date(y, m - 1, d);
+}
+function addDaysKey(baseKey, delta) {
+  const base = parseKeyToDate(baseKey);
+  base.setDate(base.getDate() + delta);
+  return toKstDateKey(base);
+}
+function dateLabel(key, todayKey) {
+  if (key === todayKey) return "오늘";
+  const d = parseKeyToDate(key);
+  const M = d.getMonth() + 1;
+  const D = d.getDate();
+  const weekday = d.toLocaleDateString("ko-KR", { weekday: "short" }); // 월,화...
+  return `${M}/${D}(${weekday})`;
+}
+// ---- /DateStrip helpers ----
 
 //관람등급
 const Badge = ({ text }) => {
@@ -115,6 +140,11 @@ const Bookings = () => {
   const isAuthenticated = !!token;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  // DateStrip states
+  const todayKey = useMemo(() => toKstDateKey(new Date()), []);
+  const [activeDate, setActiveDate] = useState(todayKey);
+  const [weekStartKey, setWeekStartKey] = useState(todayKey);
+  const [dateHasItems, setDateHasItems] = useState(new Set([todayKey]));
   const preselectedMovieIdParam = searchParams.get("movieId");
   const preselectedMovieId = preselectedMovieIdParam ? Number(preselectedMovieIdParam) : null;
   const [selectedDate, setSelectedDate] = useState(() => new Date());
@@ -128,6 +158,39 @@ const Bookings = () => {
   const [screeningsError, setScreeningsError] = useState(null);
   const [fallbackNotice, setFallbackNotice] = useState("");
   const [hasFutureByMovieId, setHasFutureByMovieId] = useState({});
+
+  // Sync selectedDate with activeDate (DateStrip)
+  useEffect(() => {
+    if (activeDate && /^\d{4}-\d{2}-\d{2}$/.test(activeDate)) {
+      setSelectedDate(parseKeyToDate(activeDate));
+    }
+  }, [activeDate]);
+
+  // Prefetch availability for the current 7-day window to enable/disable tabs
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const startKey = weekStartKey || todayKey;
+        const keys = Array.from({ length: 7 }, (_, i) => addDaysKey(startKey, i));
+        const results = await Promise.allSettled(
+          keys.map((k) => getScreenings(k, null, { page: 0, size: 1 }))
+        );
+        const next = new Set();
+        results.forEach((res, idx) => {
+          if (res.status === "fulfilled") {
+            const data = res.value;
+            const list = Array.isArray(data?.content) ? data.content : Array.isArray(data) ? data : [];
+            if (list.length > 0) next.add(keys[idx]);
+          }
+        });
+        if (!cancelled) setDateHasItems(next);
+      } catch {
+        // ignore; keep previous availability
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [weekStartKey, todayKey]);
 
   useEffect(() => {
     if (preselectedMovieId !== null && preselectedMovieId !== undefined) {
@@ -291,18 +354,15 @@ const Bookings = () => {
     })();
   }, [selectedDate, selectedMovieId, movies]);
 
-  const handleDateChange = (e) => {
-    const val = e.target.value; // yyyy-mm-dd
-    if (!val) return;
-    const [yy, mm, dd] = val.split("-");
-    setSelectedDate(new Date(Number(yy), Number(mm) - 1, Number(dd)));
-  };
 
   const openSeatPage = (slot) => {
+    const dateStr = (typeof activeDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(activeDate))
+      ? activeDate
+      : toYmdLocal(selectedDate || new Date());
     const params = new URLSearchParams({
       movieId: String(selectedMovieId ?? ''),
       screeningId: String(slot.id ?? ''),
-      date: dateInputValue,
+      date: dateStr,
       start: slot.start ?? '',
       end: slot.end ?? '',
       auditorium: String(slot.auditorium ?? ''),
@@ -337,20 +397,6 @@ const Bookings = () => {
     navigate(seatUrl);
   };
 
-  const dateInputValue = useMemo(() => {
-    const yyyy = selectedDate.getFullYear();
-    const mm = String(selectedDate.getMonth() + 1).padStart(2, "0");
-    const dd = String(selectedDate.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }, [selectedDate]);
-
-  const todayValue = useMemo(() => {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }, []);
 
   return (
       <main className="max-w-[1200px] mx-auto px-4 py-10 min-h-[75vh] bg-gradient-to-b from-white via-indigo-50/40 to-white rounded-2xl">
@@ -360,16 +406,18 @@ const Bookings = () => {
                   <h1 className="text-2xl font-semibold">예매</h1>
                   <p className="mt-1 text-gray-500 text-sm"> 영화별 상영시간을 한눈에 확인하세요. 온라인 티켓 예매의 경우 상영 시간 시작 30분 전까지 예매 또는 취소가 가능합니다.</p>
               </div>
-              <label className="inline-flex items-center gap-3">
-                  <span className="text-sm text-gray-600">날짜 선택</span>
-                  <input
-                      type="date"
-                      value={dateInputValue}
-                      onChange={handleDateChange}
-                      className="border rounded-md px-3 py-2"
-                      min={toYmdLocal(new Date())}
-                  />
-              </label>
+              <div>
+                <DateStrip
+                  activeDate={activeDate}
+                  setActiveDate={setActiveDate}
+                  weekStartKey={weekStartKey}
+                  setWeekStartKey={setWeekStartKey}
+                  todayKey={todayKey}
+                  dateHasItems={dateHasItems}
+                  addDaysKey={addDaysKey}
+                  dateLabel={dateLabel}
+                />
+              </div>
           </header>
 
       {/* 본문 레이아웃 */}

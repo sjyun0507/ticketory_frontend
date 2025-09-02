@@ -4,7 +4,6 @@ import { Heart, MessageCircle, Bookmark, MoreHorizontal, Star } from "lucide-rea
 import { getProfile, getStories, createStory, getEligibleBookings, getMyStories, likeStory, unlikeStory, bookmarkStory, unbookmarkStory, getMyBookmarkedStories, getComments, addComment,updateComment,deleteComment } from "../../api/storyApi.js";
 import Modal from "../../components/Modal.jsx";
 import { getMovieDetail } from "../../api/movieApi.js";
-import {getPublicMemberSummary} from "../../api/memberApi.js";
 import defaultPoster from '../../assets/styles/poster-placeholder.png';
 import defaultAvatar from '../../assets/styles/avatar-placeholder.png';
 /*
@@ -13,6 +12,18 @@ import defaultAvatar from '../../assets/styles/avatar-placeholder.png';
  - 버튼: 모던/중립 톤 (강조 색 사용 X)
  - 우측 여백(라이트 레일): 해시태그/빠른 필터/주간 픽/내 티켓 바로가기/가이드
  */
+
+// 프론트 가드: 서버 컬럼 길이 보호용 (DB가 짧으면 이 값을 더 낮춰 쓰세요)
+const MAX_STORY_LEN = 1000;
+
+// --- error message extractor (HTTP) ---
+function getErrMsg(err) {
+  const res = err?.response;
+  if (!res) return err?.message || '요청에 실패했어요';
+  const data = res.data;
+  if (typeof data === 'string') return data;
+  return data?.message || data?.error || `HTTP ${res.status}`;
+}
 
 // util: 날짜만 표시 (시간 제거)
 function formatDateOnly(v) {
@@ -24,6 +35,20 @@ function formatDateOnly(v) {
     // ISO가 아니거나 파싱 실패 시 안전 분기: 'T' 또는 공백 앞까지
     const s = String(v);
     return s.includes('T') ? s.split('T')[0] : s.split(' ')[0];
+}
+
+// --- Like heart pop/burst CSS (scoped via a small helper) ---
+function LikeFxCSS() {
+  return (
+    <style>{`
+      @keyframes heart-pop { 0% { transform: scale(0.95); } 45% { transform: scale(1.45); } 100% { transform: scale(1); } }
+      @keyframes particle-burst { 0% { transform: translate(0,0) scale(0.85); opacity: 0; } 25% { opacity: 1; } 100% { transform: var(--tr) scale(0); opacity: 0; } }
+      .like-pop { animation: heart-pop 450ms ease-out; }
+      .like-glow { filter: drop-shadow(0 0 6px currentColor); }
+      .particle { position: absolute; width: 9px; height: 9px; border-radius: 9999px; background: currentColor; opacity: 0; }
+      .particle.burst { animation: particle-burst 800ms ease-out forwards; }
+    `}</style>
+  );
 }
 
 
@@ -55,7 +80,7 @@ function StarRating({ value = 0, onChange }) {
           );
         })}
       </div>
-      <span className="text-sm w-10 text-right">{Number.isFinite(value) ? value.toFixed(1) : '0.0'}</span>
+      <span className="text-sm w-10 text-right"> {Number.isFinite(value) ? value.toFixed(1) : '0.0'}</span>
     </div>
   );
 }
@@ -113,8 +138,25 @@ export default function StoryFeed() {
     };
 
     useEffect(() => {
-        getProfile().then(setProfile);
-        getStories().then(data => setStories(data));
+      (async () => {
+        try {
+          const p = await getProfile();
+          setProfile(p);
+        } catch (e) {
+          console.error('[profile:load:error]', e);
+        }
+        try {
+          const list = await getStories();
+          if (Array.isArray(list?.content)) setStories(list.content);
+          else setStories(Array.isArray(list) ? list : []);
+        } catch (e) {
+          console.error('[stories:load:error]', e);
+          const msg = getErrMsg(e);
+          // 사용자에게 간단 안내 (500 등)
+          try { alert(`관람평 목록을 불러오지 못했어요.\n${msg}`); } catch {}
+          setStories([]);
+        }
+      })();
     }, []);
 
     useEffect(() => {
@@ -177,8 +219,9 @@ export default function StoryFeed() {
 
     return (
         <div className="min-h-screen bg-white">
+            <LikeFxCSS />
             <main className="mx-auto max-w-6xl bg-neutral-100 px-4 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <section className="lg:col-span-2 space-y-4 max-w-[680px] w-full mx-auto">
+                <section className="lg:col-span-2 space-y-4 max-w-[640px] w-full mx-auto">
                     {Array.isArray(stories) && stories.map((s, idx) => {
                         const key = s?.id ?? s?.storyId ?? s?.uuid ?? `${s?.memberId ?? 'm'}-${s?.movie?.id ?? s?.movieId ?? 'mv'}-${s?.createdAt ?? idx}`;
                         return (
@@ -198,7 +241,7 @@ export default function StoryFeed() {
                     })}
                 </section>
 
-                <aside className="hidden lg:block">
+                <aside className="hidden lg:block pr-3 lg:pr-4">
                     <RightRail profile={profile} recentMyStories={myRecentStories} myBookmarks={bookmarkedStories} onOpenWrite={() => setWriteOpen(true)} />
                 </aside>
             </main>
@@ -247,19 +290,13 @@ export default function StoryFeed() {
           className="w-full rounded-lg border px-3 py-2 text-sm"
           placeholder="영화 어땠어요? 스포는 자제!"
           value={storyForm.content}
-          onChange={(e) => setStoryForm(f => ({ ...f, content: e.target.value }))}
+          maxLength={MAX_STORY_LEN}
+          onChange={(e) => {
+            const v = (e.target.value || '').slice(0, MAX_STORY_LEN);
+            setStoryForm(f => ({ ...f, content: v }));
+          }}
         />
-      </label>
-
-      <label className="flex flex-col gap-1">
-        <span className="text-sm text-neutral-700">태그 (쉼표로 구분)</span>
-        <input
-          type="text"
-          className="w-full rounded-lg border px-3 py-2 text-sm"
-          placeholder="레이싱, IMAX추천"
-          value={storyForm.tags}
-          onChange={(e) => setStoryForm(f => ({ ...f, tags: e.target.value }))}
-        />
+        <div className="mt-1 text-right text-[11px] text-neutral-500">{storyForm.content.length}/{MAX_STORY_LEN}</div>
       </label>
     </div>
 
@@ -269,43 +306,48 @@ export default function StoryFeed() {
         disabled={!selectedBooking || submitting || !storyForm.content.trim()}
         onClick={async () => {
           if (!selectedBooking) return;
+          if ((storyForm.content || '').length > MAX_STORY_LEN) {
+            alert(`내용은 최대 ${MAX_STORY_LEN}자까지 입력할 수 있어요.`);
+            setSubmitting(false);
+            return;
+          }
           setSubmitting(true);
           try {
             const payload = {
               bookingId: selectedBooking.bookingId,
               movieId: selectedBooking.movieId,
               rating: storyForm.rating,
-              content: storyForm.content.trim(),
+              content: storyForm.content.trim().slice(0, MAX_STORY_LEN),
               tags: storyForm.tags ? storyForm.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
               hasProof: true,
             };
-              const saved = await createStory(payload);
+            console.debug('[story:create:req] payload', payload);
+            const saved = await createStory(payload);
 
-              // 보강: 응답에 member/movie 포스터가 비어있으면 각각 가져와서 채움
-              let memberName = saved?.member?.name;
-              let memberAvatar = saved?.member?.avatarUrl;
-              if (!memberName || !memberAvatar) {
-                  try {
-                      const p = await getProfile();
-                      memberName = memberName || p?.name;
-                      memberAvatar = memberAvatar || p?.avatarUrl || defaultAvatar;
-                  } catch {}
-              }
-              let moviePoster = saved?.movie?.poster || saved?.movie?.posterUrl;
-              if (!moviePoster) {
-                  try {
-                      const detail = await getMovieDetail(saved?.movieId || payload.movieId);
-                      moviePoster = detail?.posterUrl || detail?.poster || detail?.images?.poster;
-                  } catch {}
-              }
+            // 보강: 응답에 member/movie 포스터가 비어있으면 각각 가져와서 채움
+            let memberName = saved?.member?.name;
+            let memberAvatar = saved?.member?.avatarUrl;
+            if (!memberName || !memberAvatar) {
+                try {
+                    const p = await getProfile();
+                    memberName = memberName || p?.name;
+                    memberAvatar = memberAvatar || p?.avatarUrl || defaultAvatar;
+                } catch {}
+            }
+            let moviePoster = saved?.movie?.poster || saved?.movie?.posterUrl;
+            if (!moviePoster) {
+                try {
+                    const detail = await getMovieDetail(saved?.movieId || payload.movieId);
+                    moviePoster = detail?.posterUrl || detail?.poster || detail?.images?.poster;
+                } catch {}
+            }
 
-              const normalized = {
-                  ...saved,
-                  name: memberName,
-                  avatarUrl: memberAvatar || defaultAvatar,
-                  movie: { ...saved?.movie, poster: moviePoster },
-              };
-
+            const normalized = {
+                ...saved,
+                name: memberName,
+                avatarUrl: memberAvatar || defaultAvatar,
+                movie: { ...saved?.movie, poster: moviePoster },
+            };
 
             setStories(prev => Array.isArray(prev) ? [normalized, ...prev] : [normalized]);
             setEligible(prev => prev.map(b => b.bookingId === selectedBooking.bookingId ? { ...b, hasStory: true } : b));
@@ -314,7 +356,8 @@ export default function StoryFeed() {
             setWriteOpen(false);
           } catch (e) {
             console.error('[story:create:error]', e);
-            alert('관람평 저장에 실패했어요. 잠시 후 다시 시도해 주세요.');
+            const msg = getErrMsg(e);
+            try { alert(`관람평 저장에 실패했어요.\n${msg}`); } catch {}
           } finally {
             setSubmitting(false);
           }
@@ -354,6 +397,8 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile, onBookma
     const [commentsError, setCommentsError] = useState("");
     const [posterSpin, setPosterSpin] = useState(false);
     const [showDetail, setShowDetail] = useState(false);
+    const [likeBurst, setLikeBurst] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
     const nav = useNavigate();
 
     useEffect(() => {
@@ -421,7 +466,6 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile, onBookma
         }
 
         (async () => {
-            // 1) If the author is the logged-in user, reuse `profile` to avoid an API call
             if (profile?.memberId && profile.memberId === id) {
                 const next = {
                   name: author?.name || profile?.name || "익명",
@@ -433,10 +477,9 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile, onBookma
             }
 
             try {
-                const { data: pub } = await getPublicMemberSummary(id);
                 const next = {
-                  name: author?.name || pub?.name || "익명",
-                  avatarUrl: author?.avatarUrl || pub?.avatarUrl || defaultAvatar,
+                  name: author?.name  || "익명",
+                  avatarUrl: author?.avatarUrl || defaultAvatar,
                 };
                 __memberCache.set(id, next);
                 if (!ignore) setAuthor(next);
@@ -456,10 +499,9 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile, onBookma
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [story?.memberId]);
     return (
-
-        <article className="rounded-xl border bg-white shadow-sm hover:shadow-md transition-shadow">
+        <article className="rounded-2xl border bg-white/95 backdrop-blur-sm p-3 shadow-sm hover:shadow-md hover:border-neutral-300 transition-all">
             {/* 상단: 사용자 정보 */}
-            <div className="flex items-center justify-between px-4 py-3">
+            <div className="relative flex items-center justify-between px-3 py-2.5">
                 <div className="flex items-center gap-3">
                     <img src={author?.avatarUrl || defaultAvatar} alt="avatar" className="h-8 w-8 rounded-full object-cover" loading="lazy" />
                     <div>
@@ -474,12 +516,48 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile, onBookma
                         </div>
                     </div>
                 </div>
-                <button className="p-1 rounded-lg hover:bg-neutral-100"><MoreHorizontal className="w-5 h-5"/></button>
+                <button
+                  className="p-1 rounded-lg hover:bg-neutral-100"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((v) => !v)}
+                  onBlur={() => setTimeout(() => setMenuOpen(false), 120)}
+                >
+                  <MoreHorizontal className="w-5 h-5"/>
+                </button>
+                {menuOpen && (
+                  <div
+                    role="menu"
+                    className="absolute right-3 top-12 z-20 w-40 overflow-hidden rounded-md border bg-white shadow-lg"
+                    onMouseDown={(e) => e.preventDefault()} // keep focus for click -> blur close after
+                  >
+                    {/* 내 글이면 수정/삭제 표시 */}
+                    {(profile?.memberId && (profile.memberId === (story?.memberId))) && (
+                      <>
+                        <MenuItem onClick={() => {
+                          setMenuOpen(false);
+                          const sid = story?.id ?? story?.storyId;
+                          if (!sid) return;
+                          try { nav(`/mypage/myreviews?edit=${sid}`); } catch (e) { console.error('[menu:navigate:edit]', e); }
+                        }}>수정</MenuItem>
+                        <MenuItem onClick={() => {
+                          setMenuOpen(false);
+                          const sid = story?.id ?? story?.storyId;
+                          if (!sid) return;
+                          try { nav(`/mypage/myreviews?delete=${sid}`); } catch (e) { console.error('[menu:navigate:delete]', e); }
+                        }}>삭제</MenuItem>
+                        <Divider />
+                      </>
+                    )}
+                    <MenuItem onClick={() => { setMenuOpen(false); alert('신고가 접수되었습니다.'); }}>신고</MenuItem>
+                    <MenuItem onClick={() => { setMenuOpen(false); alert('공유 기능은 준비중입니다.'); }}>공유</MenuItem>
+                  </div>
+                )}
             </div>
 
             {/* 포스터 + 본문 */}
-            <div className="px-4">
-                <div className="grid grid-cols-[minmax(100px,150px)_1fr] gap-3">
+            <div className="px-3">
+                <div className="grid grid-cols-[minmax(96px,136px)_1fr] gap-2.5">
                     {/* 포스터: 2:3 비율 고정 */}
                     <div className="relative" style={{ perspective: '1000px' }}>
                       <button
@@ -541,24 +619,17 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile, onBookma
                     </div>
 
                     {/* 텍스트 본문 */}
-                    <div className="flex flex-col">
-                        <h3 className="text-[14px] font-semibold leading-snug mb-1.5">{movieTitle}</h3>
-                        <p className="text-[13px] text-neutral-800 whitespace-pre-line">
+                    <div className="flex flex-col p-2.5 gap-2">
+                        <h3 className="text-[16px] font-semibold leading-snug mb-1">{movieTitle}</h3>
+                        <p className="text-[14px] leading-relaxed text-neutral-800 whitespace-pre-line">
                             {content}
                         </p>
-
-                        {/* 해시태그 */}
-                        <div className="mt-2 flex flex-wrap gap-1">
-                            {tags.map((t) => (
-                                <span key={t} className="rounded-full border px-1.5 py-0.5 text-[11px] text-neutral-600">#{t}</span>
-                            ))}
-                        </div>
                     </div>
                 </div>
             </div>
 
             {/* 하단: 인터랙션 */}
-            <div className="px-4 py-2.5 flex items-center justify-between">
+            <div className="px-3 py-2 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <button
                         onClick={
@@ -570,6 +641,11 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile, onBookma
                             // optimistic update
                             setLiked(next);
                             setLikeCount((c) => c + (next ? 1 : -1));
+                            if (next) {
+                              // trigger a short pop + particle burst
+                              setLikeBurst(true);
+                              setTimeout(() => setLikeBurst(false), 800);
+                            }
                             try {
                               if (next) await likeStory(story.id ?? story.storyId);
                               else await unlikeStory(story.id ?? story.storyId);
@@ -589,7 +665,23 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile, onBookma
                         aria-busy={likeBusy}
                         title={liked ? '좋아요 취소' : '좋아요'}
                     >
-                        <Heart className={`w-5 h-5 ${liked ? 'fill-current' : ''}`} />
+                        <span className="relative inline-flex items-center">
+                          <span className={`inline-block ${likeBurst ? 'like-pop like-glow' : ''}`}>
+                            <Heart className={`w-6 h-6 ${liked ? 'fill-current' : ''}`} />
+                          </span>
+                          {likeBurst && (
+                            <>
+                              <span className="particle burst" style={{ ['--tr']: 'translate(-4px,-18px)' }} />
+                              <span className="particle burst" style={{ ['--tr']: 'translate(10px,-16px)' }} />
+                              <span className="particle burst" style={{ ['--tr']: 'translate(18px,-4px)' }} />
+                              <span className="particle burst" style={{ ['--tr']: 'translate(-16px,-6px)' }} />
+                              <span className="particle burst" style={{ ['--tr']: 'translate(0px,18px)' }} />
+                              <span className="particle burst" style={{ ['--tr']: 'translate(-12px,12px)' }} />
+                              <span className="particle burst" style={{ ['--tr']: 'translate(14px,10px)' }} />
+                              <span className="particle burst" style={{ ['--tr']: 'translate(-8px,-14px)' }} />
+                            </>
+                          )}
+                        </span>
                         <span>{likeCount}</span>
                     </button>
                     <button
@@ -639,7 +731,7 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile, onBookma
             </div>
 
             {commentsOpen && (
-                <div className="border-t bg-neutral-50/60 px-4 py-3">
+                <div className="border-t bg-neutral-50/60 px-3 py-2.5">
                     {commentsLoading && (
                         <div className="mb-2 text-[12px] text-neutral-500">불러오는 중…</div>
                     )}
@@ -805,12 +897,12 @@ function RightRail({ profile, onOpenWrite, recentMyStories = [], myBookmarks = [
               )}
             </Card>
             {/* 브랜드/CTA: Ticket × Story 중심 페이지 강조 */}
-            <Card>
-                <div className="rounded-2xl bg-gradient-to-tr from-indigo-500 via-fuchsia-500 to-rose-500 p-4 text-white">
-                    <div className="text-sm opacity-90">Ticketory — Ticket × Story</div>
-                    <div className="mt-1 text-lg font-semibold leading-tight">당신의 관람이 이야기가 되는 곳</div>
-                    <button onClick={onOpenWrite} className="mt-3 w-full rounded-xl bg-white/90 px-3 py-2 text-sm text-neutral-900 hover:bg-white">관람평 쓰기</button>
-                </div>
+            <Card bleed>
+              <div className="bg-gradient-to-tr from-indigo-500 via-fuchsia-500 to-rose-500 p-5 text-white">
+                <div className="text-sm/5 opacity-90">Ticketory — Ticket × Story</div>
+                <div className="mt-1 text-lg font-semibold leading-tight">당신의 관람이 이야기가 되는 곳</div>
+                <button onClick={onOpenWrite} className="mt-3 w-full rounded-xl bg-white/90 px-3 py-2 text-sm text-neutral-900 hover:bg-white">관람평 쓰기</button>
+              </div>
             </Card>
 
             {/* 최근 남긴 관람평 (로그인 사용자 전용) */}
@@ -819,10 +911,9 @@ function RightRail({ profile, onOpenWrite, recentMyStories = [], myBookmarks = [
                 {(!Array.isArray(recentMyStories) || recentMyStories.length === 0) ? (
                   <div className="text-[12px] text-neutral-500">아직 작성한 관람평이 없어요.</div>
                 ) : (
-                  <ul className="space-y-3">
+                  <ul className="list-none divide-y divide-neutral-200">
                     {recentMyStories.map((s, i) => (
-                        <li key={s.id ?? s.storyId ?? i} className="flex items-start gap-3 min-w-0">
-                          <div className="shrink-0 self-center h-1.5 w-1.5 rounded-full bg-neutral-400"></div>
+                        <li key={s.id ?? s.storyId ?? i} className="flex items-start gap-2 min-w-0 py-2 first:pt-0 last:pb-0">
                             <div className="min-w-0">
                                 <div className="text-sm font-medium truncate">{s.movieTitle || s.movie?.title || '제목 없음'}</div>
                                 <div className="text-[12px] text-neutral-600 break-words overflow-hidden">{s.content || ''}</div>
@@ -845,7 +936,7 @@ function RightRail({ profile, onOpenWrite, recentMyStories = [], myBookmarks = [
                 {(!Array.isArray(myBookmarks) || myBookmarks.length === 0) ? (
                   <div className="text-[12px] text-neutral-500">아직 북마크한 영화가 없어요.</div>
                 ) : (
-                  <div className="flex gap-2 overflow-x-auto no-scrollbar pr-1">
+                  <div className="grid grid-cols-4 sm:grid-cols-2 md:grid-cols-4 gap-2">
                     {myBookmarks.map((s, i) => {
                       const poster = s?.movie?.poster || s?.posterUrl || defaultPoster;
                       const title = s?.movie?.title || s?.movieTitle || '';
@@ -854,7 +945,7 @@ function RightRail({ profile, onOpenWrite, recentMyStories = [], myBookmarks = [
                       return (
                         <button
                           key={storyId ?? i}
-                          className="aspect-[2/3] w-16 shrink-0 overflow-hidden rounded-md border"
+                          className="aspect-[2/3] w-full overflow-hidden rounded-md border"
                           onClick={() => {
                             if (movieId) navigate(`/movies/${movieId}`); else if (storyId) navigate(`/stories/${storyId}`);
                           }}
@@ -874,11 +965,37 @@ function RightRail({ profile, onOpenWrite, recentMyStories = [], myBookmarks = [
 }
 
 
-function Card({ title, children }) {
+function Card({ title, children, bleed = false, className = "" }) {
+    const base = bleed
+        ? "rounded-2xl overflow-hidden shadow-sm"
+        : "rounded-2xl border bg-white p-4 shadow-sm";
     return (
-        <div className="rounded-2xl border bg-white p-4 shadow-sm">
-            {title && <h4 className="mb-3 text-sm font-semibold">{title}</h4>}
-            {children}
+        <div className={`${base} ${className}`.trim()}>
+            {!bleed && title && <h4 className="mb-3 text-sm font-semibold">{title}</h4>}
+            {bleed ? (
+                // When bleeding, children should render edge-to-edge (e.g., gradients)
+                children
+            ) : (
+                children
+            )}
         </div>
     );
+}
+
+// --- Popup menu helpers for StoryCard ---
+function MenuItem({ children, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="block w-full px-3 py-2 text-left text-[13px] hover:bg-neutral-50"
+      role="menuitem"
+    >
+      {children}
+    </button>
+  );
+}
+
+function Divider() {
+  return <div className="h-px bg-neutral-200" />;
 }

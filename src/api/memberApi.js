@@ -57,9 +57,3 @@ export const getMemberPoints = async ({
     return data;
 };
 
-//공개용 개인정보 조회
-export async function getPublicMemberSummary(memberId) {
-    if (!memberId && memberId !== 0) throw new Error('memberId required');
-    const res = await api.get(`/public/members/${memberId}`);
-    return res.data;
-}

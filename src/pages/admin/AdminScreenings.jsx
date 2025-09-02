@@ -3,11 +3,80 @@ import { useNavigate } from "react-router-dom";
 import {createScreening, deleteScreening, fetchScreenings, getAdminMovies, getAdminScreens, updateScreening} from "../../api/adminApi.js";
 import { AdminLayout } from "../../components/AdminSidebar.jsx";
 import ReactDOM from "react-dom";
-
 import { computeMovieStatus } from "../../utils/movieStatus.js";
+import { useAuthStore } from "../../store/useAuthStore.js";
+
+export function DateStrip({
+  activeDate,
+  setActiveDate,
+  weekStartKey,
+  setWeekStartKey,
+  todayKey,
+  dateHasItems,
+  addDaysKey,
+  dateLabel,
+}) {
+  const startKey = weekStartKey || todayKey;
+  const weekKeys = React.useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDaysKey(startKey, i)),
+    [startKey, addDaysKey]
+  );
+
+  return (
+    <div className="mb-3 -mt-2 overflow-x-auto" data-testid="date-strip">
+      <div className="inline-flex items-center gap-2 whitespace-nowrap">
+        <button
+          type="button"
+          onClick={() => setWeekStartKey((k) => addDaysKey(k || todayKey, -7))}
+          className="px-2 py-1 rounded border bg-white text-gray-700 hover:bg-gray-50"
+          title="이전 7일"
+        >◀</button>
+
+        <button
+          type="button"
+          onClick={() => setActiveDate('ALL')}
+          className={
+            'px-3 py-1.5 rounded-full border text-sm ' +
+            (activeDate === 'ALL'
+              ? 'bg-indigo-600 text-white border-indigo-600'
+              : 'bg-white text-gray-700 hover:bg-gray-50')
+          }
+        >전체</button>
+
+        {weekKeys.map((d) => {
+          const isActive = activeDate === d;
+          const has = dateHasItems.has(d);
+          return (
+            <button
+              key={d}
+              type="button"
+              onClick={() => has && setActiveDate(d)}
+              className={
+                'px-3 py-1.5 rounded-full border text-sm ' +
+                (isActive
+                  ? 'bg-indigo-600 text-white border-indigo-600'
+                  : has
+                    ? 'bg-white text-gray-700 hover:bg-gray-50'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed')
+              }
+              title={d}
+              disabled={!has}
+            >{dateLabel(d, todayKey)}</button>
+          );
+        })}
+
+        <button
+          type="button"
+          onClick={() => setWeekStartKey((k) => addDaysKey(k || todayKey, 7))}
+          className="px-2 py-1 rounded border bg-white text-gray-700 hover:bg-gray-50"
+          title="다음 7일"
+        >▶</button>
+      </div>
+    </div>
+  );
+}
 
 const AdminScreenings = () => {
-  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
@@ -21,7 +90,7 @@ const AdminScreenings = () => {
     date: "",
     firstStart: "10:00",
     cleanMinutes: 10,
-    mode: "single", // 'single' | 'auto'
+    mode: "single",
     closeTime: "24:00"
   });
 
@@ -46,7 +115,6 @@ const AdminScreenings = () => {
   const [sortKey, setSortKey] = useState("start");
   const [sortAsc, setSortAsc] = useState(true);
 
-  // ---- KST helpers ----
   const KST_TZ = "Asia/Seoul";
 
  // 서버가 오프셋 없는 'YYYY-MM-DDTHH:mm:ss'를 주면 KST로 가정해 +09:00을 붙인다.
@@ -64,7 +132,6 @@ const AdminScreenings = () => {
         return isNaN(d.getTime()) ? null : d;
     }
 
-  // Return YYYY-MM-DD computed in KST, regardless of input timezone (e.g., 'Z')
   function toKstDateKey(v) {
     if (!v) return "";
     let d = new Date(v);
@@ -85,7 +152,6 @@ const AdminScreenings = () => {
     return `${y}-${m}-${dd}`;
   }
 
-  // Human-readable in KST (used for table)
   function fmtKst(v) {
     if (!v) return "";
     try {
@@ -97,7 +163,6 @@ const AdminScreenings = () => {
     }
   }
 
-  // Build ISO with explicit +09:00 offset (server expects/keeps KST)
   function toIsoWithKstOffset(dateObj) {
     if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return "";
     const pad = (n) => String(n).padStart(2, "0");
@@ -110,45 +175,11 @@ const AdminScreenings = () => {
     return `${y}-${M}-${d}T${h}:${m}:${s}+09:00`;
   }
 
-  function logTime(label, value) {
-    try {
-      const d = value instanceof Date ? value : new Date(value);
-      const valid = !isNaN(d.getTime());
-      const offsetMin = valid ? -d.getTimezoneOffset() : null; // positive for east
-      const info = {
-        label,
-        input: value,
-        valid,
-        browserTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        offsetMinutes: offsetMin,
-        local: valid ? d.toString() : "Invalid Date",
-        isoLocalNoZ: valid ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}T${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}` : "",
-        isoUTC: valid ? d.toISOString() : "",
-        kst: valid ? d.toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }) : "",
-        kstKey: valid ? toKstDateKey(d) : "",
-      };
-      console.table(info);
-      return info;
-    } catch (e) {
-      console.warn("[AdminScreenings][logTime] error", e);
-    }
-  }
 
-  function logEnv() {
-    const now = new Date();
-    console.group("[AdminScreenings] Time Environment");
-    console.log("Browser tz:", Intl.DateTimeFormat().resolvedOptions().timeZone);
-    console.log("Now local:", now.toString());
-    console.log("Now ISO UTC:", now.toISOString());
-    console.log("Now as KST:", now.toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }));
-    console.log("KST dateKey:", toKstDateKey(now));
-    console.groupEnd();
+  function maskToken(t) {
+    if (!t) return "";
+    return t.length <= 12 ? t : `${t.slice(0,6)}...${t.slice(-4)}`;
   }
-
-  if (typeof window !== "undefined") {
-    window.__tzcheck = (v) => logTime("__tzcheck", v ?? new Date());
-  }
-  // ---- /Debug helpers ----
 
   const keyToDate = (key) => {
     if (!key) return null;
@@ -247,6 +278,17 @@ const AdminScreenings = () => {
     }
   }, [todayKey, weekStartKey, activeDate, dateHasItems]);
 
+  // Auth status (for CORS/redirect debugging)
+  const tokenFromStore = useAuthStore((s) => s.token || s.accessToken || null);
+  useEffect(() => {
+    const masked = maskToken(tokenFromStore || "");
+    if (tokenFromStore) {
+      console.info("[Auth] token present:", masked);
+    } else {
+      console.warn("[Auth] no token in store. Admin API may 401 and trigger OAuth redirect.");
+    }
+  }, [tokenFromStore]);
+
   // 표시할 7일 키 배열
   const weekKeys = React.useMemo(() => {
     const start = weekStartKey || todayKey;
@@ -343,27 +385,15 @@ const AdminScreenings = () => {
         setErr(null);
         const res = await fetchScreenings();
         const list = Array.isArray(res.data) ? res.data : (res.data?.content ?? []);
-
-          const normalized = (Array.isArray(list) ? list : []).map(it => {
-              const startRaw = it.startAt ?? it.start_at ?? it.start;
-              const endRaw = it.endAt ?? it.end_at ?? it.end;
-              return {
-                  ...it,
-                  startAt: ensureKstOffset(startRaw),
-                  endAt: endRaw ? ensureKstOffset(endRaw) : endRaw,
-              };
-          });
-        console.group("[AdminScreenings] fetchScreenings()");
-        logEnv();
-        (normalized || []).slice(0, 5).forEach((it, i) => {
-          const startRaw = it.startAt ?? it.start_at ?? it.start;
-          const endRaw = it.endAt ?? it.end_at ?? it.end;
-          console.group(`Row ${i}`);
-          logTime("startRaw", startRaw);
-          logTime("endRaw", endRaw);
-          console.groupEnd();
+        const normalized = (Array.isArray(list) ? list : []).map(it => {
+            const startRaw = it.startAt ?? it.start_at ?? it.start;
+            const endRaw = it.endAt ?? it.end_at ?? it.end;
+            return {
+                ...it,
+                startAt: ensureKstOffset(startRaw),
+                endAt: endRaw ? ensureKstOffset(endRaw) : endRaw,
+            };
         });
-        console.groupEnd();
         if (alive) setItems(normalized);
       } catch (e) {
         if (alive) setErr(e?.response?.data?.message || e.message || "상영시간 목록을 불러오지 못했어요.");
@@ -435,13 +465,6 @@ const AdminScreenings = () => {
       const end = addMinutes(first, runtime);
       const outEnd = addMinutes(end, 0); // show exact end (청소시간 제외)
       const list = [{ start: first, end: outEnd }];
-      // Debug: preview log
-      console.group("[AdminScreenings] buildSchedule preview");
-      list.slice(0, 5).forEach((slot, i) => {
-        logTime(`preview#${i+1}.start`, slot.start);
-        logTime(`preview#${i+1}.end`, slot.end);
-      });
-      console.groupEnd();
       return list;
     }
 
@@ -456,13 +479,6 @@ const AdminScreenings = () => {
       // 다음 회차: 종료 + 청소
       cur = addMinutes(end, clean);
     }
-
-    console.group("[AdminScreenings] buildSchedule preview");
-    list.slice(0, 5).forEach((slot, i) => {
-      logTime(`preview#${i+1}.start`, slot.start);
-      logTime(`preview#${i+1}.end`, slot.end);
-    });
-    console.groupEnd();
     return list;
   };
 
@@ -508,12 +524,7 @@ const AdminScreenings = () => {
           startAt: toIsoWithKstOffset(slot.start),
           endAt: toIsoWithKstOffset(slot.end)
         };
-
-        console.group("[AdminScreenings] createScreening payload");
-        logTime("slot.start(Date)", slot.start);
-        logTime("slot.end(Date)", slot.end);
-        console.log("payload:", payload);
-        console.groupEnd();
+        console.info("[AdminScreenings] createScreening for screenId=", Number(form.screenId), "hasToken=", !!tokenFromStore);
         await postOne(payload);
       }
       // 생성 후 목록 리프레시
@@ -548,13 +559,6 @@ const AdminScreenings = () => {
       startInput,
       endInput,
     });
-    // Debug: log openEdit prefill
-    console.group("[AdminScreenings] openEdit");
-    logTime("row.start(raw)", s.startAt ?? s.start_at ?? s.start);
-    logTime("row.end(raw)", s.endAt ?? s.end_at ?? s.end);
-    console.log("prefill.startInput(datetime-local)", toInputValue(s.startAt ?? s.start_at ?? s.start));
-    console.log("prefill.endInput(datetime-local)", toInputValue(s.endAt ?? s.end_at ?? s.end));
-    console.groupEnd();
     setIsEditOpen(true);
   };
 
@@ -571,13 +575,7 @@ const AdminScreenings = () => {
         startAt: toIsoWithKstOffset(start),
         endAt: toIsoWithKstOffset(end),
       };
-      console.group("[AdminScreenings] updateScreening payload");
-      logTime("edit.startInput(raw)", editForm.startInput);
-      logTime("edit.endInput(raw)", editForm.endInput);
-      logTime("start(Date)", start);
-      logTime("end(Date)", end);
-      console.log("payload:", payload);
-      console.groupEnd();
+      console.info("[AdminScreenings] updateScreening id=", editForm.id, "hasToken=", !!tokenFromStore);
       await updateScreening(editForm.id, payload);
       // refresh list
       const res = await fetchScreenings();
@@ -597,6 +595,7 @@ const AdminScreenings = () => {
     if (!confirm("정말 삭제할까요? 이 작업은 되돌릴 수 없습니다.")) return;
     setSubmitting(true);
     try {
+      console.info("[AdminScreenings] deleteScreening id=", editForm.id, "hasToken=", !!tokenFromStore);
       await deleteScreening(editForm.id);
       const res = await fetchScreenings();
       const list = Array.isArray(res.data) ? res.data : (res.data?.content ?? []);
@@ -623,60 +622,17 @@ const AdminScreenings = () => {
             + 새 상영 추가
           </button>
         </header>
-          {/* 날짜 탭 */}
-          <div className="mb-3 -mt-2 overflow-x-auto">
-            <div className="inline-flex items-center gap-2 whitespace-nowrap">
-              <button
-                type="button"
-                onClick={() => setWeekStartKey((k) => addDaysKey(k || todayKey, -7))}
-                className="px-2 py-1 rounded border bg-white text-gray-700 hover:bg-gray-50"
-                title="이전 7일"
-              >◀</button>
-
-              {/* 전체 버튼 */}
-              <button
-                type="button"
-                onClick={() => setActiveDate('ALL')}
-                className={
-                  'px-3 py-1.5 rounded-full border text-sm ' +
-                  (activeDate === 'ALL'
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-white text-gray-700 hover:bg-gray-50')
-                }
-              >전체</button>
-
-              {/* 7-day 버튼 */}
-              {weekKeys.map((d) => {
-                const isActive = activeDate === d;
-                const has = dateHasItems.has(d);
-                return (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => has && setActiveDate(d)}
-                    className={
-                      'px-3 py-1.5 rounded-full border text-sm ' +
-                      (isActive
-                        ? 'bg-indigo-600 text-white border-indigo-600'
-                        : has
-                          ? 'bg-white text-gray-700 hover:bg-gray-50'
-                          : 'bg-gray-100 text-gray-400 cursor-not-allowed')
-                    }
-                    title={d}
-                    disabled={!has}
-                  >{dateLabel(d, todayKey)}</button>
-                );
-              })}
-
-              {/* 다음 7 days */}
-              <button
-                type="button"
-                onClick={() => setWeekStartKey((k) => addDaysKey(k || todayKey, 7))}
-                className="px-2 py-1 rounded border bg-white text-gray-700 hover:bg-gray-50"
-                title="다음 7일"
-              >▶</button>
-            </div>
-          </div>
+          {/* 날짜 탭 (reused) */}
+          <DateStrip
+            activeDate={activeDate}
+            setActiveDate={setActiveDate}
+            weekStartKey={weekStartKey}
+            setWeekStartKey={setWeekStartKey}
+            todayKey={todayKey}
+            dateHasItems={dateHasItems}
+            addDaysKey={addDaysKey}
+            dateLabel={dateLabel}
+          />
 
         {loading && <div className="py-16 text-center text-gray-500">불러오는 중…</div>}
 

@@ -117,7 +117,10 @@ export default function MyReview() {
         return (
             <div className="mx-auto max-w-5xl px-4 py-6">
                 <div className="mb-6 flex items-center justify-between">
-                    <h1 className="text-xl font-semibold">내 관람평</h1>
+                    <div>
+                        <h1 className="text-xl font-semibold">내 관람평</h1>
+                        <p className="mt-1 text-[12px] text-neutral-500">내가 남긴 관람평을 한 곳에서 관리해요</p>
+                    </div>
                     <button onClick={() => navigate("/story")} className="rounded-lg border px-3 py-1.5 text-sm hover:bg-indigo-50">
                         스토리 피드로
                     </button>
@@ -132,7 +135,10 @@ export default function MyReview() {
     return (
         <div className="mx-auto max-w-5xl px-4 py-6">
             <div className="mb-6 flex items-center justify-between">
-                <h1 className="text-xl font-semibold">내 관람평</h1>
+                <div>
+                    <h1 className="text-xl font-semibold">내 관람평</h1>
+                    <p className="mt-1 text-[12px] text-neutral-500">내가 남긴 관람평을 한 곳에서 관리해요</p>
+                </div>
                 <button onClick={() => navigate("/story")} className="rounded-lg border px-3 py-1.5 text-sm hover:bg-indigo-50">
                     스토리 피드로
                 </button>
@@ -143,27 +149,40 @@ export default function MyReview() {
             )}
 
             <div className="divide-y rounded-xl border bg-white">
-                {loading && <div className="p-6 text-sm text-neutral-500">불러오는 중…</div>}
+                {loading && (
+                    <div className="p-6 text-sm text-neutral-500">
+                        <div className="h-4 w-24 animate-pulse rounded bg-neutral-200/80" />
+                        <div className="mt-3 h-4 w-48 animate-pulse rounded bg-neutral-200/80" />
+                    </div>
+                )}
 
                 {!loading && stories.length === 0 && (
-                    <div className="p-10 text-center text-sm text-neutral-500">작성한 관람평이 없어요.</div>
+                    <div className="p-10 text-center text-sm text-neutral-500">
+                        아직 작성한 관람평이 없어요.
+                        <div className="mt-1 text-[12px] text-neutral-400">스토리 피드에서 첫 관람평을 남겨보세요</div>
+                    </div>
                 )}
 
                 {stories.map((s, idx) => {
                     const id = s.id ?? s.storyId;
                     const isEditing = editingId === id;
                     return (
-                        <div key={keyOf(s, idx)} className="grid grid-cols-[80px,1fr] gap-4 p-4">
+                        <div key={keyOf(s, idx)} className="group grid grid-cols-[88px,1fr] gap-4 p-4 transition-colors hover:bg-neutral-50/80">
                             <img
                                 src={s.posterUrl || s.movie?.posterUrl}
                                 alt="poster"
-                                className="h-24 w-16 rounded object-cover"
+                                className="h-28 w-20 rounded-md object-cover shadow-sm ring-1 ring-black/5"
                             />
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <div className="text-sm font-medium">{s.movieTitle || s.movie?.title}</div>
-                                        <div className="text-xs text-neutral-500">{formatDateOnly(s.createdAt || s.updatedAt)}</div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="text-sm font-semibold truncate">{s.movieTitle || s.movie?.title}</div>
+                                            {Number.isFinite(s?.rating) && (
+                                                <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">★ {s.rating}</span>
+                                            )}
+                                        </div>
+                                        <div className="text-[11px] text-neutral-500">{formatDateOnly(s.createdAt || s.updatedAt)}</div>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         {isEditing ? (
@@ -185,13 +204,13 @@ export default function MyReview() {
                                             <>
                                                 <button
                                                     onClick={() => startEdit(s)}
-                                                    className="rounded-lg border px-3 py-1.5 text-sm hover:bg-neutral-50"
+                                                    className="rounded-lg border px-3 py-1.5 text-sm hover:bg-neutral-50 group-hover:border-neutral-300"
                                                 >
                                                     수정
                                                 </button>
                                                 <button
                                                     onClick={() => removeStory(id)}
-                                                    className="rounded-lg border px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+                                                    className="rounded-lg border px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 group-hover:border-red-300"
                                                 >
                                                     삭제
                                                 </button>
@@ -203,7 +222,7 @@ export default function MyReview() {
                                 {isEditing ? (
                                     <div className="space-y-2">
                     <textarea
-                        className="h-28 w-full rounded-md border p-2 text-sm"
+                        className="h-28 w-full rounded-md border p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
                         value={draft.content}
                         onChange={(e) => setDraft({ ...draft, content: e.target.value })}
                         placeholder="관람평 내용을 입력하세요"
@@ -216,7 +235,7 @@ export default function MyReview() {
                                                     min={0}
                                                     max={10}
                                                     step={0.5}
-                                                    className="w-20 rounded border px-2 py-1"
+                                                    className="w-20 rounded border px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
                                                     value={draft.rating}
                                                     onChange={(e) => setDraft({ ...draft, rating: e.target.value })}
                                                 />
@@ -225,7 +244,7 @@ export default function MyReview() {
                                                 <span className="text-neutral-600">태그</span>
                                                 <input
                                                     type="text"
-                                                    className="grow rounded border px-2 py-1"
+                                                    className="grow rounded border px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
                                                     placeholder="예: 액션, 감동"
                                                     value={draft.tags}
                                                     onChange={(e) => setDraft({ ...draft, tags: e.target.value })}
@@ -242,7 +261,16 @@ export default function MyReview() {
                                         </div>
                                     </div>
                                 ) : (
-                                    <p className="whitespace-pre-wrap text-sm text-neutral-800">{s.content}</p>
+                                    <>
+                                        <p className="whitespace-pre-wrap text-sm text-neutral-800">{s.content}</p>
+                                        {((Array.isArray(s.tags) && s.tags.length) || (typeof s.tags === 'string' && s.tags.trim())) && (
+                                            <div className="mt-1 flex flex-wrap gap-1.5">
+                                                {(Array.isArray(s.tags) ? s.tags : s.tags.split(',').map(t => t.trim()).filter(Boolean)).slice(0, 6).map((t,i) => (
+                                                    <span key={i} className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] text-neutral-700">#{t}</span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -256,7 +284,7 @@ export default function MyReview() {
                     <button
                         disabled={page <= 0}
                         onClick={() => setPage((p) => Math.max(0, p - 1))}
-                        className="rounded-md border px-3 py-1.5 text-sm disabled:opacity-40"
+                        className="rounded-md border px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-40"
                     >
                         이전
                     </button>
@@ -266,7 +294,7 @@ export default function MyReview() {
                     <button
                         disabled={page >= totalPages - 1}
                         onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                        className="rounded-md border px-3 py-1.5 text-sm disabled:opacity-40"
+                        className="rounded-md border px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-40"
                     >
                         다음
                     </button>

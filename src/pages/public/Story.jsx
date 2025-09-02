@@ -4,17 +4,15 @@ import { Heart, MessageCircle, Bookmark, MoreHorizontal, Star } from "lucide-rea
 import { getProfile, getStories, createStory, getEligibleBookings, getMyStories, likeStory, unlikeStory, bookmarkStory, unbookmarkStory, getMyBookmarkedStories, getComments, addComment,updateComment,deleteComment } from "../../api/storyApi.js";
 import Modal from "../../components/Modal.jsx";
 import { getMovieDetail } from "../../api/movieApi.js";
-import defaultAvatar from '../../assets/styles/avatar-placeholder.png';
 import {getPublicMemberSummary} from "../../api/memberApi.js";
 import defaultPoster from '../../assets/styles/poster-placeholder.png';
+import defaultAvatar from '../../assets/styles/avatar-placeholder.png';
 /*
  StoryFeed - 카드형 실관람평 피드 (인스타그램 느낌)
  - 포스터: 세로 비율 유지 (2:3)
  - 버튼: 모던/중립 톤 (강조 색 사용 X)
  - 우측 여백(라이트 레일): 해시태그/빠른 필터/주간 픽/내 티켓 바로가기/가이드
  */
-
-
 
 // util: 날짜만 표시 (시간 제거)
 function formatDateOnly(v) {
@@ -143,10 +141,9 @@ export default function StoryFeed() {
     }, [profile?.memberId]);
 
     return (
-        <div className="min-h-screen bg-neutral-50">
-
-            <main className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <section className="lg:col-span-2 space-y-4 max-w-[780px] w-full">
+        <div className="min-h-screen bg-white">
+            <main className="mx-auto max-w-6xl bg-neutral-100 px-4 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <section className="lg:col-span-2 space-y-4 max-w-[680px] w-full mx-auto">
                     {Array.isArray(stories) && stories.map((s, idx) => {
                         const key = s?.id ?? s?.storyId ?? s?.uuid ?? `${s?.memberId ?? 'm'}-${s?.movie?.id ?? s?.movieId ?? 'mv'}-${s?.createdAt ?? idx}`;
                         return (
@@ -293,28 +290,35 @@ export default function StoryFeed() {
     </div>
   </div>
 </Modal>
-        </div>
+        // </div>
     );
 }
 
 function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
     const [liked, setLiked] = useState(!!story?.liked);
-    const [likeCount, setLikeCount] = useState(Number.isFinite(story?.likeCount) ? story.likeCount : 0);
+    const [likeCount, setLikeCount] = useState(
+        Number.isFinite(story?.likeCount) ? story.likeCount :
+            Number.isFinite(story?.likes) ? story.likes :
+                Number.isFinite(story?.like_count) ? story.like_count : 0
+    );
     const [bookmarked, setBookmarked] = useState(!!story?.bookmarked);
+    const [likeBusy, setLikeBusy] = useState(false);
+    const [bookmarkBusy, setBookmarkBusy] = useState(false);
     const [commentsOpen, setCommentsOpen] = useState(false);
     const [commentList, setCommentList] = useState(Array.isArray(story?.commentsList) ? story.commentsList : []);
-    // 🎉
     const [comments, setComments] = useState(
-        Number.isFinite(story?.commentCount)
-        ? story.commentCount
-            : (Number.isFinite(story?.comments) ? story.comments : 0)
+        Number.isFinite(story?.commentCount) ? story.commentCount :
+            Number.isFinite(story?.comments) ? story.comments :
+                Number.isFinite(story?.comment_count) ? story.comment_count : 0
     );
-    // 🎉
     const [commentDraft, setCommentDraft] = useState("");
     const [editingId, setEditingId] = useState(null);
     const [editingDraft, setEditingDraft] = useState("");
     const [commentsLoading, setCommentsLoading] = useState(false);
     const [commentsError, setCommentsError] = useState("");
+    const [posterSpin, setPosterSpin] = useState(false);
+    const [showDetail, setShowDetail] = useState(false);
+    const nav = useNavigate();
 
     useEffect(() => {
       if (!commentsOpen) return;
@@ -412,7 +416,7 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
             {/* 상단: 사용자 정보 */}
             <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-3">
-                    <img src={author?.avatarUrl || defaultAvatar} alt="avatar" className="h-8 w-8 rounded-full object-cover" />
+                    <img src={author?.avatarUrl || defaultAvatar} alt="avatar" className="h-8 w-8 rounded-full object-cover" loading="lazy" />
                     <div>
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">{author?.name || "익명"}</span>
@@ -432,14 +436,63 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
             <div className="px-4">
                 <div className="grid grid-cols-[minmax(100px,150px)_1fr] gap-3">
                     {/* 포스터: 2:3 비율 고정 */}
-                    <div className="relative">
-                        <div className="aspect-[2/3] overflow-hidden rounded-lg border">
-                            <img src={poster} alt={movieTitle}
-                                 className="h-full w-full object-cover" />
-                        </div>
-                        <div className="absolute left-1.5 top-1.5 rounded bg-black/60 px-1 py-0.5 text-[10px] text-white">
-                            {age}
-                        </div>
+                    <div className="relative" style={{ perspective: '1000px' }}>
+                      <button
+                        type="button"
+                        className="group aspect-[2/3] w-full overflow-hidden rounded-lg border"
+                        onClick={() => {
+                          setPosterSpin(true);
+                          setShowDetail(true);
+                          setTimeout(() => setPosterSpin(false), 1200);
+                          // 버튼은 조금 더 오래 유지
+                          setTimeout(() => setShowDetail(false), 3000);
+                        }}
+                        aria-label={`${movieTitle} 포스터 회전`}
+                      >
+                        <img
+                          src={poster}
+                          alt={movieTitle}
+                          style={{
+                            transform: posterSpin ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                            transition: 'transform 1200ms ease-in-out',
+                            transformStyle: 'preserve-3d'
+                          }}
+                          className="h-full w-full object-cover transform-gpu motion-reduce:transition-none motion-reduce:transform-none"
+                          loading="lazy"
+                        />
+                      </button>
+
+                      {/* 연령 등급 배지 */}
+                      <div className="absolute left-1.5 top-1.5 rounded bg-black/60 px-1 py-0.5 text-[10px] text-white">
+                        {age}
+                      </div>
+
+                      {/* 상세보기 오버레이 버튼 */}
+                      <div className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity ${showDetail ? 'opacity-100' : 'opacity-0'}`}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            (e).stopPropagation();
+                            const movieId = story?.movie?.id ?? story?.movieId ?? story?.movie?.movieId;
+                            if (!movieId) {
+                              console.error('[movie:navigate] movieId not found in story', story);
+                              return;
+                            }
+                            // 기본 라우트 시도
+                            try { nav(`/movies/${movieId}`); } catch {}
+
+                            setTimeout(() => {
+                              const path = (typeof window !== 'undefined' && window.location?.pathname) || '';
+                              if (!path.includes(`/movies/${movieId}`)) {
+                                try { nav(`/movie/${movieId}`); } catch {}
+                              }
+                            }, 150);
+                          }}
+                          className="pointer-events-auto rounded-full bg-black/70 px-4 py-2 text-xs sm:text-sm text-white shadow hover:bg-black/80"
+                        >
+                          영화 상세보기
+                        </button>
+                      </div>
                     </div>
 
                     {/* 텍스트 본문 */}
@@ -455,12 +508,6 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
                                 <span key={t} className="rounded-full border px-1.5 py-0.5 text-[11px] text-neutral-600">#{t}</span>
                             ))}
                         </div>
-
-                        {/* 액션 버튼 */}
-                        <div className="mt-3 flex items-center gap-2">
-                            {/* 모던/중립 버튼 (강조색 X) */}
-                            <button className="h-8 rounded-lg border px-3 text-[13px] hover:bg-neutral-50">상세보기</button>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -469,30 +516,42 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
             <div className="px-4 py-2.5 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <button
-                      onClick={async () => {
-                        if (!loggedIn) { onLoginRequired?.(); return; }
-                        const next = !liked;
-                        // optimistic update
-                        setLiked(next);
-                        setLikeCount((c) => c + (next ? 1 : -1));
-                        try {
-                          if (next) await likeStory(story.id ?? story.storyId);
-                          else await unlikeStory(story.id ?? story.storyId);
-                        } catch (e) {
-                          // rollback on error
-                          setLiked(!next);
-                          setLikeCount((c) => c + (next ? -1 : 1));
-                          console.error('[story:like:error]', e);
+                        onClick={
+                          async () => {
+                            if (!loggedIn) { onLoginRequired?.(); return; }
+                            if (likeBusy) return;
+                            setLikeBusy(true);
+                            const next = !liked;
+                            // optimistic update
+                            setLiked(next);
+                            setLikeCount((c) => c + (next ? 1 : -1));
+                            try {
+                              if (next) await likeStory(story.id ?? story.storyId);
+                              else await unlikeStory(story.id ?? story.storyId);
+                            } catch (e) {
+                              // rollback on error
+                              setLiked(!next);
+                              setLikeCount((c) => c + (next ? -1 : 1));
+                              console.error('[story:like:error]', e);
+                            } finally {
+                              setLikeBusy(false);
+                            }
+                          }
                         }
-                      }}
-                      className={`group flex items-center gap-1 text-sm ${liked ? 'text-neutral-900' : 'text-neutral-600'}`}
+                        className={`group flex items-center gap-1 text-sm transition-colors ${liked ? 'text-red-500' : 'text-neutral-600 hover:text-neutral-800'}`}
+                        disabled={likeBusy}
+                        aria-pressed={liked}
+                        aria-busy={likeBusy}
+                        title={liked ? '좋아요 취소' : '좋아요'}
                     >
-                      <Heart className={`w-5 h-5 ${liked ? 'fill-current' : ''}`} />
-                      <span>{likeCount}</span>
+                        <Heart className={`w-5 h-5 ${liked ? 'fill-current' : ''}`} />
+                        <span>{likeCount}</span>
                     </button>
                     <button
                         onClick={() => setCommentsOpen(v => !v)}
                         className="flex items-center gap-1 text-sm text-neutral-600"
+                        aria-expanded={commentsOpen}
+                        title={commentsOpen ? '댓글 닫기' : '댓글 열기'}
                     >
                         <MessageCircle className="w-5 h-5" />
                         {/* 🎉 */}
@@ -502,22 +561,30 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
                     </button>
                 </div>
                 <button
-                  onClick={async () => {
-                    if (!loggedIn) { onLoginRequired?.(); return; }
-                    const next = !bookmarked;
-                    setBookmarked(next);
-                    try {
-                      const id = story.id ?? story.storyId;
-                      if (next) await bookmarkStory(id);
-                      else await unbookmarkStory(id);
-                    } catch (e) {
-                      setBookmarked(!next);
-                      console.error('[story:bookmark:error]', e);
+                  onClick={
+                    async () => {
+                      if (!loggedIn) { onLoginRequired?.(); return; }
+                      if (bookmarkBusy) return;
+                      setBookmarkBusy(true);
+                      const next = !bookmarked;
+                      setBookmarked(next);
+                      try {
+                        const id = story.id ?? story.storyId;
+                        if (next) await bookmarkStory(id);
+                        else await unbookmarkStory(id);
+                      } catch (e) {
+                        setBookmarked(!next);
+                        console.error('[story:bookmark:error]', e);
+                      } finally {
+                        setBookmarkBusy(false);
+                      }
                     }
-                  }}
-                  className={`transition-colors ${bookmarked ? 'text-neutral-900' : 'text-neutral-500 hover:text-neutral-800'}`}
+                  }
+                  className={`transition-colors ${bookmarked ? 'text-indigo-500' : 'text-neutral-500 hover:text-neutral-800'}`}
                   aria-pressed={bookmarked}
-                  aria-label={bookmarked ? '북마크 취소' : '북마크'}
+                  aria-busy={bookmarkBusy}
+                  title={bookmarked ? '북마크 취소' : '북마크'}
+                  disabled={bookmarkBusy}
                 >
                   <Bookmark className={`w-5 h-5 ${bookmarked ? 'fill-current' : ''}`} />
                 </button>
@@ -655,18 +722,13 @@ function RightRail({ profile, onOpenWrite, recentMyStories = [], myBookmarks = [
                 <>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <img src={profile?.avatarUrl} alt="avatar" className="h-10 w-10 rounded-full object-cover" />
+                      <img src={profile?.avatarUrl} alt="avatar" className="h-10 w-10 rounded-full object-cover" loading="lazy" />
                       <div>
                         <div className="text-sm font-semibold">{profile?.name}</div>
                         <div className="text-[11px] text-neutral-500">최근 관람: {formatDateOnly(profile?.lastWatchedAt)}</div>
                       </div>
                     </div>
                     <button onClick={() => navigate('/mypage')} className="rounded-xl border px-3 py-1.5 text-sm hover:bg-indigo-50">프로필</button>
-                  </div>
-                  <div className="mt-3 grid grid-cols-3 text-center">
-                    <Stat label="관람평" value="12" />
-                    <Stat label="댓글" value="134" />
-                    <Stat label="북마크" value="9" />
                   </div>
                 </>
               ) : (
@@ -705,12 +767,12 @@ function RightRail({ profile, onOpenWrite, recentMyStories = [], myBookmarks = [
                 ) : (
                   <ul className="space-y-3">
                     {recentMyStories.map((s, i) => (
-                      <li key={s.id ?? s.storyId ?? i} className="flex items-start gap-3">
-                        <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-neutral-400"></div>
-                        <div>
-                          <div className="text-sm font-medium">{s.movieTitle || s.movie?.title || '제목 없음'}</div>
-                          <div className="text-[12px] text-neutral-600 overflow-hidden text-ellipsis whitespace-nowrap">{s.content || ''}</div>
-                        </div>
+                        <li key={s.id ?? s.storyId ?? i} className="flex items-start gap-3 min-w-0">
+                          <div className="shrink-0 self-center h-1.5 w-1.5 rounded-full bg-neutral-400"></div>
+                            <div className="min-w-0">
+                                <div className="text-sm font-medium truncate">{s.movieTitle || s.movie?.title || '제목 없음'}</div>
+                                <div className="text-[12px] text-neutral-600 break-words overflow-hidden">{s.content || ''}</div>
+                            </div>
                       </li>
                     ))}
                   </ul>
@@ -744,7 +806,7 @@ function RightRail({ profile, onOpenWrite, recentMyStories = [], myBookmarks = [
                           }}
                           title={title}
                         >
-                          <img src={poster} alt={title} className="h-full w-full object-cover" />
+                          <img src={poster} alt={title} className="h-full w-full object-cover" loading="lazy" />
                         </button>
                       );
                     })}
@@ -753,40 +815,10 @@ function RightRail({ profile, onOpenWrite, recentMyStories = [], myBookmarks = [
               </Card>
             )}
 
-            {/* 커뮤니티: 팔로우 추천 & 베스트 관람평 */}
-            <Card title="커뮤니티 추천 계정">
-                <div className="space-y-3">
-                    {[{n:'movie_owl',a:'https://images.unsplash.com/photo-1544006659-f0b21884ce1d?q=80&w=200&auto=format&fit=crop'}, {n:'cine_note',a:'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200&auto=format&fit=crop'}].map((u) => (
-                        <div key={u.n} className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <img src={u.a} className="h-7 w-7 rounded-full object-cover" />
-                                <div className="text-sm">{u.n}</div>
-                            </div>
-                            <button className="rounded-lg border px-2 py-1 text-[12px]">팔로우</button>
-                        </div>
-                    ))}
-                </div>
-            </Card>
-
-            <Card title="베스트 관람평 (주간)">
-                <div className="space-y-2 text-[12px] text-neutral-700">
-                    <p>“연출·음악·연기의 삼박자! 올해 최고의 스릴러.” — <span className="font-medium">@cine_note</span></p>
-                    <p>“다큐 톤이지만 엔진음과 편집이 미쳤다.” — <span className="font-medium">@racer_j</span></p>
-                </div>
-            </Card>
-
         </div>
     );
 }
 
-function Stat({ label, value }) {
-    return (
-        <div>
-            <div className="text-sm font-semibold">{value}</div>
-            <div className="text-[11px] text-neutral-500">{label}</div>
-        </div>
-    );
-}
 
 function Card({ title, children }) {
     return (

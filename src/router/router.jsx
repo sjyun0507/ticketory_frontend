@@ -25,7 +25,7 @@ import AdminMovieDetail from "../pages/admin/AdminMovieDetail.jsx";
 import PointsHistory from "../pages/mypage/PointHistory.jsx";
 import AdminEvent from "../pages/admin/AdminEvent.jsx";
 import AdminPricing from "../pages/admin/AdminPricing.jsx";
-import MyReveiw from "../pages/mypage/MyReveiw.jsx";
+import MyReview from "../pages/mypage/MyReview.jsx";
 
 const routes = [
     {path: "/", element: <Home/>},
@@ -56,7 +56,7 @@ const routes = [
             { path: "bookings", element: <MyBookings /> },
             { path: "settings", element: <Settings /> },
             { path: "points", element: <PointsHistory /> },
-            { path: "myreviews", element: <MyReveiw /> },
+            { path: "myreviews", element: <MyReview /> },
         ],
     },
     {

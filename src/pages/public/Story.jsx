@@ -328,10 +328,22 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
         try {
           const res = await getComments(story.id ?? story.storyId, { page: 0, size: 50 });
           const rows = Array.isArray(res?.content) ? res.content : (Array.isArray(res) ? res : []);
-          setCommentList(rows);
-          // 🎉
-            setComments(typeof res?.totalElements === 'number' ? res.totalElements : rows.length);
-            //🎉
+          // Normalize comments to mark mine and fill author info
+          const me = profile?.memberId;
+          const normalized = rows.map((r) => {
+            const rMemberId = r?.memberId ?? r?.authorId ?? r?.author?.memberId;
+            const isMine = r?.mine ?? r?.isMine ?? (me ? rMemberId === me : false);
+            const authorName = r?.author?.name || r?.authorName || (isMine ? (profile?.name || '나') : '익명');
+            const authorAvatar = r?.author?.avatarUrl || (isMine ? profile?.avatarUrl : undefined);
+            return {
+              ...r,
+              memberId: rMemberId ?? r?.memberId,
+              mine: isMine,
+              author: r?.author || { name: authorName, avatarUrl: authorAvatar },
+            };
+          });
+          setCommentList(normalized);
+          setComments(typeof res?.totalElements === 'number' ? res.totalElements : normalized.length);
         } catch (e) {
           console.error('[comments:load:error]', e);
           setCommentsError('댓글을 불러오지 못했어요.');
@@ -616,7 +628,16 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
                                 if (!text) return;
                                 try {
                                     const saved = await addComment(story.id ?? story.storyId, { content: text });
-                                    const newItem = saved || { id: Date.now(), content: text, mine: true, createdAt: new Date().toISOString() };
+                                    const base = (saved && typeof saved === 'object') ? saved : {};
+                                    const newItem = {
+                                      ...base,
+                                      id: base.id ?? base.commentId ?? Date.now(),
+                                      content: base.content ?? text,
+                                      memberId: base.memberId ?? profile?.memberId,
+                                      mine: true,
+                                      author: base.author ?? { name: profile?.name || '나', avatarUrl: profile?.avatarUrl },
+                                      createdAt: base.createdAt ?? new Date().toISOString(),
+                                    };
                                     setCommentList((prev) => [newItem, ...prev]);
                                     setCommentDraft("");
                                     // 🎉
@@ -670,7 +691,7 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
                                 ) : (
                                     <div className="flex items-start justify-between gap-3">
                                         <div>
-                                            <div className="text-[12px] text-neutral-500">{c.author?.name || c.authorName || '익명'} · {formatDateOnly(c.createdAt)}</div>
+                                            <div className="text-[12px] text-neutral-500">{c.mine ? (profile?.name || '나') : (c.author?.name || c.authorName || '익명')} · {formatDateOnly(c.createdAt)}</div>
                                             <div className="text-sm text-neutral-800 whitespace-pre-wrap">{c.content}</div>
                                         </div>
                                         {(c.mine || c.isMine) && (

@@ -42,6 +42,8 @@ function LineChart({ data, labels }) {
     const fmtCompact = (v) => new Intl.NumberFormat('ko-KR', { notation: 'compact' }).format(Math.round(v));
     const x = (i) => pad + (i * (width - pad * 2)) / (safeLabels.length - 1 || 1);
     const y = (v) => height - pad - ((v - min) * (height - pad * 2)) / (max - min || 1);
+    const weeklyIdx = Array.from({ length: safeLabels.length }, (_, i) => i)
+      .filter(i => i % 7 === 0 || i === safeLabels.length - 1);
 
     const paths = safeData.map((series, idx) => {
         const d = series.map((v, i) => `${i ? "L" : "M"}${x(i)},${y(v)}`).join(" ");
@@ -51,7 +53,7 @@ function LineChart({ data, labels }) {
                 d={d}
                 fill="none"
                 strokeWidth="2.5"
-                className={idx === 0 ? "stroke-sky-500" : "stroke-slate-400"}
+                className={idx === 0 ? "stroke-indigo-500" : "stroke-slate-400"}
             />
         );
     });
@@ -59,7 +61,7 @@ function LineChart({ data, labels }) {
     return (
         <div className="bg-white rounded-xl shadow-sm p-5">
             <div className="flex items-center justify-between mb-3">
-                <h4 className="font-semibold text-slate-800">일자별 승인매출</h4>
+                <h4 className="font-semibold text-slate-800">월별 승인매출</h4>
                 <div className="text-xs text-slate-500">{safeLabels?.[0] ?? ''} ~ {safeLabels?.[safeLabels.length-1] ?? ''}</div>
             </div>
             <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-64">
@@ -73,6 +75,16 @@ function LineChart({ data, labels }) {
                         y2={pad + g * ((height - pad * 2) / 4)}
                         className="stroke-slate-100"
                     />
+                ))}
+                {weeklyIdx.map((i) => (
+                  <line
+                    key={`vx-${i}`}
+                    x1={x(i)}
+                    x2={x(i)}
+                    y1={pad}
+                    y2={height - pad}
+                    className="stroke-slate-50"
+                  />
                 ))}
                 <line x1={pad} x2={pad} y1={pad} y2={height - pad} className="stroke-slate-200" />
                 {ticks.map((tv, i) => (
@@ -98,15 +110,21 @@ function LineChart({ data, labels }) {
                         />
                     ))
                 )}
-       {(safeLabels || []).map((lb, i) => (
-                    <text key={lb} x={x(i)} y={height - 8} textAnchor="middle" className="fill-slate-400 text-[10px]">
-                        {lb}
-                    </text>
+                {weeklyIdx.map((i) => (
+                  <text
+                    key={`xl-${i}`}
+                    x={x(i)}
+                    y={height - 8}
+                    textAnchor="middle"
+                    className="fill-slate-400 text-[10px]"
+                  >
+                    {safeLabels[i]}
+                  </text>
                 ))}
             </svg>
             <div className="mt-3 flex gap-3 text-xs">
     <span className="inline-flex items-center gap-1 text-slate-500">
-      <span className="inline-block w-3 h-0.5 bg-sky-500" /> 승인매출
+      <span className="inline-block w-3 h-0.5 bg-indigo-500" /> 승인매출
     </span>
   </div>
   {(!hasData) && (
@@ -126,9 +144,40 @@ function BarChart({ data, labels }) {
     const tickCount = 5;
     const ticks = Array.from({ length: tickCount }, (_, i) => (max * i) / (tickCount - 1));
     const fmtCompact = (v) => new Intl.NumberFormat('ko-KR', { notation: 'compact' }).format(Math.round(v));
-    const barW = (width - pad * 2) / (safeLabels.length * safeData.length + safeLabels.length);
-    const x0 = (i) => pad + i * (safeData.length * barW + barW); // 그룹 시작 x
+
+    // spacing: 더 넓은 그룹 간격 + 막대 간 미세 간격
+    const groupGap = 12;           // 그룹 사이 간격(px)
+    const innerGap = 4;            // 같은 그룹 내 막대 사이 간격(px)
+
+    // 총 그려질 막대 개수와 간격을 고려해 barW 계산
+    const totalInnerGaps = Math.max(0, safeLabels.length * (safeData.length - 1)) * innerGap;
+    const totalGroupGaps = Math.max(0, (safeLabels.length - 1)) * groupGap;
+    const plotWidth = (width - pad * 2) - totalInnerGaps - totalGroupGaps;
+    const barW = plotWidth / Math.max(1, safeLabels.length * safeData.length);
+
+    // 그룹 시작 x 좌표
+    const x0 = (i) => {
+      const barsPerGroup = safeData.length;
+      const groupWidth = barsPerGroup * barW + Math.max(0, barsPerGroup - 1) * innerGap;
+      return pad + i * (groupWidth + groupGap);
+    };
+
     const y = (v) => height - pad - (v * (height - pad * 2)) / (max || 1);
+
+    // 상위 1~3위 랭크 계산 (첫 번째 시리즈 기준)
+    const rankMap = useMemo(() => {
+      const primary = (safeData && safeData[0]) ? safeData[0] : [];
+      const pairs = (primary || []).map((v, i) => ({ i, v: Number(v) || 0 }));
+      pairs.sort((a, b) => b.v - a.v);
+      const map = new Map();
+      let rank = 1;
+      for (const p of pairs) {
+        if (p.v <= 0) break;
+        map.set(p.i, rank);
+        rank += 1;
+      }
+      return map;
+    }, [safeData]);
 
     return (
         <div className="bg-white rounded-xl shadow-sm p-5">
@@ -161,32 +210,75 @@ function BarChart({ data, labels }) {
                 ))}
                 {safeLabels.map((lb, i) =>
                     safeData.map((series, sidx) => {
-                        const v = series[i];
-                        const x = x0(i) + sidx * barW;
+                        const v = Number(series[i]) || 0;
+                        const x = x0(i) + sidx * (barW + innerGap);
+                        const h = Math.max(0, height - pad - y(v));
                         return (
-                            <rect
-                                key={`${sidx}-${i}`}
+                            <g key={`${sidx}-${i}`}>
+                              <rect
                                 x={x}
                                 y={y(v)}
-                                width={barW - 3}
-                                height={height - pad - y(v)}
-                                className={sidx === 0 ? "fill-fuchsia-500/80" : "fill-sky-500/80"}
-                                rx="2"
-                            />
+                                width={Math.max(1, barW)}
+                                height={h}
+                                className={(() => {
+                                  if (sidx !== 0) return "fill-sky-500/60";
+                                  const r = rankMap.get(i);
+                                  if (r === 1) return "fill-amber-500/90";
+                                  if (r === 2) return "fill-amber-400/80";
+                                  if (r === 3) return "fill-amber-300/80";
+                                  return "fill-slate-300/80";
+                                })()}
+                                rx="3"
+                              />
+                              {/* 값 라벨 (작은 값은 숨김) */}
+                              {v > 0 && h > 14 && (
+                                <text
+                                  x={x + Math.max(1, barW) / 2}
+                                  y={y(v) - 4}
+                                  textAnchor="middle"
+                                  className={(() => {
+                                    if (sidx !== 0) return "fill-slate-500 text-[10px]";
+                                    const r = rankMap.get(i);
+                                    return r && r <= 3 ? "fill-amber-700 text-[10px]" : "fill-slate-500 text-[10px]";
+                                  })()}
+                                >
+                                  {fmtCompact(v)}
+                                </text>
+                              )}
+                            </g>
                         );
                     })
                 )}
-                {safeLabels.map((lb, i) => (
-                    <text key={lb} x={x0(i) + (safeData.length * barW) / 2 - barW / 2} y={height - 8} textAnchor="middle" className="fill-slate-400 text-[10px]">
-                        {lb}
+                {safeLabels.map((lb, i) => {
+                  const barsPerGroup = safeData.length;
+                  const groupWidth = barsPerGroup * barW + Math.max(0, barsPerGroup - 1) * innerGap;
+                  return (
+                    <text
+                      key={lb}
+                      x={x0(i) + groupWidth / 2}
+                      y={height - 8}
+                      textAnchor="middle"
+                      className="fill-slate-400 text-[10px]"
+                    >
+                      {lb}
                     </text>
-                ))}
+                  );
+                })}
             </svg>
-            <div className="mt-3 flex gap-4 text-xs">
-    <span className="inline-flex items-center gap-1 text-slate-500">
-      <span className="inline-block w-3 h-2 bg-fuchsia-500/80 rounded" /> 올해
-    </span>
-  </div>
+            <div className="mt-3 flex justify-end flex-wrap gap-4 text-xs">
+              <span className="inline-flex items-center gap-1 text-slate-500">
+                <span className="inline-block w-3 h-2 bg-amber-500/90 rounded" /> 1위
+              </span>
+              <span className="inline-flex items-center gap-1 text-slate-500">
+                <span className="inline-block w-3 h-2 bg-amber-400/80 rounded" /> 2위
+              </span>
+              <span className="inline-flex items-center gap-1 text-slate-500">
+                <span className="inline-block w-3 h-2 bg-amber-300/80 rounded" /> 3위
+              </span>
+              <span className="inline-flex items-center gap-1 text-slate-500">
+                <span className="inline-block w-3 h-2 bg-slate-300/80 rounded" /> 기타
+              </span>
+            </div>
   {(!hasBars) && (
     <p className="mt-2 text-xs text-slate-400">표시할 데이터가 없습니다.</p>
   )}
@@ -272,7 +364,6 @@ export default function AdminDashboard() {
 
             }
           }
-          // Build movie title map to resolve missing movie titles
           let titleMap = new Map();
           try {
             const mv = await fetchMoviesList({ page: 0, size: 500 });
@@ -283,7 +374,6 @@ export default function AdminDashboard() {
               if (mid != null && mtitle) titleMap.set(String(mid), String(mtitle));
             });
           } catch (e) {
-            // ignore – titleMap stays empty if fetch fails
           }
           setDaily(dailyArr);
           setTopMovies(topsArr);
@@ -323,7 +413,6 @@ export default function AdminDashboard() {
             return { ...s, _resolvedTitle: (rawTitle && String(rawTitle).trim()) || mapped || '' };
           });
           setScreenings(upcomingResolved);
-          // --- Normalize summary keys for dashboard cards ---
           const sWrap = sRes && typeof sRes === 'object' ? sRes : {};
           const sRaw =
             (sWrap.data && typeof sWrap.data === 'object') ? sWrap.data :
@@ -387,7 +476,6 @@ export default function AdminDashboard() {
             };
             const startTxt = start ? toLocal(start) : '-';
             const endTxt = end ? toLocal(end) : '-';
-            // Build movie cell: "#<id> - <title>" using resolved title map fallback
             const rawTitle = (s._resolvedTitle ?? s.movieTitle ?? s.movie_title ?? s.movie?.title ?? s.title ?? '');
             const title = (typeof rawTitle === 'string' ? rawTitle : String(rawTitle || '')).trim() || '-';
             const rawId = (s.movieId ?? s.movie_id ?? s.movie?.id ?? null);
@@ -427,8 +515,8 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* 그래프 영역 */}
-                <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2">
+                <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="lg:col-span-1">
                         <LineChart data={dailySeries} labels={dailyLabels} />
                         <div className="mt-2 text-right">
                           <Link to="/admin/stats" className="text-xs text-sky-600">상세 통계 보기 →</Link>

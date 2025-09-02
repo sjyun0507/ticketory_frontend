@@ -14,6 +14,8 @@ import defaultPoster from '../../assets/styles/poster-placeholder.png';
  - 우측 여백(라이트 레일): 해시태그/빠른 필터/주간 픽/내 티켓 바로가기/가이드
  */
 
+
+
 // util: 날짜만 표시 (시간 제거)
 function formatDateOnly(v) {
     if (!v) return '';
@@ -25,6 +27,8 @@ function formatDateOnly(v) {
     const s = String(v);
     return s.includes('T') ? s.split('T')[0] : s.split(' ')[0];
 }
+
+
 
 // 별점 컴포넌트 (0.5 단위)
 function StarRating({ value = 0, onChange }) {
@@ -113,7 +117,7 @@ export default function StoryFeed() {
       if (!id) return;
       (async () => {
         try {
-          const res = await getMyStories(id, { limit: 5, sort: 'RECENT' });
+          const res = await getMyStories(id, { page:0, size: 5 });
           const rows = Array.isArray(res?.content) ? res.content : (Array.isArray(res) ? res : []);
           setMyRecentStories(rows);
         } catch (e) {
@@ -299,6 +303,13 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
     const [bookmarked, setBookmarked] = useState(!!story?.bookmarked);
     const [commentsOpen, setCommentsOpen] = useState(false);
     const [commentList, setCommentList] = useState(Array.isArray(story?.commentsList) ? story.commentsList : []);
+    // 🎉
+    const [comments, setComments] = useState(
+        Number.isFinite(story?.commentCount)
+        ? story.commentCount
+            : (Number.isFinite(story?.comments) ? story.comments : 0)
+    );
+    // 🎉
     const [commentDraft, setCommentDraft] = useState("");
     const [editingId, setEditingId] = useState(null);
     const [editingDraft, setEditingDraft] = useState("");
@@ -314,6 +325,9 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
           const res = await getComments(story.id ?? story.storyId, { page: 0, size: 50 });
           const rows = Array.isArray(res?.content) ? res.content : (Array.isArray(res) ? res : []);
           setCommentList(rows);
+          // 🎉
+            setComments(typeof res?.totalElements === 'number' ? res.totalElements : rows.length);
+            //🎉
         } catch (e) {
           console.error('[comments:load:error]', e);
           setCommentsError('댓글을 불러오지 못했어요.');
@@ -334,7 +348,7 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
     const age = story?.movie?.age || "";
     const content = story?.content || "";
     const tags = Array.isArray(story?.tags) ? story.tags : [];
-    const comments = Number.isFinite(story?.comments) ? story.comments : 0;
+    // const comments = Number.isFinite(story?.comments) ? story.comments : 0;
 
     // NOTE: `/api/members/{id}` is often protected to only allow self/admin access (403 for others).
     //       To display author info in a public feed, prefer a public summary endpoint.
@@ -481,7 +495,10 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
                         className="flex items-center gap-1 text-sm text-neutral-600"
                     >
                         <MessageCircle className="w-5 h-5" />
-                        <span>{commentsOpen ? commentList.length : comments}</span>
+                        {/* 🎉 */}
+                        {/*<span>{commentsOpen ? commentList.length : comments}</span>*/}
+                        <span>{comments}</span>
+                        {/* 🎉 */}
                     </button>
                 </div>
                 <button
@@ -535,6 +552,9 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
                                     const newItem = saved || { id: Date.now(), content: text, mine: true, createdAt: new Date().toISOString() };
                                     setCommentList((prev) => [newItem, ...prev]);
                                     setCommentDraft("");
+                                    // 🎉
+                                    setComments((c) => c + 1);
+                                    // 🎉
                                 } catch (e) {
                                     console.error('[comment:add:error]', e);
                                     alert('댓글 저장에 실패했어요.');
@@ -602,6 +622,8 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
                                                         try {
                                                             await deleteComment(story.id ?? story.storyId, id);
                                                             setCommentList((prev) => prev.filter((x) => (x.id ?? x.commentId) !== id));
+                                                            // 🎉
+                                                            setComments((c) => Math.max(0, c -1));
                                                         } catch (e) {
                                                             console.error('[comment:delete:error]', e);
                                                             alert('댓글 삭제에 실패했어요.');

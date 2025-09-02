@@ -5,27 +5,37 @@ import { getStatsSummary, getDailyRevenue, getTopMovies, fetchScreenings } from 
 import { getScreenings as fetchPublicScreenings, getMovies as fetchMoviesList } from "../../api/movieApi.js";
 
 function StatCard({ title, value, delta, positive, icon, to }) {
-    return (
-        <div className="bg-white rounded-xl shadow-sm p-5 flex items-start gap-4">
-            <div className="shrink-0 rounded-lg p-3 bg-blue-50 text-blue-600">{icon}</div>
-            <div className="flex-1">
-                <p className="text-xs text-slate-500 uppercase tracking-wider">{title}</p>
-                <div className="mt-1 flex items-baseline gap-2">
-                    <h3 className="text-2xl font-semibold text-slate-800">{value}</h3>
-                    {typeof delta !== 'undefined' && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${positive ? "bg-green-50 text-green-600" : "bg-rose-50 text-rose-600"}`}>
-                        {positive ? "▲" : "▼"} {delta}
-                      </span>
-                    )}
-                </div>
-                {to && (
-                  <div className="mt-2">
-                    <Link to={to} className="text-xs text-sky-600 hover:underline">바로가기 →</Link>
-                  </div>
-                )}
-            </div>
+  return (
+    <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+
+      <div className="flex items-start gap-4">
+        {/* 아이콘 배지 */}
+        <div className="shrink-0 rounded-xl p-3 bg-sky-50 text-sky-600 shadow-[inset_0_0_0_1px_rgba(2,132,199,0.15)]">
+          {icon}
         </div>
-    );
+
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] uppercase tracking-wide text-slate-500">{title}</p>
+          <div className="mt-1.5 flex items-baseline gap-2">
+            <h3 className="text-2xl font-semibold tracking-tight text-slate-900 truncate">{value}</h3>
+            {typeof delta !== 'undefined' && (
+              <span
+                className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full ${positive ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100' : 'bg-rose-50 text-rose-600 ring-1 ring-rose-100'}`}
+              >
+                <span aria-hidden>{positive ? '▲' : '▼'}</span>
+                {delta}
+              </span>
+            )}
+          </div>
+          {to && (
+            <div className="mt-2">
+              <Link to={to} className="text-xs text-sky-600 hover:underline">바로가기 →</Link>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* ---------- 라인 차트 (SVG) ---------- */
@@ -291,30 +301,62 @@ function MiniTable({ title, rows, columns, actionText, to }) {
   return (
     <div className="bg-white rounded-xl shadow-sm p-5">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="font-semibold text-slate-800">{title}</h4>
-        {actionText && (to ? <Link to={to} className="text-xs text-sky-600">{actionText}</Link> : <button className="text-xs text-sky-600">{actionText}</button>)}
+        <div>
+          <h4 className="font-semibold text-slate-800">{title}</h4>
+          <p className="mt-0.5 text-[11px] text-slate-400">가까운 상영 일정만 간략히 보여줘요</p>
+        </div>
+        {actionText && (to ? (
+          <Link to={to} className="text-xs text-sky-600 hover:underline">{actionText}</Link>
+        ) : (
+          <button className="text-xs text-sky-600 hover:underline">{actionText}</button>
+        ))}
       </div>
+
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm table-fixed">
           <thead>
             <tr className="text-left text-slate-500 border-b border-slate-100">
-              {columns.map((c) => (
-                <th key={c} className="py-2 pr-3 font-medium">{c}</th>
+              {columns.map((c, i) => (
+                <th
+                  key={c}
+                  className={`py-2 pr-3 font-medium ${i===0 ? 'w-1/4' : 'w-1/6'} truncate`}
+                  title={c}
+                >
+                  {c}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {hasRows ? (
               (rows || []).map((r, i) => (
-                <tr key={i} className="border-b last:border-0 border-slate-50">
+                <tr
+                  key={i}
+                  className="border-b last:border-0 border-slate-50 odd:bg-slate-50/40 hover:bg-slate-50 transition-colors"
+                >
                   {(Array.isArray(r) ? r : []).map((cell, j) => (
-                    <td key={j} className="py-2 pr-3 text-slate-700">{cell}</td>
+                    <td key={j} className="py-2 pr-3 text-slate-700 align-middle">
+                      {j === 0 ? (
+                        <div className="flex items-center gap-2">
+                          <span className="shrink-0 h-1.5 w-1.5 rounded-full bg-slate-300"></span>
+                          <span className="truncate" title={String(cell || '')}>{cell}</span>
+                        </div>
+                      ) : j === 1 ? (
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">
+                          {cell}
+                        </span>
+                      ) : (
+                        <span className="font-mono text-[12px] text-slate-600">{cell}</span>
+                      )}
+                    </td>
                   ))}
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={columns.length} className="py-6 text-center text-slate-400">표시할 항목이 없습니다.</td>
+                <td colSpan={columns.length} className="py-10 text-center text-slate-400">
+                  표시할 회차가 없습니다.
+                </td>
               </tr>
             )}
           </tbody>
@@ -493,19 +535,8 @@ export default function AdminDashboard() {
 
     return (
         <AdminLayout>
-            {/* 상단 헤더 */}
-            <div className="bg-sky-600 text-white">
-                <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-                    <h1 className="text-lg font-semibold tracking-wide">DASHBOARD</h1>
-                    <div className="hidden md:flex items-center gap-3">
-                        <input className="rounded-lg px-3 py-1.5 text-sm text-slate-900 outline-none" placeholder="Search..." />
-                        <div className="w-8 h-8 rounded-full bg-white/20" />
-                    </div>
-                </div>
-            </div>
-
             {/* 콘텐츠 */}
-            <div className="max-w-7xl mx-auto px-6 -mt-10 pb-10">
+            <div className="max-w-7xl mx-auto px-6 mt-6 pb-10">
                 {/* 통계 카드 */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <StatCard title="승인매출(Gross)" value={`₩ ${(summary.gross ?? 0).toLocaleString('ko-KR')}`} icon={<span>💰</span>} to="/admin/stats" />

@@ -240,24 +240,6 @@ export default function MyReview() {
                                                     onChange={(e) => setDraft({ ...draft, rating: e.target.value })}
                                                 />
                                             </label>
-                                            <label className="flex grow items-center gap-2">
-                                                <span className="text-neutral-600">태그</span>
-                                                <input
-                                                    type="text"
-                                                    className="grow rounded border px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
-                                                    placeholder="예: 액션, 감동"
-                                                    value={draft.tags}
-                                                    onChange={(e) => setDraft({ ...draft, tags: e.target.value })}
-                                                />
-                                            </label>
-                                            <label className="flex items-center gap-2">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={!!draft.visible}
-                                                    onChange={(e) => setDraft({ ...draft, visible: e.target.checked })}
-                                                />
-                                                <span className="text-neutral-600">공개</span>
-                                            </label>
                                         </div>
                                     </div>
                                 ) : (

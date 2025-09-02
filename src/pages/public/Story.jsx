@@ -6,6 +6,7 @@ import Modal from "../../components/Modal.jsx";
 import { getMovieDetail } from "../../api/movieApi.js";
 import defaultPoster from '../../assets/styles/poster-placeholder.png';
 import defaultAvatar from '../../assets/styles/avatar-placeholder.png';
+import { getMyInfo } from "../../api/memberApi.js";
 /*
  StoryFeed - 카드형 실관람평 피드 (인스타그램 느낌)
  - 포스터: 세로 비율 유지 (2:3)
@@ -37,7 +38,6 @@ function formatDateOnly(v) {
     return s.includes('T') ? s.split('T')[0] : s.split(' ')[0];
 }
 
-// --- Like heart pop/burst CSS (scoped via a small helper) ---
 function LikeFxCSS() {
   return (
     <style>{`
@@ -50,7 +50,6 @@ function LikeFxCSS() {
     `}</style>
   );
 }
-
 
 
 // 별점 컴포넌트 (0.5 단위)
@@ -477,14 +476,15 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile, onBookma
             }
 
             try {
+                const member = await getMyInfo(id);
                 const next = {
-                  name: author?.name  || "익명",
-                  avatarUrl: author?.avatarUrl || defaultAvatar,
+                  name: author?.name || member?.name || "익명",
+                  avatarUrl: author?.avatarUrl || member?.avatarUrl || defaultAvatar,
                 };
                 __memberCache.set(id, next);
                 if (!ignore) setAuthor(next);
             } catch (err) {
-                console.warn('[StoryCard] public member fetch failed:', err);
+                console.warn('[StoryCard] member fetch failed:', err);
                 if (!ignore) {
                   setAuthor((prev) => ({
                     name: prev?.name || "익명",

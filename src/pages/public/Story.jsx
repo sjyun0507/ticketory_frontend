@@ -1,10 +1,12 @@
 import React,{ useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Star, Film } from "lucide-react";
+import { Heart, MessageCircle, Bookmark, MoreHorizontal, Star } from "lucide-react";
 import { getProfile, getStories, createStory, getEligibleBookings, getMyStories, likeStory, unlikeStory, bookmarkStory, unbookmarkStory, getMyBookmarkedStories, getComments, addComment,updateComment,deleteComment } from "../../api/stroyApi.js";
 import Modal from "../../components/Modal.jsx";
 import { getMovieDetail } from "../../api/movieApi.js";
-
+import defaultAvatar from '../../assets/styles/avatar-placeholder.png';
+import {getPublicMemberSummary} from "../../api/memberApi.js";
+import defaultPoster from '../../assets/styles/poster-placeholder.png';
 /*
  StoryFeed - 카드형 실관람평 피드 (인스타그램 느낌)
  - 포스터: 세로 비율 유지 (2:3)
@@ -55,6 +57,9 @@ function StarRating({ value = 0, onChange }) {
     </div>
   );
 }
+// 작성자(멤버) 조회 캐시: 같은 ID 반복 호출 방지
+const __memberCache = new Map(); // key: memberId, value: { name, avatarUrl }
+
 export default function StoryFeed() {
     const [stories, setStories] = useState([]);
     const [profile, setProfile] = useState(null);
@@ -63,7 +68,6 @@ export default function StoryFeed() {
     const [selectedBooking, setSelectedBooking] = useState(null);
     const [storyForm, setStoryForm] = useState({ rating: 4.5, content: "", tags: "" });
     const [submitting, setSubmitting] = useState(false);
-
     const [myRecentStories, setMyRecentStories] = useState([]);
     const [bookmarkedStories, setBookmarkedStories] = useState([]);
 
@@ -80,7 +84,6 @@ export default function StoryFeed() {
       if (!profile?.memberId) return;
       (async () => {
         try {
-          // getEligibleBookings now returns an ARRAY (not a Page)
           const rows = await getEligibleBookings(profile.memberId, { page: 0, size: 10, sort: 'RECENT' });
           const paid = (Array.isArray(rows) ? rows : []).filter(r => r?.paymentStatus === 'PAID' && !r?.hasStory);
           const withPosters = await Promise.all(paid.map(async (r) => {
@@ -94,7 +97,6 @@ export default function StoryFeed() {
           }));
           setEligible(withPosters);
         } catch (e) {
-          // If backend currently 404s due to JPQL error, fail soft
           if (e?.response?.status === 404) {
             console.warn('[eligible:load] 404 from API, showing empty list until backend fix');
             setEligible([]);
@@ -139,8 +141,8 @@ export default function StoryFeed() {
     return (
         <div className="min-h-screen bg-neutral-50">
 
-            <main className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <section className="lg:col-span-2 space-y-6">
+            <main className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <section className="lg:col-span-2 space-y-4 max-w-[780px] w-full">
                     {Array.isArray(stories) && stories.map((s, idx) => {
                         const key = s?.id ?? s?.storyId ?? s?.uuid ?? `${s?.memberId ?? 'm'}-${s?.movie?.id ?? s?.movieId ?? 'mv'}-${s?.createdAt ?? idx}`;
                         return (
@@ -148,6 +150,7 @@ export default function StoryFeed() {
                             key={key}
                             story={s}
                             loggedIn={loggedIn}
+                            profile={profile}
                             onLoginRequired={() => {
                               const back = (location?.pathname || '/story') + (location?.search || '');
                               try { sessionStorage.setItem('postLoginRedirect', back); } catch {}
@@ -180,7 +183,7 @@ export default function StoryFeed() {
               className={`group relative overflow-hidden rounded-lg border ${selectedBooking?.bookingId === b.bookingId ? 'ring-2 ring-black' : ''}`}
             >
               <div className="aspect-[2/3] w-full overflow-hidden">
-                <img src={b.posterUrl || '/images/poster-placeholder.png'} alt={b.movieTitle}
+                <img src={b.posterUrl || defaultPoster} alt={b.movieTitle}
                      className="h-full w-full object-cover group-hover:scale-105 transition-transform" />
               </div>
               <div className="p-2 text-left">
@@ -290,7 +293,7 @@ export default function StoryFeed() {
     );
 }
 
-function StoryCard({ story, loggedIn = false, onLoginRequired }) {
+function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
     const [liked, setLiked] = useState(!!story?.liked);
     const [likeCount, setLikeCount] = useState(Number.isFinite(story?.likes) ? story.likes : 0);
     const [bookmarked, setBookmarked] = useState(!!story?.bookmarked);
@@ -308,41 +311,97 @@ function StoryCard({ story, loggedIn = false, onLoginRequired }) {
         setCommentsLoading(true);
         setCommentsError("");
         try {
-          // Try to fetch; supports Page or Array responses
           const res = await getComments(story.id ?? story.storyId, { page: 0, size: 50 });
           const rows = Array.isArray(res?.content) ? res.content : (Array.isArray(res) ? res : []);
           setCommentList(rows);
         } catch (e) {
           console.error('[comments:load:error]', e);
           setCommentsError('댓글을 불러오지 못했어요.');
-          // keep any existing list; do not clear hard
         } finally {
           setCommentsLoading(false);
         }
       })();
     }, [commentsOpen, story.id, story.storyId]);
 
-    const avatar = story?.avatarUrl || "/images/avatar-placeholder.png";
-    const name = story?.name || "익명";
+    const [author, setAuthor] = useState({
+        name: story?.name,
+        avatarUrl: story?.avatarUrl
+    });
     const lastWatched = story?.lastWatchedAt || "";
     const ratingText = Number.isFinite(story?.rating) ? story.rating.toFixed(1) : "—";
-    const poster = story?.movie?.poster || "/images/poster-placeholder.png";
+    const poster = story?.movie?.poster || defaultPoster;
     const movieTitle = story?.movie?.title || "";
     const age = story?.movie?.age || "";
     const content = story?.content || "";
     const tags = Array.isArray(story?.tags) ? story.tags : [];
     const comments = Number.isFinite(story?.comments) ? story.comments : 0;
 
+    // NOTE: `/api/members/{id}` is often protected to only allow self/admin access (403 for others).
+    //       To display author info in a public feed, prefer a public summary endpoint.
+    useEffect(() => {
+        let ignore = false;
+        const id = story?.memberId;
+        const hasName = !!author?.name;
+        const hasAvatar = !!author?.avatarUrl;
+        if (!id || (hasName && hasAvatar)) return;
+
+        // 캐시 히트 시 즉시 적용
+        if (__memberCache.has(id)) {
+            const cached = __memberCache.get(id);
+            if (!ignore) {
+                setAuthor((prev) => ({
+                    name: prev?.name || cached?.name,
+                    avatarUrl: prev?.avatarUrl || cached?.avatarUrl,
+                }));
+            }
+            return;
+        }
+
+        (async () => {
+            // 1) If the author is the logged-in user, reuse `profile` to avoid an API call
+            if (profile?.memberId && profile.memberId === id) {
+                const next = {
+                  name: author?.name || profile?.name || "익명",
+                  avatarUrl: author?.avatarUrl || profile?.avatarUrl || defaultAvatar,
+                };
+                __memberCache.set(id, next);
+                if (!ignore) setAuthor(next);
+                return;
+            }
+
+            try {
+                const { data: pub } = await getPublicMemberSummary(id);
+                const next = {
+                  name: author?.name || pub?.name || "익명",
+                  avatarUrl: author?.avatarUrl || pub?.avatarUrl || defaultAvatar,
+                };
+                __memberCache.set(id, next);
+                if (!ignore) setAuthor(next);
+            } catch (err) {
+                console.warn('[StoryCard] public member fetch failed:', err);
+                if (!ignore) {
+                  setAuthor((prev) => ({
+                    name: prev?.name || "익명",
+                    avatarUrl: prev?.avatarUrl || defaultAvatar,
+                  }));
+                }
+            }
+        })();
+
+        return () => { ignore = true; };
+        // author는 채우기 용도라 의존성 최소화
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [story?.memberId]);
     return (
 
-        <article className="rounded-2xl border bg-white shadow-sm hover:shadow transition-shadow">
+        <article className="rounded-xl border bg-white shadow-sm hover:shadow-md transition-shadow">
             {/* 상단: 사용자 정보 */}
             <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-3">
-                    <img src={avatar} alt="avatar" className="h-9 w-9 rounded-full object-cover" />
+                    <img src={author?.avatarUrl || defaultAvatar} alt="avatar" className="h-8 w-8 rounded-full object-cover" />
                     <div>
                         <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">{name}</span>
+                            <span className="text-sm font-medium">{author?.name || "익명"}</span>
                             <span className="text-[11px] text-neutral-500">{lastWatched}</span>
                         </div>
                         <div className="flex items-center gap-1 text-[11px] text-neutral-500">
@@ -357,43 +416,43 @@ function StoryCard({ story, loggedIn = false, onLoginRequired }) {
 
             {/* 포스터 + 본문 */}
             <div className="px-4">
-                <div className="grid grid-cols-[minmax(120px,180px)_1fr] gap-4">
+                <div className="grid grid-cols-[minmax(100px,150px)_1fr] gap-3">
                     {/* 포스터: 2:3 비율 고정 */}
                     <div className="relative">
-                        <div className="aspect-[2/3] overflow-hidden rounded-xl border">
+                        <div className="aspect-[2/3] overflow-hidden rounded-lg border">
                             <img src={poster} alt={movieTitle}
                                  className="h-full w-full object-cover" />
                         </div>
-                        <div className="absolute left-2 top-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[11px] text-white">
+                        <div className="absolute left-1.5 top-1.5 rounded bg-black/60 px-1 py-0.5 text-[10px] text-white">
                             {age}
                         </div>
                     </div>
 
                     {/* 텍스트 본문 */}
                     <div className="flex flex-col">
-                        <h3 className="text-[15px] font-semibold leading-tight mb-1">{movieTitle}</h3>
-                        <p className="text-sm text-neutral-800 whitespace-pre-line">
+                        <h3 className="text-[14px] font-semibold leading-snug mb-1.5">{movieTitle}</h3>
+                        <p className="text-[13px] text-neutral-800 whitespace-pre-line">
                             {content}
                         </p>
 
                         {/* 해시태그 */}
-                        <div className="mt-2 flex flex-wrap gap-1.5">
+                        <div className="mt-2 flex flex-wrap gap-1">
                             {tags.map((t) => (
-                                <span key={t} className="rounded-full border px-2 py-0.5 text-[11px] text-neutral-600">#{t}</span>
+                                <span key={t} className="rounded-full border px-1.5 py-0.5 text-[11px] text-neutral-600">#{t}</span>
                             ))}
                         </div>
 
                         {/* 액션 버튼 */}
-                        <div className="mt-4 flex items-center gap-2">
+                        <div className="mt-3 flex items-center gap-2">
                             {/* 모던/중립 버튼 (강조색 X) */}
-                            <button className="h-9 rounded-xl border px-3 text-sm hover:bg-neutral-50">상세보기</button>
+                            <button className="h-8 rounded-lg border px-3 text-[13px] hover:bg-neutral-50">상세보기</button>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* 하단: 인터랙션 */}
-            <div className="px-4 py-3 flex items-center justify-between">
+            <div className="px-4 py-2.5 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <button
                       onClick={async () => {
@@ -462,7 +521,7 @@ function StoryCard({ story, loggedIn = false, onLoginRequired }) {
           value={commentDraft}
           onChange={(e) => setCommentDraft(e.target.value)}
           rows={2}
-          className="min-h-[36px] grow rounded-md border px-2 py-1 text-sm"
+          className="min-h-[34px] grow rounded-md border px-2 py-1 text-[13px]"
           placeholder="댓글을 입력하세요"
       />
                         <button
@@ -650,7 +709,7 @@ function RightRail({ profile, onOpenWrite, recentMyStories = [], myBookmarks = [
                 ) : (
                   <div className="flex gap-2 overflow-x-auto no-scrollbar pr-1">
                     {myBookmarks.map((s, i) => {
-                      const poster = s?.movie?.poster || s?.posterUrl || '/images/poster-placeholder.png';
+                      const poster = s?.movie?.poster || s?.posterUrl || defaultPoster;
                       const title = s?.movie?.title || s?.movieTitle || '';
                       const movieId = s?.movie?.id ?? s?.movieId;
                       const storyId = s?.id ?? s?.storyId;

@@ -39,13 +39,6 @@ export const deleteMember = async (memberId,payload) => {
 };
 
 // 회원 ID로 포인트 조회
-// Query params:
-// - page: 0-based
-// - size
-// - type: 'EARN' | 'USE' | 'CANCEL' (선택)
-// - from: 'YYYY-MM-DD' (선택)  시작일 00:00:00
-// - to:   'YYYY-MM-DD' (선택)  종료일 23:59:59
-// - sort: createdAt,desc  (백엔드 정렬 파라미터 컨벤션 사용)
 export const getMemberPoints = async ({
                                           memberId,
                                           page = 0,
@@ -63,3 +56,10 @@ export const getMemberPoints = async ({
     const { data } = await api.get(`/members/${memberId}/points`, { params });
     return data;
 };
+
+//공개용 개인정보 조회
+export async function getPublicMemberSummary(memberId) {
+    if (!memberId && memberId !== 0) throw new Error('memberId required');
+    const res = await api.get(`/public/members/${memberId}`);
+    return res.data;
+}

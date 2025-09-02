@@ -60,7 +60,7 @@ function StarRating({ value = 0, onChange }) {
   );
 }
 // 작성자(멤버) 조회 캐시: 같은 ID 반복 호출 방지
-const __memberCache = new Map(); // key: memberId, value: { name, avatarUrl }
+const __memberCache = new Map();
 
 export default function StoryFeed() {
     const [stories, setStories] = useState([]);
@@ -252,7 +252,7 @@ export default function StoryFeed() {
                   try {
                       const p = await getProfile();
                       memberName = memberName || p?.name;
-                      memberAvatar = memberAvatar || p?.avatarUrl;
+                      memberAvatar = memberAvatar || p?.avatarUrl || defaultAvatar;
                   } catch {}
               }
               let moviePoster = saved?.movie?.poster || saved?.movie?.posterUrl;
@@ -266,7 +266,7 @@ export default function StoryFeed() {
               const normalized = {
                   ...saved,
                   name: memberName,
-                  avatarUrl: memberAvatar,
+                  avatarUrl: memberAvatar || defaultAvatar,
                   movie: { ...saved?.movie, poster: moviePoster },
               };
 
@@ -328,7 +328,6 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
         try {
           const res = await getComments(story.id ?? story.storyId, { page: 0, size: 50 });
           const rows = Array.isArray(res?.content) ? res.content : (Array.isArray(res) ? res : []);
-          // Normalize comments to mark mine and fill author info
           const me = profile?.memberId;
           const normalized = rows.map((r) => {
             const rMemberId = r?.memberId ?? r?.authorId ?? r?.author?.memberId;
@@ -635,7 +634,7 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
                                       content: base.content ?? text,
                                       memberId: base.memberId ?? profile?.memberId,
                                       mine: true,
-                                      author: base.author ?? { name: profile?.name || '나', avatarUrl: profile?.avatarUrl },
+                                      author: base.author ?? { name: profile?.name || '나', avatarUrl: (profile?.avatarUrl || defaultAvatar) },
                                       createdAt: base.createdAt ?? new Date().toISOString(),
                                     };
                                     setCommentList((prev) => [newItem, ...prev]);
@@ -743,7 +742,7 @@ function RightRail({ profile, onOpenWrite, recentMyStories = [], myBookmarks = [
                 <>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <img src={profile?.avatarUrl} alt="avatar" className="h-10 w-10 rounded-full object-cover" loading="lazy" />
+                      <img src={profile?.avatarUrl || defaultAvatar} alt="avatar" className="h-10 w-10 rounded-full object-cover" loading="lazy" />
                       <div>
                         <div className="text-sm font-semibold">{profile?.name}</div>
                         <div className="text-[11px] text-neutral-500">최근 관람: {formatDateOnly(profile?.lastWatchedAt)}</div>

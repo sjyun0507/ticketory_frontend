@@ -363,10 +363,8 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
     const age = story?.movie?.age || "";
     const content = story?.content || "";
     const tags = Array.isArray(story?.tags) ? story.tags : [];
-    // const comments = Number.isFinite(story?.comments) ? story.comments : 0;
 
-    // NOTE: `/api/members/{id}` is often protected to only allow self/admin access (403 for others).
-    //       To display author info in a public feed, prefer a public summary endpoint.
+
     useEffect(() => {
         let ignore = false;
         const id = story?.memberId;
@@ -565,10 +563,7 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
                         title={commentsOpen ? '댓글 닫기' : '댓글 열기'}
                     >
                         <MessageCircle className="w-5 h-5" />
-                        {/* 🎉 */}
-                        {/*<span>{commentsOpen ? commentList.length : comments}</span>*/}
                         <span>{comments}</span>
-                        {/* 🎉 */}
                     </button>
                 </div>
                 <button
@@ -639,9 +634,7 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
                                     };
                                     setCommentList((prev) => [newItem, ...prev]);
                                     setCommentDraft("");
-                                    // 🎉
                                     setComments((c) => c + 1);
-                                    // 🎉
                                 } catch (e) {
                                     console.error('[comment:add:error]', e);
                                     alert('댓글 저장에 실패했어요.');
@@ -709,7 +702,6 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
                                                         try {
                                                             await deleteComment(story.id ?? story.storyId, id);
                                                             setCommentList((prev) => prev.filter((x) => (x.id ?? x.commentId) !== id));
-                                                            // 🎉
                                                             setComments((c) => Math.max(0, c -1));
                                                         } catch (e) {
                                                             console.error('[comment:delete:error]', e);

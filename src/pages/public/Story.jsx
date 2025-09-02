@@ -1,7 +1,7 @@
 import React,{ useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Heart, MessageCircle, Bookmark, MoreHorizontal, Star } from "lucide-react";
-import { getProfile, getStories, createStory, getEligibleBookings, getMyStories, likeStory, unlikeStory, bookmarkStory, unbookmarkStory, getMyBookmarkedStories, getComments, addComment,updateComment,deleteComment } from "../../api/stroyApi.js";
+import { getProfile, getStories, createStory, getEligibleBookings, getMyStories, likeStory, unlikeStory, bookmarkStory, unbookmarkStory, getMyBookmarkedStories, getComments, addComment,updateComment,deleteComment } from "../../api/storyApi.js";
 import Modal from "../../components/Modal.jsx";
 import { getMovieDetail } from "../../api/movieApi.js";
 import defaultAvatar from '../../assets/styles/avatar-placeholder.png';
@@ -198,7 +198,7 @@ export default function StoryFeed() {
 
     {/* Step 2: 평점/내용/태그 */}
     <div className="grid grid-cols-1 gap-3">
-      <label className="flex items-center justify-between gap-3">
+      <label className="flex items-center justify-start gap-5">
         <span className="text-sm text-neutral-700">평점</span>
         <StarRating value={storyForm.rating} onChange={(v) => setStoryForm(f => ({ ...f, rating: v }))} />
       </label>
@@ -295,7 +295,7 @@ export default function StoryFeed() {
 
 function StoryCard({ story, loggedIn = false, onLoginRequired, profile }) {
     const [liked, setLiked] = useState(!!story?.liked);
-    const [likeCount, setLikeCount] = useState(Number.isFinite(story?.likes) ? story.likes : 0);
+    const [likeCount, setLikeCount] = useState(Number.isFinite(story?.likeCount) ? story.likeCount : 0);
     const [bookmarked, setBookmarked] = useState(!!story?.bookmarked);
     const [commentsOpen, setCommentsOpen] = useState(false);
     const [commentList, setCommentList] = useState(Array.isArray(story?.commentsList) ? story.commentsList : []);

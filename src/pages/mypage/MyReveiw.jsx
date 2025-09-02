@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore.js';
-import {deleteStory, getMyStories, updateStory} from "../../api/stroyApi.js";
+import {deleteStory, getMyStories, updateStory} from "../../api/storyApi.js";
 
 
 // 날짜만 표시

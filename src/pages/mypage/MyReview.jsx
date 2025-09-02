@@ -167,13 +167,13 @@ export default function MyReview() {
                     const id = s.id ?? s.storyId;
                     const isEditing = editingId === id;
                     return (
-                        <div key={keyOf(s, idx)} className="group grid grid-cols-[88px,1fr] gap-4 p-4 transition-colors hover:bg-neutral-50/80">
+                        <div key={keyOf(s, idx)} className="group flex items-start gap-4 p-4 transition-colors hover:bg-neutral-50/80">
                             <img
                                 src={s.posterUrl || s.movie?.posterUrl}
                                 alt="poster"
                                 className="h-28 w-20 rounded-md object-cover shadow-sm ring-1 ring-black/5"
                             />
-                            <div className="space-y-2">
+                            <div className="flex-1 space-y-2">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <div className="flex items-center gap-2">

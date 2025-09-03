@@ -349,6 +349,20 @@ export default function StoryFeed() {
             };
 
             setStories(prev => Array.isArray(prev) ? [normalized, ...prev] : [normalized]);
+            // Right rail: 최근 남긴 관람평 즉시 반영 (최대 5개 유지)
+            setMyRecentStories((prev) => {
+              const item = {
+                id: normalized?.id ?? normalized?.storyId,
+                storyId: normalized?.storyId ?? normalized?.id,
+                movieTitle: normalized?.movie?.title ?? normalized?.movieTitle ?? '',
+                movie: normalized?.movie,
+                content: normalized?.content ?? '',
+                createdAt: normalized?.createdAt ?? new Date().toISOString(),
+              };
+              const base = Array.isArray(prev) ? prev.slice() : [];
+              const deduped = [item, ...base.filter((x) => (x.id ?? x.storyId) !== (item.id ?? item.storyId))];
+              return deduped.slice(0, 5);
+            });
             setEligible(prev => prev.map(b => b.bookingId === selectedBooking.bookingId ? { ...b, hasStory: true } : b));
             setSelectedBooking(null);
             setStoryForm({ rating: 4.5, content: "", tags: "" });
@@ -509,7 +523,16 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile, onBookma
                 return;
             }
 
-            try {
+            // 다른 사용자의 프로필은 권한상 403이 날 수 있어 호출을 생략하고 익명 처리
+            if (profile?.memberId && profile.memberId !== id) {
+              const next = {
+                name: author?.name || "익명",
+                avatarUrl: author?.avatarUrl || defaultAvatar,
+              };
+              __memberCache.set(id, next);
+              if (!ignore) setAuthor(next);
+            } else {
+              try {
                 const member = await getMyInfo(id);
                 const next = {
                   name: author?.name || member?.name || "익명",
@@ -517,14 +540,15 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile, onBookma
                 };
                 __memberCache.set(id, next);
                 if (!ignore) setAuthor(next);
-            } catch (err) {
-                console.warn('[StoryCard] member fetch failed:', err);
-                if (!ignore) {
-                  setAuthor((prev) => ({
-                    name: prev?.name || "익명",
-                    avatarUrl: prev?.avatarUrl || defaultAvatar,
-                  }));
-                }
+              } catch (err) {
+                // 조용히 익명 처리 (콘솔 경고 과도 방지)
+                const next = {
+                  name: author?.name || "익명",
+                  avatarUrl: author?.avatarUrl || defaultAvatar,
+                };
+                __memberCache.set(id, next);
+                if (!ignore) setAuthor(next);
+              }
             }
         })();
 

@@ -12,9 +12,11 @@ export default function MovieList({ movies = [] }) {
         return <div className="py-8 text-center text-sm text-gray-500">표시할 영화가 없어요.</div>;
     }
 
+    const shuffled = [...movies].sort(() => Math.random() - 0.5);
+
     return (
         <div className="grid grid-cols-2 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {movies.map((m) => (
+            {shuffled.map((m) => (
                 <div className="transform transition hover:scale-105" key={m.movieId}>
                     <MovieCard
                         key={m.movieId}

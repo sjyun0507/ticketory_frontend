@@ -167,30 +167,50 @@ const Bookings = () => {
   }, [activeDate]);
 
   // Prefetch availability for the current 7-day window to enable/disable tabs
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const startKey = weekStartKey || todayKey;
-        const keys = Array.from({ length: 7 }, (_, i) => addDaysKey(startKey, i));
-        const results = await Promise.allSettled(
-          keys.map((k) => getScreenings(k, null, { page: 0, size: 1 }))
-        );
-        const next = new Set();
-        results.forEach((res, idx) => {
-          if (res.status === "fulfilled") {
-            const data = res.value;
-            const list = Array.isArray(data?.content) ? data.content : Array.isArray(data) ? data : [];
-            if (list.length > 0) next.add(keys[idx]);
-          }
-        });
-        if (!cancelled) setDateHasItems(next);
-      } catch {
-        // ignore; keep previous availability
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [weekStartKey, todayKey]);
+    useEffect(() => {
+        let cancelled = false;
+
+        (async () => {
+            try {
+                // 영화가 아직 선택되지 않았다면 비활성 세트로 초기화
+                if (!selectedMovieId) {
+                    if (!cancelled) setDateHasItems(new Set());
+                    return;
+                }
+
+                const startKey = weekStartKey || todayKey;
+                const keys = Array.from({ length: 7 }, (_, i) => addDaysKey(startKey, i));
+
+                // 날짜별로 해당 영화 상영이 있는지 확인 (백엔드에서 movieId 필터 지원)
+                const results = await Promise.allSettled(
+                    keys.map((k) => getScreenings(k, Number(selectedMovieId), { page: 0, size: 1 }))
+                );
+
+                const next = new Set();
+                results.forEach((res, idx) => {
+                    if (res.status === "fulfilled") {
+                        const data = res.value;
+                        const list = Array.isArray(data?.content) ? data.content : Array.isArray(data) ? data : [];
+                        if (list.length > 0) next.add(keys[idx]); // 해당 날짜에 이 영화 상영 있음
+                    }
+                });
+
+                if (cancelled) return;
+
+                setDateHasItems(next);
+
+                // 현재 activeDate가 비활성화되었으면 가장 가까운 활성 날짜로 자동 이동
+                if (!next.has(activeDate)) {
+                    const firstEnabled = keys.find((k) => next.has(k));
+                    if (firstEnabled) setActiveDate(firstEnabled);
+                }
+            } catch {
+                // 네트워크 오류 등은 조용히 무시 (기존 상태 유지)
+            }
+        })();
+
+        return () => { cancelled = true; };
+    }, [weekStartKey, todayKey, selectedMovieId]);
 
   useEffect(() => {
     if (preselectedMovieId !== null && preselectedMovieId !== undefined) {

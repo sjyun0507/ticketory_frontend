@@ -245,7 +245,13 @@ const MyBookings = () => {
               detail?.screeningEndAt ?? detail?.screening?.endAt ?? pre?.screeningEndAt ?? null
             );
             const bookingTime = detail?.bookingTime ?? null; // if DTO later includes it; otherwise remains null
-            const screenName = detail?.screenName ?? '';
+            const screenName = (
+              detail?.screenName ??
+              detail?.screen?.name ??
+              pre?.screenName ??
+              pre?.screen?.name ??
+              ''
+            );
             const screenLocation = detail?.screenLocation ?? '';
             // 좌석: 상세 응답이 비어있으면 목록(pre)에서 폴백
             let seats = normalizeSeatLabels(detail?.seats);

@@ -409,18 +409,52 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile, onBookma
           const res = await getComments(story.id ?? story.storyId, { page: 0, size: 50 });
           const rows = Array.isArray(res?.content) ? res.content : (Array.isArray(res) ? res : []);
           const me = profile?.memberId;
-          const normalized = rows.map((r) => {
-            const rMemberId = r?.memberId ?? r?.authorId ?? r?.author?.memberId;
-            const isMine = r?.mine ?? r?.isMine ?? (me ? rMemberId === me : false);
-            const authorName = r?.author?.name || r?.authorName || (isMine ? (profile?.name || '나') : '익명');
-            const authorAvatar = r?.author?.avatarUrl || (isMine ? profile?.avatarUrl : undefined);
-            return {
-              ...r,
-              memberId: rMemberId ?? r?.memberId,
-              mine: isMine,
-              author: r?.author || { name: authorName, avatarUrl: authorAvatar },
-            };
-          });
+          //🎉
+          // const normalized = rows.map((r) => {
+          //   const rMemberId = r?.memberId ?? r?.authorId ?? r?.author?.memberId;
+          //   const isMine = r?.mine ?? r?.isMine ?? (me ? rMemberId === me : false);
+          //   const authorName = r?.author?.name || r?.authorName || (isMine ? (profile?.name || '나') : '익명');
+          //   const authorAvatar = r?.author?.avatarUrl || (isMine ? profile?.avatarUrl : undefined);
+          //   return {
+          //     ...r,
+          //     memberId: rMemberId ?? r?.memberId,
+          //     mine: isMine,
+          //     author: r?.author || { name: authorName, avatarUrl: authorAvatar },
+          //   };
+          // });
+          // 🎉
+            const normalized = rows.map((r) => {
+                const rawAuthor =
+                    r?.author ?? r?.member ?? r?.writer ?? r?.user ?? null;
+                const rMemberId =
+                    r?.memberId ?? r?.authorId ?? rawAuthor?.memberId ?? rawAuthor?.id ?? null;
+                const isMine =
+                    (r?.mine ?? r?.isMine) ?? (me ? rMemberId === me : false);
+
+                const authorName =
+                    rawAuthor?.name ??
+                    r?.authorName ??
+                    r?.memberName ??
+                    (isMine ? (profile?.name || '나') : '익명');
+
+                const authorAvatar =
+                    rawAuthor?.avatarUrl ??
+                    r?.authorAvatarUrl ??
+                    r?.memberAvatarUrl ??
+                    (isMine ? profile?.avatarUrl : undefined);
+
+                return {
+                    ...r,
+                    memberId: rMemberId ?? r?.memberId,
+                    mine: isMine,
+                    author: {
+                        name: authorName,
+                        avatarUrl: authorAvatar,
+                        memberId: rMemberId,
+                    },
+                };
+            });
+            // 🎉
           setCommentList(normalized);
           setComments(typeof res?.totalElements === 'number' ? res.totalElements : normalized.length);
         } catch (e) {
@@ -558,64 +592,59 @@ function StoryCard({ story, loggedIn = false, onLoginRequired, profile, onBookma
             {/* 포스터 + 본문 */}
             <div className="px-3">
                 <div className="grid grid-cols-[minmax(96px,136px)_1fr] gap-2.5">
-                    {/* 포스터: 2:3 비율 고정 */}
-                    <div className="relative" style={{ perspective: '1000px' }}>
-                      <button
-                        type="button"
-                        className="group aspect-[2/3] w-full overflow-hidden rounded-lg border"
-                        onClick={() => {
-                          setPosterSpin(true);
-                          setShowDetail(true);
-                          setTimeout(() => setPosterSpin(false), 1200);
-                          // 버튼은 조금 더 오래 유지
-                          setTimeout(() => setShowDetail(false), 3000);
-                        }}
-                        aria-label={`${movieTitle} 포스터 회전`}
-                      >
-                        <img
-                          src={poster}
-                          alt={movieTitle}
-                          style={{
-                            transform: posterSpin ? 'rotateY(180deg)' : 'rotateY(0deg)',
-                            transition: 'transform 1200ms ease-in-out',
-                            transformStyle: 'preserve-3d'
-                          }}
-                          className="h-full w-full object-cover transform-gpu motion-reduce:transition-none motion-reduce:transform-none"
-                          loading="lazy"
-                        />
-                      </button>
-
-                      {/* 연령 등급 배지 */}
-                      <div className="absolute left-1.5 top-1.5 rounded bg-black/60 px-1 py-0.5 text-[10px] text-white">
-                        {age}
-                      </div>
-
-                      {/* 상세보기 오버레이 버튼 */}
-                      <div className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity ${showDetail ? 'opacity-100' : 'opacity-0'}`}>
+                    {/* 포스터: 2:3 비율 + 3D 플립 */}
+                    <div className="relative [perspective:1200px]">
                         <button
-                          type="button"
-                          onClick={(e) => {
-                            (e).stopPropagation();
-                            const movieId = story?.movie?.id ?? story?.movieId ?? story?.movie?.movieId;
-                            if (!movieId) {
-                              console.error('[movie:navigate] movieId not found in story', story);
-                              return;
-                            }
-                            // 기본 라우트 시도
-                            try { nav(`/movies/${movieId}`); } catch {}
-
-                            setTimeout(() => {
-                              const path = (typeof window !== 'undefined' && window.location?.pathname) || '';
-                              if (!path.includes(`/movies/${movieId}`)) {
-                                try { nav(`/movie/${movieId}`); } catch {}
-                              }
-                            }, 150);
-                          }}
-                          className="pointer-events-auto rounded-full bg-black/70 px-4 py-2 text-xs sm:text-sm text-white shadow hover:bg-black/80"
+                            type="button"
+                            className="group block aspect-[2/3] w-full"
+                            onClick={() => {
+                                const movieId = story?.movie?.id ?? story?.movieId ?? story?.movie?.movieId;
+                                if (!movieId) return;
+                                try { nav(`/movies/${movieId}`); } catch {}
+                                setTimeout(() => {
+                                    const p = (typeof window !== 'undefined' && window.location?.pathname) || '';
+                                    if (!p.includes(`/movies/${movieId}`)) {
+                                        try { nav(`/movie/${movieId}`); } catch {}
+                                    }
+                                }, 120);
+                            }}
+                            aria-label={`${movieTitle} 상세보기로 이동`}
                         >
-                          영화 상세보기
+                            {/* 플립 컨테이너 */}
+                            <div
+                                className="
+        relative h-full w-full rounded-lg border overflow-hidden
+        transition-transform duration-[1200ms] ease-in-out
+        [transform-style:preserve-3d]
+        group-hover:[transform:rotateY(180deg)]
+      "
+                            >
+                                {/* 앞면 (포스터) */}
+                                <img
+                                    src={poster}
+                                    alt={movieTitle}
+                                    className="absolute inset-0 h-full w-full object-cover [backface-visibility:hidden]"
+                                    loading="lazy"
+                                />
+
+                                {/* 뒷면 (영화 상세보기 텍스트) */}
+                                <div
+                                    className="
+          absolute inset-0 flex items-center justify-center
+          bg-black/70 text-white text-base font-semibold
+          [transform:rotateY(180deg)]
+          [backface-visibility:hidden]
+        "
+                                >
+                                    영화 상세보기
+                                </div>
+                            </div>
                         </button>
-                      </div>
+
+                        {/* 연령 등급 배지 */}
+                        <div className="absolute left-1.5 top-1.5 rounded bg-black/60 px-1 py-0.5 text-[10px] text-white">
+                            {age}
+                        </div>
                     </div>
 
                     {/* 텍스트 본문 */}

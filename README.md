@@ -22,71 +22,60 @@
 
 ## 주요 기능 화면
 
-### 메인 화면
-<figure align="center">
-  <img width="1000" alt="메인 화면" src="https://github.com/user-attachments/assets/xxxxxx" />
-  <figcaption>메인 페이지 – 실시간 상영 중인 영화와 예매 버튼</figcaption>
-</figure>
-
-### 예매 & 좌석 선택
-
 <table>
   <tr>
     <td width="50%" valign="top">
-      <b>영화 선택</b><br/>
-      <sub>상영 중 영화 목록 및 상세정보 확인</sub><br/><br/>
-      <img alt="영화 선택" src="https://github.com/user-attachments/assets/xxxxxx" width="100%"/>
+      <b>메인 페이지</b><br/>
+      <sub>실시간 상영 영화 목록과 예매 바로가기</sub><br/><br/>
+      <img alt="메인 페이지" src="https://github.com/user-attachments/assets/4c69e2ba-f6c2-404b-8217-c8f42dcfdb2b" width="100%"/>
     </td>
     <td width="50%" valign="top">
-      <b>시간표 조회</b><br/>
-      <sub>날짜별/상영관별 상영 정보 조회</sub><br/><br/>
-      <img alt="시간표 조회" src="https://github.com/user-attachments/assets/xxxxxx" width="100%"/>
+      <b>영화 상세보기</b><br/>
+      <sub>예고편, 출연진, 상영관 정보 및 빠른 예매</sub><br/><br/>
+      <img alt="영화 상세보기" src="https://github.com/user-attachments/assets/3b059e38-9587-4339-8273-68e41e18d32a" width="100%"/>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <b>좌석 선택</b><br/>
-      <sub>실시간 HOLD/BOOKED 상태 반영 및 인원별 선택</sub><br/><br/>
-      <img alt="좌석 선택" src="https://github.com/user-attachments/assets/xxxxxx" width="100%"/>
+      <b>영화 예매</b><br/>
+      <sub>날짜별 상영 시간표 조회 및 예매 진행</sub><br/><br/>
+      <img alt="영화 예매" src="https://github.com/user-attachments/assets/3baff37f-8b1a-43ac-b9a9-8dc519498ccd" width="100%"/>
     </td>
     <td width="50%" valign="top">
-      <b>예매 확인</b><br/>
-      <sub>선택한 영화, 좌석, 금액을 한눈에 확인 후 결제 진행</sub><br/><br/>
-      <img alt="예매 확인" src="https://github.com/user-attachments/assets/xxxxxx" width="100%"/>
-    </td>
-  </tr>
-</table>
-
-###  결제 및 티켓 발급
-
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <b>결제 진행</b><br/>
-      <sub>가상 결제 API (Toss Payments) 연동</sub><br/><br/>
-      <img alt="결제 화면" src="https://github.com/user-attachments/assets/xxxxxx" width="100%"/>
-    </td>
-    <td width="50%" valign="top">
-      <b>QR 티켓 발급</b><br/>
-      <sub>결제 완료 시 QR 코드 자동 생성 및 다운로드</sub><br/><br/>
-      <img alt="QR 티켓" src="https://github.com/user-attachments/assets/xxxxxx" width="100%"/>
+      <b>좌석 예매</b><br/>
+      <sub>실시간 좌석 상태(HOLD/BOOKED) 반영</sub><br/><br/>
+      <img alt="좌석 예매" src="https://github.com/user-attachments/assets/d17b63db-b3da-47d9-9d96-7dbb9408d530" width="100%"/>
     </td>
   </tr>
-</table>
-
-###  마이페이지 & 스토리 피드
-
-<table>
   <tr>
     <td width="50%" valign="top">
-      <b>마이페이지</b><br/>
-      <sub>회원정보 수정, 예매 내역 조회, 티켓 재확인</sub><br/><br/>
-      <img alt="마이페이지" src="https://github.com/user-attachments/assets/xxxxxx" width="100%"/>
+      <b>이벤트 / 공지 게시판</b><br/>
+      <sub>영화관 이벤트 및 공지사항 관리</sub><br/><br/>
+      <img alt="이벤트/공지 게시판" src="https://github.com/user-attachments/assets/4237168c-5b2d-4368-9289-d366e018dc47" width="100%"/>
     </td>
     <td width="50%" valign="top">
       <b>스토리 피드</b><br/>
-      <sub>관람 후 감상 스토리를 업로드하고 커뮤니티처럼 공유</sub><br/><br/>
-      <img alt="스토리 피드" src="https://github.com/user-attachments/assets/xxxxxx" width="100%"/>
+      <sub>관람 후 감상 스토리 업로드 및 공유</sub><br/><br/>
+      <img alt="스토리 피드" src="https://github.com/user-attachments/assets/19bdba85-5d19-4228-9096-d550a06195a3" width="100%"/>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <b>마이페이지</b><br/>
+      <sub>회원정보 수정, 예매내역 확인 및 QR 티켓 조회</sub><br/><br/>
+      <img alt="마이페이지" src="https://github.com/user-attachments/assets/5b04fc87-e762-446a-935e-34b5b45bf2ca" width="100%"/>
+    </td>
+    <td width="50%" valign="top">
+      <b>관리자 대시보드</b><br/>
+      <sub>매출 통계, 상영 일정, 게시판 관리</sub><br/><br/>
+      <img alt="관리자 대시보드" src="https://github.com/user-attachments/assets/1f757295-1cb7-41ab-8aad-5478be12cffe" width="100%"/>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top" colspan="2" align="center">
+      <b>관리자 영화 관리</b><br/>
+      <sub>영화 등록, 수정, 삭제 및 신작 분류 관리</sub><br/><br/>
+      <img alt="관리자 영화관리" src="https://github.com/user-attachments/assets/32700272-4717-45ab-a5fa-1cc49710229d" width="80%"/>
     </td>
   </tr>
 </table>

@@ -71,14 +71,14 @@
       <img alt="관리자 대시보드" src="https://github.com/user-attachments/assets/1f757295-1cb7-41ab-8aad-5478be12cffe" width="100%"/>
     </td>
   </tr>
-  <tr>
-    <td width="50%" valign="top" colspan="2" align="center">
-      <b>관리자 영화 관리</b><br/>
-      <sub>영화 등록, 수정, 삭제 및 신작 분류 관리</sub><br/><br/>
-      <img alt="관리자 영화관리" src="https://github.com/user-attachments/assets/32700272-4717-45ab-a5fa-1cc49710229d" width="80%"/>
-    </td>
-  </tr>
 </table>
+
+---
+##  Tech Stack
+
+**Frontend:** React + Vite + Zustand + TailwindCSS + Axios + React Router  
+**Backend:** Spring Boot + JPA + MariaDB + Spring Security (JWT)  
+**Deployment:** Naver Cloud 
 
 ---
 
@@ -88,14 +88,6 @@
 
 - 관리자 영화 추가 흐름 (관리자 → 영화관리 → 새 영화 추가 → 미디어 추가 → 홈)
 👉 [관리자흐름 시연영상(mp4)](https://github.com/user-attachments/assets/b60a7af4-1f1d-457d-9535-ce3da64a18c4)
-
----
-
-##  Tech Stack
-
-**Frontend:** React + Vite + Zustand + TailwindCSS + Axios + React Router  
-**Backend:** Spring Boot + JPA + MariaDB + Spring Security (JWT)  
-**Deployment:** Naver Cloud 
 
 ---
 

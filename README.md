@@ -1,4 +1,4 @@
-## 데모 (Live Demo)
+## Live Demo
 👉 [Ticketory 바로가기](http://211.188.58.155:8080/)  
 
 ---
@@ -20,7 +20,7 @@
 
 ---
 
-## 주요 기능 화면
+## Screenshots
 
 <table>
   <tr>
@@ -82,7 +82,7 @@
 
 ---
 
-## 시연 영상 (Demo Video)
+## Demo Video
 - 예매 흐름 (영화 → 상영시간 → 좌석 → 결제 → QR 티켓)
 👉 [예매흐름 시연영상(mp4)](https://github.com/user-attachments/assets/099c75e4-6254-4c2b-84b9-2d4b7cf5523c)
 
@@ -91,7 +91,7 @@
 
 ---
 
-### 발표 자료 (Presentation) 
+### Presentation
 👉 [프로젝트 발표자료 (PDF)](https://github.com/user-attachments/files/22225340/ticketory_presentation_final.pdf)
 
 ---
